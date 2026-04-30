@@ -22,9 +22,10 @@ from quantstats import plots as _plots
 from utils import eodhd, fred, yahoo
 from utils.storage import load_config, read_stock_dataset
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def demo_portfolio_daily_return():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
 
     # OPTION 1 : from user defined portfolio history
     pf_history = read_portfolio_history('./data/pf/portfolio-sample.csv', end_date='2023-12-31')
@@ -50,7 +51,7 @@ def demo_portfolio_daily_return():
 
 def demo_quantstats(pf_returns: pd.Series):
     # Define benchmark
-    benchmark = eodhd.download_returns('SPY', load_config('config.json').get('eodhd'))
+    benchmark = eodhd.download_returns('SPY', load_config(os.path.join(BASE_DIR, "config.json")).get('eodhd'))
     benchmark.name = 'Benchmark'
 
     # Show sharpe ratio
@@ -91,7 +92,7 @@ def demo_quantstats(pf_returns: pd.Series):
 
 
 def demo_portfolio_optimization():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
 
     # Define and download ticker returns
     tickers = ["GOOG", "AAPL", "META", "BABA", "AMZN", "GE", "AMD"]
@@ -122,7 +123,7 @@ def demo_portfolio_optimization():
 
 
 def demo_search_constituents():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
 
     # Load constituents data and search for each ISIN using EODHD API
     constituents = pd.read_csv('./data/constituents/raw/sxxp.csv')
@@ -147,7 +148,7 @@ def demo_search_constituents():
 
 
 def demo_validate_constituents():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
 
     # Load historical constituents data
     historical = pd.read_csv('./data/constituents/eodhd/sxxp.csv')
@@ -262,12 +263,14 @@ def _format_universal_features(
 
 
 def demo_download_dataset(universe: str):
-    userdata = load_config('config.json')
-    out_dir = os.path.join('./data/dataset', universe)
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
+    out_dir = os.path.join(BASE_DIR, 'data', universe)
     os.makedirs(out_dir, exist_ok=True)
 
     # Step 1: Read historical constituents
-    historical = pd.read_csv(f'./data/constituents/eodhd/{universe}.csv')
+
+    historical = pd.read_csv(os.path.join(BASE_DIR, f'data/constituents/eodhd/{universe}.csv'))
+    #historical = pd.read_csv(f'./data/constituents/eodhd/{universe}.csv')
 
     # Step 2: Check null symbols
     missing_symbols = historical.loc[historical['EODHD'].isnull(), 'Name'].unique().tolist()
@@ -294,7 +297,7 @@ def demo_download_dataset(universe: str):
 
 
 def demo_download_news():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
     news_dir = './data/news/'
     os.makedirs(news_dir, exist_ok=True)
 
@@ -308,7 +311,7 @@ def demo_download_news():
     # Download only missing tickers
     existing_files = {file.strip('.json') for file in os.listdir(news_dir) if file.endswith('.json')}
     to_download = symbols - existing_files
-    # to_download = to_download[0:200]  # download 200 at a time
+    to_download = to_download[0:20]  # download 20 at a time
 
     # Download news
     news, errors = eodhd.download_multi(list(to_download), userdata.get('eodhd'), data_type='news', verbose=True, p=1)
@@ -328,8 +331,8 @@ def demo_download_news():
 
 
 def demo_market_information():
-    userdata = load_config('config.json')
-    out_dir = os.path.join('./data/dataset')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
+    out_dir = os.path.join(BASE_DIR, 'data')
     os.makedirs(out_dir, exist_ok=True)
 
     us_index_symbols = ['GSPC.INDX', 'DJI.INDX', 'NDX.INDX']
@@ -348,7 +351,7 @@ def demo_market_information():
 
 
 def demo_feature_extraction(universe: str):
-    out_dir = os.path.join('./data/dataset', universe)
+    out_dir = os.path.join(BASE_DIR, 'data', universe)
 
     # Read OHLC dataset
     prices = read_stock_dataset(os.path.join(out_dir, f'{universe}.csv'))
@@ -369,7 +372,7 @@ def demo_feature_extraction(universe: str):
 
 
 def demo_compute_relation(universe: str):
-    out_dir = os.path.join('./data/dataset', universe)
+    out_dir = os.path.join(BASE_DIR, 'data', universe)
 
     # Read OHLC dataset
     prices = read_stock_dataset(os.path.join(out_dir, f'{universe}.csv'))
@@ -411,7 +414,7 @@ def demo_compute_relation(universe: str):
 
 
 def demo_incidence_matrix(universe: str):
-    out_dir = os.path.join('./data/dataset', universe)
+    out_dir = os.path.join(BASE_DIR, 'data', universe)
 
     sect_file = os.path.join(out_dir, f'{universe}_sector_industry_matrix.npz')
     wiki_file = os.path.join(out_dir, f'{universe}_wikidata_matrix.npz')
@@ -453,7 +456,7 @@ def demo_incidence_matrix(universe: str):
 
 
 def cnnpred_market_features():
-    userdata = load_config('config.json')
+    userdata = load_config(os.path.join(BASE_DIR, "config.json"))
 
     # Download commodity futures returns (Copper, Natural Gas, Gold, Silver)
     df_commodities = yahoo.download_commodities_returns(['HG=F', 'NG=F', 'GC=F', 'SI=F'])
@@ -477,7 +480,7 @@ def cnnpred_market_features():
 
     # Combine all datasets and save to CSV for CNNPred model
     df = pd.concat([df_fred, df_commodities, df_us_indx_forex], axis=1).sort_index(ascending=True)
-    df.to_csv('./data/dataset/cnnpred_market.csv', index=True)
+    df.to_csv('./data/cnnpred_market.csv', index=True)
 
     print('Here!')
 
