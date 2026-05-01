@@ -1,7 +1,6 @@
 import copy
 import json
 import pickle
-import logging
 import os
 from argparse import ArgumentParser
 
@@ -11,7 +10,6 @@ import torch
 from sklearn.metrics import r2_score
 from torch import optim
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 from load_dataset import CSVDataset, DailyBatchSamplerRandom, RobustZScoreNormalization
 from lr_scheduler import ChainedScheduler
@@ -49,12 +47,8 @@ def open_datasets(universe, seq_len, pred_len):
     return dl_train, dl_valid, dl_test
 
 def create_saving_path(args):
-    model_save_path = f"./model_params/{args.universe}/{args.model_name}_{args.seed}"
+    model_save_path = f"./model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
     metrics_path = f"./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-    log_dir = f"./logs/{args.model_name}/{args.seed}"
-
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
 
     if not os.path.exists(model_save_path):
         os.makedirs(model_save_path, exist_ok=True)
@@ -62,43 +56,7 @@ def create_saving_path(args):
     if not os.path.exists(metrics_path):
         os.makedirs(metrics_path, exist_ok=True)
 
-    return model_save_path, metrics_path, log_dir
-
-
-def create_logger_and_writer(args, log_dir):
-    logging.basicConfig(filename=os.path.join(log_dir, f"{args.model_name}_seed_{args.seed}.log"), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(f"Train {args.model_name}")
-    writer = SummaryWriter(log_dir=log_dir, filename_suffix=f"{args.model_name}_{args.seed}_")
-    return logger, writer
-
-def logging_info(logger, writer, args, train_optimizer, lr_scheduler):
-    logger.info(msg=f"\n===== Model {args.model_name} =====\n"
-                    f"n_epochs: {args.n_epoch}\n"
-                    f"start_lr: {args.lr}\n"
-                    f"T_0: {args.T_0}\n"
-                    f"T_mult: {args.T_mult}\n"
-                    f"gamma: {args.gamma}\n"
-                    f"coef: {args.coef}\n"
-                    f"cosine_period: {args.cosine_period}\n"
-                    f"eta_min: {args.eta_min}\n"
-                    f"seed: {args.seed}\n"
-                    f"optimizer: {train_optimizer}\n"
-                    f"lr_scheduler: {lr_scheduler}\n"
-                    f"description: train {args.model_name}\n\n")
-
-    writer.add_text("train_optimizer", train_optimizer.__str__())
-    writer.add_text("lr_scheduler", lr_scheduler.__str__())
-    writer.add_text("model_name", args.model_name)
-    writer.add_text("seed", str(args.seed))
-    writer.add_text("n_head", str(args.n_head))
-    writer.add_text("learning rate", str(args.lr))
-    writer.add_text("T_0", str(args.T_0))
-    writer.add_text("T_mult", str(args.T_mult))
-    writer.add_text("gamma", str(args.gamma))
-    writer.add_text("coef", str(args.coef))
-    writer.add_text("eta_min", str(args.eta_min))
-    writer.add_text("weight_decay", str(args.weight_decay))
-    writer.add_text("cosine_period", str(args.cosine_period))
+    return model_save_path, metrics_path
 
 
 def calc_ic(pred, label):
@@ -282,26 +240,11 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
 
     print("==" * 10 + f" Now is Training {args.model_name}_{args.seed} " + "==" * 10 + "\n")
 
-    # best_valid_loss = float('inf')
-
     for step in range(1, args.n_epoch + 1):
         train_loss = train_epoch(train_loader, train_optimizer=train_optimizer, lr_scheduler=lr_scheduler, model=model, device=device)
 
         val_loss, valid_metrics, _, _, = valid_epoch(valid_loader, model, device)
         test_loss, test_metrics, preds, labels = valid_epoch(test_loader, model, device)
-
-        if writer is not None:
-            writer.add_scalars(
-                "Valid metrics", valid_metrics, global_step=step)
-            writer.add_scalars("Test metrics", test_metrics, global_step=step)
-            writer.add_scalar("Train loss", train_loss, global_step=step)
-            writer.add_scalar("Valid loss", val_loss, global_step=step)
-            writer.add_scalar("Test loss", test_loss, global_step=step)
-            writer.add_scalars("All loss Comparison",
-                               {"train loss": train_loss,
-                                "val loss": val_loss, "test loss": test_loss},
-                               global_step=step)
-            writer.add_scalar("Learning rate", train_optimizer.param_groups[0]['lr'], global_step=step)
 
         print("==" * 10 + f" {args.model_name}_{args.seed} Epoch {step} " + "==" * 10)
         print("Epoch %d, train_loss %.6f, valid_loss %.6f, test_loss %.6f " %(step, train_loss, val_loss, test_loss))
@@ -309,11 +252,11 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
         print("Test Dataset Metrics performance:{}\n".format(test_metrics))
         print("Learning rate :{}\n\n".format(train_optimizer.param_groups[0]['lr']))
 
-        logger.info(msg=f"\n===== Epoch {step} =====\ntrain loss:{train_loss}, "
-                                    f"valid loss:{val_loss},test loss:{test_loss}\n"
-                                    f"valid metrics:{valid_metrics}\n"
-                                    f"test metrics:{test_metrics}\n"
-                                    f"learning rate:{train_optimizer.param_groups[0]['lr']}\n")
+        print(f"\n===== Epoch {step} =====\ntrain loss:{train_loss}, "
+                f"valid loss:{val_loss},test loss:{test_loss}\n"
+                f"valid metrics:{valid_metrics}\n"
+                f"test metrics:{test_metrics}\n"
+                f"learning rate:{train_optimizer.param_groups[0]['lr']}\n")
 
         if step <= 10: # Warm up phase
             continue
@@ -343,12 +286,9 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
                 json.dump(valid_metrics, f, indent=4)
 
     print("SAVING LAST EPOCH RESULT AS THE TEST RESULT!")
-
-
-    # torch.save(model.state_dict(),f'{model_save_path}/TEST_{args.model_name}_model_params_seed_{args.seed}.pth')
+    torch.save(model.state_dict(),f'{model_save_path}/model.pth')
 
     print("\n" + "==" * 10 + " Training Over " + "==" * 10)
-    writer.close()
 
 
 if __name__=='__main__':
@@ -359,17 +299,16 @@ if __name__=='__main__':
     args.add_argument('--universe', type=str, default='sxxp')
     args.add_argument('--data_path', type=str, default='../../Evaluation/data')
     args.add_argument('--data_preprocessing', action='store_true', default=False)
-    args.add_argument('--nation', type=str, default=None)
 
     # Prediction Parameters
-    args.add_argument('--seq_len', type=int, default=8)
+    args.add_argument('--seq_len', type=int, default=5)
     args.add_argument('--pred_len', type=int, default=1)
-    args.add_argument('--start_date', type=str, default='2019-01-01')
-    args.add_argument('--end_train_date', type=str, default='2022-12-31')
-    args.add_argument('--start_valid_date', type=str, default='2023-01-01')
-    args.add_argument('--end_valid_date', type=str, default='2023-12-31')
-    args.add_argument('--start_test_date', type=str, default='2010-03-01')
-    args.add_argument('--end_date', type=str, default='2010-03-31')
+    args.add_argument('--start_date', type=str, default='2020-01-01')
+    args.add_argument('--end_train_date', type=str, default='2020-06-31')
+    args.add_argument('--start_valid_date', type=str, default='2021-01-01')
+    args.add_argument('--end_valid_date', type=str, default='2021-01-30')
+    args.add_argument('--start_test_date', type=str, default='2022-03-01')
+    args.add_argument('--end_date', type=str, default='2022-03-31')
 
     # Model Hyperparameters
     args.add_argument('--gpu', type=int, default=0)
@@ -409,8 +348,7 @@ if __name__=='__main__':
         'eu': 199
     }
 
-    if args.nation is None:
-        args.nation = universe_to_nation.get(args.universe.lower(), 'us')  # fallback 'us'
+    args.nation = universe_to_nation.get(args.universe.lower(), 'us')  # fallback 'us'
 
     # Setting args.gate_input_end_index based on the number of features in market and alpha CSVs
     market_csv = f"{args.data_path}/{args.universe}/{args.nation}_market.csv"
@@ -419,11 +357,11 @@ if __name__=='__main__':
     shape_a = pd.read_csv(alpha_csv).shape[1]
     args.gate_input_end_index = shape_m + shape_a - 3
 
-    print(args)
-
     torch.cuda.manual_seed(args.seed)
-    model_save_path, metrics_path, log_dir = create_saving_path(args)
-    logger, writer = create_logger_and_writer(args, log_dir)
+    model_save_path, metrics_path = create_saving_path(args)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
@@ -442,8 +380,6 @@ if __name__=='__main__':
     lr_scheduler = ChainedScheduler(train_optimizer, T_0=args.T_0, T_mul=args.T_mult, eta_min=args.eta_min,
                                     last_epoch=-1, max_lr=args.lr, warmup_steps=args.warmUp_epoch,
                                     gamma=args.gamma, coef=args.coef, step_size=3, cosine_period=args.cosine_period)
-
-    logging_info(logger, writer, args, train_optimizer, lr_scheduler)
 
     train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler)
 
