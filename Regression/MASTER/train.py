@@ -11,6 +11,8 @@ from .load_dataset import RobustZScoreNormalization, CSVDataset
 from .master import MASTERModel
 from .utils import filter_constituents_by_date
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 def save_datasets(dl_train, dl_valid, dl_test, universe, seq_len, pred_len):
     with open(f'./checkpoints/{universe}_dl_train_sl{seq_len}_pl{pred_len}.pkl', 'wb') as f:
@@ -34,9 +36,12 @@ def open_datasets(universe, seq_len, pred_len):
 
     return dl_train, dl_valid, dl_test
 
-def create_saving_path(args):
-    model_save_path = f"./model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
-    metrics_path = f"./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
+def create_saving_path(args, task_type='Regression', test_model='MATCC'):
+    model_save_path = f"model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
+    metrics_path = f"results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
+
+    model_save_path = os.path.join(PROJECT_ROOT, task_type, test_model, model_save_path)
+    metrics_path = os.path.join(PROJECT_ROOT, task_type, test_model, metrics_path)
 
     if not os.path.exists(model_save_path):
         os.makedirs(model_save_path, exist_ok=True)
