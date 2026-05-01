@@ -5,8 +5,8 @@ from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 import math
 
-from model.RWKV import Block, RWKV_Init
-from model.DLinear import DLinear, DLinear_Init
+from .RWKV import Block, RWKV_Init
+from .DLinear import DLinear, DLinear_Init
 
 
 class SAttention(nn.Module):
