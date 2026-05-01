@@ -74,12 +74,12 @@ if __name__ == '__main__':
     # Prediction Parameters
     args.add_argument('--seq_len', type=int, default=8)
     args.add_argument('--pred_len', type=int, default=10)
-    args.add_argument('--start_date', type=str, default='2010-01-01')
-    args.add_argument('--end_train_date', type=str, default='2010-01-31')
-    args.add_argument('--start_valid_date', type=str, default='2010-02-01')
-    args.add_argument('--end_valid_date', type=str, default='2010-02-28')
-    args.add_argument('--start_test_date', type=str, default='2010-03-01')
-    args.add_argument('--end_date', type=str, default='2010-03-31')
+    args.add_argument('--start_date', type=str, default='2020-01-01')
+    args.add_argument('--end_train_date', type=str, default='2020-12-31')
+    args.add_argument('--start_valid_date', type=str, default='2021-01-01')
+    args.add_argument('--end_valid_date', type=str, default='2022-12-31')
+    args.add_argument('--start_test_date', type=str, default='2023-01-01')
+    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--n_epoch', type=int, default=40)
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     model_save_path, metrics_path = create_saving_path(args)
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
-    with open(f'{model_save_path}/args.json', 'w') as f:
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     if args.data_preprocessing:

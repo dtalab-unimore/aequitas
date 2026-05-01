@@ -68,7 +68,6 @@ def run_test(
     model_save_path, metrics_path = create_saving_path(args)
     model_save_path = os.path.abspath(os.path.join(PROJECT_ROOT, task_type, test_model, model_save_path))
     metrics_path = os.path.abspath(os.path.join(PROJECT_ROOT, task_type, test_model, metrics_path))
-    os.makedirs(metrics_path, exist_ok=True)
 
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
