@@ -27,7 +27,7 @@ from test_models import (
     on_task_change,
     on_model_change,
     on_config_change,
-    update_end_year_choices
+    update_end_year_choices, on_sl_change, on_pl_change
 )
 
 # -------------------------------------------------
@@ -168,6 +168,20 @@ with gr.Blocks() as demo:
                         label="Configuration",
                         interactive=False,
                     )
+
+                    sl = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Sequence length",
+                        interactive=False,
+                    )
+
+                    pl = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Prediction length",
+                        interactive=False,
+                    )
                 with gr.Column():
                     config_info = gr.Code(
                         label="Configuration Parameters",
@@ -197,18 +211,6 @@ with gr.Blocks() as demo:
                         interactive=False,
                     )
 
-                    sl = gr.Textbox(
-                        label="Sequence length",
-                        interactive=False,
-                        value="",
-                    )
-
-                    pl = gr.Textbox(
-                        label="Prediction length",
-                        interactive=False,
-                        value="",
-                    )
-
                 with gr.Row():
                     with gr.Column(scale=5):
                         gr.Markdown("")
@@ -225,31 +227,43 @@ with gr.Blocks() as demo:
             test_universe.input(
                 fn=on_universe_change,
                 inputs=[test_universe],
-                outputs=[test_task]
+                outputs=[test_task, test_model, test_config, sl, pl, config_info, test_dates_section]
             )
 
             test_task.input(
                 fn=on_task_change,
                 inputs=[test_universe, test_task],
-                outputs=[test_model]
+                outputs=[test_model, test_config, sl, pl, config_info, test_dates_section]
             )
 
             test_model.input(
                 fn=on_model_change,
                 inputs=[test_universe, test_task, test_model],
-                outputs=[test_config],
+                outputs=[test_config, sl, pl, config_info, test_dates_section],
             )
 
             test_config.input(
                 fn=on_config_change,
                 inputs=[test_universe, test_task, test_model, test_config],
-                outputs=[config_info, test_dates_section, sl, pl],
+                outputs=[sl, pl, config_info, test_dates_section],
             )
 
             start_test.change(
                 fn=update_end_year_choices,
                 inputs=[start_test],
                 outputs=[end_test],
+            )
+
+            sl.input(
+                fn=on_sl_change,
+                inputs=[test_universe, test_task, test_model, test_config, sl],
+                outputs=[pl, config_info, test_dates_section],
+            )
+
+            pl.input(
+                fn=on_pl_change,
+                inputs=[test_universe, test_task, test_model, test_config, sl, pl],
+                outputs=[config_info, test_dates_section],
             )
 
             end_test.change(

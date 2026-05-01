@@ -87,20 +87,21 @@ def get_available_configs(universe: str, task_type: str, model_name: str):
     configs = []
     for name in os.listdir(base_dir):
         config_dir = os.path.join(base_dir, name)
-        config_file = os.path.join(config_dir, "config_params.json")
-        if os.path.isdir(config_dir) and os.path.isfile(config_file):
+        if os.path.isdir(config_dir):
             configs.append(name)
 
     return sorted(configs)
 
 
-def load_config_params(universe: str, task_type: str, model_name: str, config_name: str):
-    if not universe or not task_type or not model_name or not config_name:
+def load_config_params(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
+    if (not universe or not task_type or not model_name or not config_name or sl_value is None or pl_value is None):
         return None, ""
 
     config_path = os.path.join(
         get_model_params_base_dir(universe, task_type, model_name),
         config_name,
+        f"sl_{sl_value}",
+        f"pl_{pl_value}",
         "config_params.json",
     )
 
@@ -127,49 +128,128 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
 
 def on_universe_change(universe: str):
     tasks = get_available_tasks(universe)
-    first_task = None
 
     return (
-        gr.update(choices=tasks, value=first_task, interactive=bool(tasks))
+        gr.update(choices=tasks, value=None, interactive=bool(tasks)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value="", visible=True),
+        gr.update(visible=False),
     )
-
-
-def on_task_change(universe: str, task_type: str):
-    models = get_available_models(universe, task_type)
-
-    return (
-        gr.update(choices=models, value=None, interactive=bool(models))
-    )
-
 
 def on_model_change(universe: str, task_type: str, model_name: str):
     configs = get_available_configs(universe, task_type, model_name)
 
     return (
-        gr.update(choices=configs, value=None, interactive=bool(configs))
+        gr.update(choices=configs, value=None, interactive=bool(configs)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value="", visible=True),
+        gr.update(visible=False),
     )
+
+def on_task_change(universe: str, task_type: str):
+    models = get_available_models(universe, task_type)
+
+    return (
+        gr.update(choices=models, value=None, interactive=bool(models)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value="", visible=True),
+        gr.update(visible=False),
+    )
+
+def extract_numeric_suffix(folder_name: str, prefix: str):
+    if not folder_name.startswith(prefix):
+        return None
+    try:
+        return int(folder_name[len(prefix):])
+    except ValueError:
+        return None
+
+
+def get_available_sl(universe: str, task_type: str, model_name: str, config_name: str):
+    if not universe or not task_type or not model_name or not config_name:
+        return []
+
+    base_dir = os.path.join(
+        get_model_params_base_dir(universe, task_type, model_name),
+        config_name
+    )
+
+    if not os.path.isdir(base_dir):
+        return []
+
+    sl_values = []
+    for name in os.listdir(base_dir):
+        full_path = os.path.join(base_dir, name)
+        value = extract_numeric_suffix(name, "sl_")
+        if os.path.isdir(full_path) and value is not None:
+            sl_values.append(value)
+
+    return sorted(sl_values)
+
+
+def get_available_pl(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
+    if not universe or not task_type or not model_name or not config_name or sl_value is None:
+        return []
+
+    sl_dir = os.path.join(
+        get_model_params_base_dir(universe, task_type, model_name),
+        config_name,
+        f"sl_{sl_value}"
+    )
+
+    if not os.path.isdir(sl_dir):
+        return []
+
+    pl_values = []
+    for name in os.listdir(sl_dir):
+        full_path = os.path.join(sl_dir, name)
+        value = extract_numeric_suffix(name, "pl_")
+        if os.path.isdir(full_path) and value is not None:
+            pl_values.append(value)
+
+    return sorted(pl_values)
 
 
 def on_config_change(universe: str, task_type: str, model_name: str, config_name: str):
-    params, config_text = load_config_params(universe, task_type, model_name, config_name)
+    sl_values = get_available_sl(universe, task_type, model_name, config_name)
+
+    return (
+        gr.update(choices=sl_values, value=None, interactive=bool(sl_values)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value="", visible=True),
+        gr.update(visible=False),
+    )
+
+def on_sl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
+    pl_values = get_available_pl(universe, task_type, model_name, config_name, sl_value)
+
+    return (
+        gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),
+        gr.update(value="", visible=True),
+        gr.update(visible=False),
+    )
+
+def on_pl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
+    params, config_text = load_config_params(universe, task_type, model_name, config_name, sl_value, pl_value)
 
     if not params:
         return (
             gr.update(value=config_text, visible=True),
             gr.update(visible=False),
-            "",
-            "",
         )
-
-    sl = params.get("sl", "")
-    pl = params.get("pl", "")
 
     return (
         gr.update(value=config_text, visible=True),
         gr.update(visible=True),
-        str(sl),
-        str(pl),
     )
+
+
 
 def update_end_year_choices(start_year):
     all_years = [2020, 2021, 2022, 2023, 2024]
@@ -181,7 +261,7 @@ def update_end_year_choices(start_year):
             interactive=False,
         )
 
-    valid_end_years = [y for y in all_years if y > int(start_year)]
+    valid_end_years = [y for y in all_years if y >= int(start_year)]
 
     return gr.update(
         choices=valid_end_years,
