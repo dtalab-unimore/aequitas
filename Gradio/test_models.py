@@ -1,6 +1,11 @@
 import os
 import json
+import traceback
+from datetime import datetime
+
 import gradio as gr
+
+from test_model_dispatcher import dispatch_test
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -268,3 +273,43 @@ def update_end_year_choices(start_year):
         value=None,
         interactive=bool(valid_end_years),
     )
+
+
+def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year):
+    logs = []
+
+    def push_log(msg):
+        ts = datetime.now().strftime("%H:%M:%S")
+        logs.append(f"[{ts}] {msg}")
+
+    def current_logs():
+        return "\n".join(logs)
+
+    if None in [universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year]:
+        yield "Parametri mancanti.", ""
+        return
+
+    start_test_date = f"{int(start_year)}-01-01"
+    end_date = f"{int(end_year)}-12-31"
+
+    try:
+        push_log("Avvio test...")
+        yield current_logs(), ""
+
+        output = dispatch_test(
+            universe=universe,
+            task_type=task_type,
+            test_model=test_model,
+            config_name=config_name,
+            sl_value=int(sl_value),
+            pl_value=int(pl_value),
+            start_test_date=start_test_date,
+            end_date=end_date,
+            log_fn=push_log,
+        )
+
+        yield current_logs() + "\n[OK] Test completato.", json.dumps(output, indent=2, ensure_ascii=False)
+
+    except Exception:
+        push_log("Errore durante il test.")
+        yield current_logs(), traceback.format_exc()

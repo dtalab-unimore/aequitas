@@ -27,7 +27,10 @@ from test_models import (
     on_task_change,
     on_model_change,
     on_config_change,
-    update_end_year_choices, on_sl_change, on_pl_change
+    update_end_year_choices,
+    on_sl_change,
+    on_pl_change,
+    run_test_with_logs
 )
 
 # -------------------------------------------------
@@ -198,18 +201,27 @@ with gr.Blocks() as demo:
                 gr.Markdown("### 2️⃣ Choose dates to test")
 
                 with gr.Row():
-                    start_test = gr.Dropdown(
-                        choices=[2020, 2021, 2022, 2023, 2024],
-                        value=None,
-                        label="Start Year",
-                    )
+                    with gr.Column():
+                        start_test = gr.Dropdown(
+                            choices=[2020, 2021, 2022, 2023, 2024],
+                            value="",
+                            label="Start Year",
+                        )
 
-                    end_test = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="End Year",
-                        interactive=False,
-                    )
+                        end_test = gr.Dropdown(
+                            choices=[],
+                            value="",
+                            label="End Year",
+                            interactive=False,
+                        )
+
+                    with gr.Column():
+                        test_logs = gr.Code(
+                            label="Test Progress",
+                            language="shell",
+                            value="",
+                            interactive=False,
+                        )
 
                 with gr.Row():
                     with gr.Column(scale=5):
@@ -223,6 +235,14 @@ with gr.Blocks() as demo:
                         )
                     with gr.Column(scale=5):
                         gr.Markdown("")
+
+                with gr.Row():
+                    test_result = gr.Code(
+                        label="Test Result",
+                        language="json",
+                        value="",
+                        interactive=False,
+                    )
 
             test_universe.input(
                 fn=on_universe_change,
@@ -270,6 +290,12 @@ with gr.Blocks() as demo:
                 fn=lambda start, end: gr.update(interactive=(start is not None and end is not None)),
                 inputs=[start_test, end_test],
                 outputs=test_button,
+            )
+
+            test_button.click(
+                fn=run_test_with_logs,
+                inputs=[test_universe, test_task, test_model, test_config, sl, pl, start_test, end_test],
+                outputs=[test_logs, test_result],
             )
 
 

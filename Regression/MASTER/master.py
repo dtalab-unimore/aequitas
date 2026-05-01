@@ -5,7 +5,7 @@ from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 import math
 
-from base_model import SequenceModel
+from .base_model import SequenceModel
 
 
 class PositionalEncoding(nn.Module):

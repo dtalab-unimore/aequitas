@@ -7,9 +7,9 @@ import time
 import pandas as pd
 import torch
 
-from load_dataset import RobustZScoreNormalization, CSVDataset
-from master import MASTERModel
-from utils import filter_constituents_by_date
+from .load_dataset import RobustZScoreNormalization, CSVDataset
+from .master import MASTERModel
+from .utils import filter_constituents_by_date
 
 
 def save_datasets(dl_train, dl_valid, dl_test, universe, seq_len, pred_len):

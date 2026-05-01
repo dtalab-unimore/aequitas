@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import torch
 import torch.optim as optim
 
-from load_dataset import DailyBatchSamplerRandomSP500
+from .load_dataset import DailyBatchSamplerRandomSP500
 
 
 def calc_ic(pred, label):
