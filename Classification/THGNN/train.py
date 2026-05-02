@@ -11,9 +11,9 @@ from torch import optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 
-from data_loader import CustomDataset
-from trainer.trainer import train_epoch, bce_loss, eval_model
-from model.Thgnn import StockHeteGAT
+from .data_loader import CustomDataset
+from .trainer.trainer import train_epoch, bce_loss, eval_model
+from .model.Thgnn import StockHeteGAT
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 
@@ -31,7 +31,7 @@ def select_valid_ticker(df, corr_matr, start_date, end_date):
     corr_matr['tickers'] = [t for t in corr_matr['tickers'] if t in tickers]
     return df, corr_matr, tickers, dates
 
-def extract_labels(df):
+def extract_labels(df, args):
     df['Label'] = df.groupby('instrument')['adj_close'].transform(lambda x: ((x.shift(-args.pred_len) - x) / x) * 100)
     df = df.drop(columns=['adj_close'])
     return df
@@ -80,7 +80,7 @@ if __name__=='__main__':
     args = ArgumentParser()
 
     # Dataset Parameters
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data')
     args.add_argument('--universe', type=str, default='sx5e')
     args.add_argument('--model_name', type=str, default='THGNN')
     args.add_argument('--seed', type=int, default=42)
@@ -123,7 +123,7 @@ if __name__=='__main__':
 
     corr_matrix = dict(np.load(f'{args.data_path}/{args.universe}/{args.universe}_corr_matrix.npz', allow_pickle=True))
 
-    dataset = extract_labels(dataset)
+    dataset = extract_labels(dataset, args)
     dataset, corr_matrix, tickers, dates = select_valid_ticker(dataset, corr_matrix, args.start_date, args.end_date)
 
     all_keys = pd.DataFrame(tickers, columns=['instrument']).merge(dates, how='cross')
