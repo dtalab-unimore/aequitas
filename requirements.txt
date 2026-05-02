@@ -16,3 +16,4 @@ xgboost==3.0.5
 xlsxwriter==3.2.9
 yfinance==0.2.66
 torch==2.11.0
+torch-geometric==2.7.0
