@@ -13,9 +13,12 @@ from torch.utils.data import DataLoader
 
 from data_loader import CustomDataset
 from trainer.trainer import train_epoch, bce_loss, eval_model
-from utils import filter_constituents_by_date
 from model.Thgnn import StockHeteGAT
+from utils.filter_constituents import filter_constituents_by_date
+from utils.load_configuation import create_saving_path
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 def select_valid_ticker(df, corr_matr, start_date, end_date):
     tickers_before = df[df['date'] < start_date]['instrument'].drop_duplicates().reset_index(drop=True)
@@ -47,24 +50,50 @@ def calcultate_matrics(preds, labels):
     }
     return metrics
 
+def train(args, model, train_loader, optimizer, bce_loss, default_scheduler, valid_loader, metrics_path, model_save_path):
+    print('Start Training...')
+    for epoch in range(args.n_epochs):
+        train_loss = train_epoch(args=args, model=model, dataset_train=train_loader,
+                                 optimizer=optimizer, scheduler=default_scheduler, loss_fcn=bce_loss)
+        if epoch % args.epochs_eval == 0:
+            eval_loss, val_preds, val_labels = eval_model(args=args, model=model, dataset_eval=valid_loader,
+                                                          loss_fcn=bce_loss)
+            print('Epoch: {}/{}, train loss: {:.6f}, val loss: {:.6f}'.format(epoch + 1, args.n_epochs, train_loss,
+                                                                              eval_loss))
+
+            val_metrics = calcultate_matrics(val_preds, val_labels)
+            val_metrics = {k: float(v) for k, v in val_metrics.items()}
+
+            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
+                json.dump(val_metrics, f, indent=4)
+
+        else:
+            print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch + 1, args.n_epochs, train_loss))
+        if (epoch + 1) % args.n_epochs == 0:
+            print("save model!")
+            state = {'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch + 1}
+            torch.save(state, os.path.join(model_save_path, "model.pth"))
+
+        print(f'Epoch {epoch + 1}/{args.n_epochs} completed.')
+
 if __name__=='__main__':
     args = ArgumentParser()
 
     # Dataset Parameters
     args.add_argument('--data_path', type=str, default='../../Evaluation/data')
-    args.add_argument('--universe', type=str, default='sp500')
+    args.add_argument('--universe', type=str, default='sx5e')
     args.add_argument('--model_name', type=str, default='THGNN')
     args.add_argument('--seed', type=int, default=42)
 
     # Prediction Parameters
     args.add_argument('--seq_len', type=int, default=20)
     args.add_argument('--pred_len', type=int, default=5)
-    args.add_argument('--start_date', type=str, default='2015-01-01')
-    args.add_argument('--end_train_date', type=str, default='2018-12-31')
-    args.add_argument('--start_valid_date', type=str, default='2019-01-01')
-    args.add_argument('--end_valid_date', type=str, default='2019-12-31')
-    args.add_argument('--start_test_date', type=str, default='2020-01-01')
-    args.add_argument('--end_date', type=str, default='2020-12-31')
+    args.add_argument('--start_date', type=str, default='2020-01-01')
+    args.add_argument('--end_train_date', type=str, default='2020-12-31')
+    args.add_argument('--start_valid_date', type=str, default='2021-01-01')
+    args.add_argument('--end_valid_date', type=str, default='2022-12-31')
+    args.add_argument('--start_test_date', type=str, default='2023-01-01')
+    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--n_epochs', type=int, default=60)
@@ -78,8 +107,10 @@ if __name__=='__main__':
 
     args = args.parse_args()
 
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
+    model_save_path, metrics_path = create_saving_path(args, 'Classification', 'THGNN', PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -142,28 +173,7 @@ if __name__=='__main__':
     cold_scheduler = StepLR(optimizer=optimizer, step_size=5000, gamma=0.9, last_epoch=-1)
     default_scheduler = cold_scheduler
 
-    print('Start Training...')
-    for epoch in range(args.n_epochs):
-        train_loss = train_epoch(args=args, model=model, dataset_train=train_loader,
-                                 optimizer=optimizer, scheduler=default_scheduler, loss_fcn=bce_loss)
-        if epoch % args.epochs_eval == 0:
-            eval_loss, val_preds, val_labels = eval_model(args=args, model=model, dataset_eval=valid_loader, loss_fcn=bce_loss)
-            print('Epoch: {}/{}, train loss: {:.6f}, val loss: {:.6f}'.format(epoch + 1, args.n_epochs, train_loss, eval_loss))
-
-            val_metrics = calcultate_matrics(val_preds, val_labels)
-            val_metrics = {k: float(v) for k, v in val_metrics.items()}
-
-            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(val_metrics, f, indent=4)
-
-        else:
-            print('Epoch: {}/{}, train loss: {:.6f}'.format(epoch + 1, args.n_epochs, train_loss))
-        # if (epoch + 1) % args.n_epochs == 0:
-            # print("save model!")
-            # state = {'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch + 1}
-            # torch.save(state, os.path.join(metrics_path, "_epoch_" + str(epoch + 1) + ".dat"))
-
-        print(f'Epoch {epoch + 1}/{args.n_epochs} completed.')
+    train(args, model, train_loader, optimizer, bce_loss, default_scheduler, valid_loader, metrics_path, model_save_path)
 
     print('Start Testing...')
 

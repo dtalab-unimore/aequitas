@@ -1,23 +1,19 @@
 import json
 import os
-import pickle
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 
 import pandas as pd
 import torch
 
+from utils.load_configuation import _log, load_configuration
+from utils.save_results import save_results
 from .load_dataset import RobustZScoreNormalization, CSVDataset
 from .master import MASTERModel
-from .train import extract_labels, select_valid_ticker, create_saving_path
+from .train import extract_labels, select_valid_ticker
 from .utils import filter_constituents_by_date
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
-
-
-def _log(log_fn, msg):
-    if log_fn is not None:
-        log_fn(msg)
 
 
 def run_test(
@@ -33,42 +29,10 @@ def run_test(
 ):
     _log(log_fn, "Preparazione del test...")
 
-    config_dir = os.path.join(
-        PROJECT_ROOT,
-        task_type,
-        test_model,
-        "model_params",
-        universe,
-        config_name,
-        f"sl_{sl_value}",
-        f"pl_{pl_value}",
+    args, model_save_path, metrics_path = load_configuration(
+        task_type, test_model, universe, config_name, sl_value, pl_value, start_test_date, end_date, PROJECT_ROOT,
+        log_fn
     )
-
-    config_path = os.path.join(config_dir, "config_params.json")
-    _log(log_fn, f"Lettura configurazione da: {config_path}")
-
-    if not os.path.isfile(config_path):
-        raise FileNotFoundError(f"config_params.json non trovato: {config_path}")
-
-    with open(config_path, "r", encoding="utf-8-sig") as f:
-        saved_args = json.load(f)
-
-    args_dict = saved_args.copy()
-    args_dict["start_test_date"] = start_test_date
-    args_dict["end_date"] = end_date
-    args_dict["model_name"] = config_name
-    args_dict["universe"] = universe
-    args_dict["seq_len"] = sl_value
-    args_dict["pred_len"] = pl_value
-    args_dict["data_path"] = "../Evaluation/data"
-
-    args = Namespace(**args_dict)
-
-    _log(log_fn, "Creazione dei path di salvataggio...")
-    model_save_path, metrics_path = create_saving_path(args)
-    model_save_path = os.path.abspath(os.path.join(PROJECT_ROOT, task_type, test_model, model_save_path))
-    metrics_path = os.path.abspath(os.path.join(PROJECT_ROOT, task_type, test_model, metrics_path))
-
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
     _log(log_fn, "Caricamento dati alpha...")
@@ -137,30 +101,19 @@ def run_test(
     _log(log_fn, "Pesi caricati correttamente.")
 
     _log(log_fn, "Avvio predizione...")
-    predictions, labels, metrics = model.predict(dl_test, args.num_workers)
+    preds, labels, metrics = model.predict(dl_test, args.num_workers)
 
-    metrics = {k: float(v) for k, v in metrics.items()}
-    _log(log_fn, f"Metriche calcolate: {metrics}")
-
-    results = {
-        "metrics": metrics,
-        "preds": predictions,
-        "labels": labels,
-        "pred_date": dl_test.output_dates,
-        "last_date": dl_test.input_dates,
-        "tickers": dl_test.tickers_to_date
-    }
-
-    results_pkl = f"{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl"
-    metrics_json = f"{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json"
-
-    with open(results_pkl, "wb") as f:
-        pickle.dump(results, f)
-
-    with open(metrics_json, "w") as f:
-        json.dump(metrics, f)
-
-    _log(log_fn, "Test completato con successo.")
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        metrics,
+        preds,
+        labels,
+        dl_test.output_dates,
+        dl_test.input_dates,
+        dl_test.tickers_to_date,
+        metrics_path,
+        log_fn=log_fn
+    )
 
     return {
         "metrics": metrics,
@@ -172,19 +125,19 @@ def run_test(
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--task_type", type=str, required=True)
-    parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--universe", type=str, required=True)
-    parser.add_argument("--config_name", type=str, required=True)
-    parser.add_argument("--sl_value", type=int, required=True)
-    parser.add_argument("--pl_value", type=int, required=True)
-    parser.add_argument("--start_test_date", type=str, required=True)
-    parser.add_argument("--end_date", type=str, required=True)
+    parser.add_argument("--task_type", type=str, default='Regression')
+    parser.add_argument("--model_name", type=str, default='MATCC')
+    parser.add_argument("--universe", type=str, default='sxxp')
+    parser.add_argument("--config_name", type=str, default='MATCC')
+    parser.add_argument("--sl_value", type=int, default=5)
+    parser.add_argument("--pl_value", type=int, default=1)
+    parser.add_argument("--start_test_date", type=str, default='2023-01-01')
+    parser.add_argument("--end_date", type=str, default='2023-12-31')
     args = parser.parse_args()
 
     out = run_test(
         task_type=args.task_type,
-        model_name=args.model_name,
+        test_model=args.model_name,
         universe=args.universe,
         config_name=args.config_name,
         sl_value=args.sl_value,

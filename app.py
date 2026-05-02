@@ -3,7 +3,7 @@ import sys
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ""))
 EVALUATION_DIR = os.path.join(PROJECT_ROOT, "Evaluation")
 
 for p in [PROJECT_ROOT, EVALUATION_DIR]:
@@ -13,7 +13,7 @@ for p in [PROJECT_ROOT, EVALUATION_DIR]:
 import gradio as gr
 import pandas as pd
 
-from data_load import (
+from Gradio.data_load import (
     run_data_pipeline,
     use_existing_dataset,
     update_existing_button,
@@ -21,7 +21,7 @@ from data_load import (
     refresh_preview_controls
 )
 
-from test_models import (
+from Gradio.test_models import (
     get_universe_options,
     on_universe_change,
     on_task_change,

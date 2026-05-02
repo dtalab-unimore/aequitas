@@ -5,7 +5,7 @@ from datetime import datetime
 
 import gradio as gr
 
-from test_model_dispatcher import dispatch_test
+from Gradio.test_model_dispatcher import dispatch_test
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))

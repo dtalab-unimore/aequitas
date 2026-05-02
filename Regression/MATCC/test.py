@@ -1,24 +1,19 @@
 import json
 import os
-import pickle
-from argparse import Namespace, ArgumentParser
+from argparse import ArgumentParser
 
 import pandas as pd
 import torch
 
+from utils.filter_constituents import filter_constituents_by_date
+from utils.load_configuation import _log, load_configuration
+from utils.save_results import save_results
 from .load_dataset import RobustZScoreNormalization, CSVDataset
 from .model.MATCC import MATCC
-from .train import create_saving_path, select_valid_ticker, _init_data_loader, valid_epoch
-from .utils import filter_constituents_by_date
+from .train import select_valid_ticker, _init_data_loader, valid_epoch
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
-
-
-def _log(log_fn, msg):
-    if log_fn is not None:
-        log_fn(msg)
-
 
 def run_test(
         task_type,
@@ -33,39 +28,9 @@ def run_test(
 ):
     _log(log_fn, "Preparazione del test...")
 
-    config_dir = os.path.join(
-        PROJECT_ROOT,
-        task_type,
-        test_model,
-        "model_params",
-        universe,
-        config_name,
-        f"sl_{sl_value}",
-        f"pl_{pl_value}",
+    args, model_save_path, metrics_path = load_configuration(
+        task_type, test_model, universe, config_name, sl_value, pl_value, start_test_date, end_date, PROJECT_ROOT, log_fn
     )
-
-    config_path = os.path.join(config_dir, "config_params.json")
-    _log(log_fn, f"Lettura configurazione da: {config_path}")
-
-    if not os.path.isfile(config_path):
-        raise FileNotFoundError(f"config_params.json non trovato: {config_path}")
-
-    with open(config_path, "r", encoding="utf-8-sig") as f:
-        saved_args = json.load(f)
-
-    args_dict = saved_args.copy()
-    args_dict["start_test_date"] = start_test_date
-    args_dict["end_date"] = end_date
-    args_dict["model_name"] = config_name
-    args_dict["universe"] = universe
-    args_dict["seq_len"] = sl_value
-    args_dict["pred_len"] = pl_value
-    args_dict["data_path"] = "../Evaluation/data"
-
-    args = Namespace(**args_dict)
-
-    _log(log_fn, "Creazione dei path di salvataggio...")
-    model_save_path, metrics_path = create_saving_path(args)
 
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
@@ -111,26 +76,17 @@ def run_test(
 
     test_loss, metrics, preds, labels = valid_epoch(test_loader, model, device)
 
-    metrics = {k: float(v) for k, v in metrics.items()}
-    results = {
-        'metrics': metrics,
-        'preds': preds,
-        'labels': labels,
-        'pred_date': dl_test.output_dates,
-        'last_date': dl_test.input_dates,
-        'tickers': dl_test.tickers_to_date
-    }
-
-    results_pkl = f"{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl"
-    metrics_json = f"{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json"
-
-    with open(results_pkl, "wb") as f:
-        pickle.dump(results, f)
-
-    with open(metrics_json, "w") as f:
-        json.dump(metrics, f)
-
-    _log(log_fn, "Test completato con successo.")
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        metrics,
+        preds,
+        labels,
+        dl_test.output_dates,
+        dl_test.input_dates,
+        dl_test.tickers_to_date,
+        metrics_path,
+        log_fn=log_fn
+    )
 
     return {
         "metrics": metrics,
@@ -149,7 +105,7 @@ if __name__=='__main__':
     parser.add_argument("--sl_value", type=int, default=5)
     parser.add_argument("--pl_value", type=int, default=1)
     parser.add_argument("--start_test_date", type=str, default='2023-01-01')
-    parser.add_argument("--end_date", type=str, default='2023-01-01')
+    parser.add_argument("--end_date", type=str, default='2023-12-31')
     args = parser.parse_args()
 
     out = run_test(

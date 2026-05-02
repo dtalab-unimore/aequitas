@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from .load_dataset import CSVDataset, DailyBatchSamplerRandom, RobustZScoreNormalization
 from .lr_scheduler import ChainedScheduler
 from .model.MATCC import MATCC
-from .utils import filter_constituents_by_date
+from utils.filter_constituents import filter_constituents_by_date
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -303,7 +303,7 @@ if __name__=='__main__':
     # Dataset Parameters
     args.add_argument('--model_name', type=str, default='MATCC')
     args.add_argument('--universe', type=str, default='sxxp')
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data')
     args.add_argument('--data_preprocessing', action='store_true', default=False)
 
     # Prediction Parameters
