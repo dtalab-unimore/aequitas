@@ -15,6 +15,7 @@ from .load_dataset import CSVDataset, DailyBatchSamplerRandom, RobustZScoreNorma
 from .lr_scheduler import ChainedScheduler
 from .model.MATCC import MATCC
 from utils.filter_constituents import filter_constituents_by_date
+from utils.load_configuation import create_saving_path
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -48,21 +49,6 @@ def open_datasets(universe, seq_len, pred_len):
         dl_test = pickle.load(f)
 
     return dl_train, dl_valid, dl_test
-
-def create_saving_path(args, task_type='Regression', test_model='MATCC'):
-    model_save_path = f"model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
-    metrics_path = f"results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-
-    model_save_path = os.path.join(PROJECT_ROOT, task_type, test_model, model_save_path)
-    metrics_path = os.path.join(PROJECT_ROOT, task_type, test_model, metrics_path)
-
-    if not os.path.exists(model_save_path):
-        os.makedirs(model_save_path, exist_ok=True)
-
-    if not os.path.exists(metrics_path):
-        os.makedirs(metrics_path, exist_ok=True)
-
-    return model_save_path, metrics_path
 
 
 def calc_ic(pred, label):
@@ -364,7 +350,7 @@ if __name__=='__main__':
     args.gate_input_end_index = shape_m + shape_a - 3
 
     torch.cuda.manual_seed(args.seed)
-    model_save_path, metrics_path = create_saving_path(args)
+    model_save_path, metrics_path = create_saving_path(args, "Regression", "MATCC", PROJECT_ROOT)
     print(model_save_path)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
