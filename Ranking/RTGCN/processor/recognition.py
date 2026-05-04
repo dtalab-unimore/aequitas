@@ -15,6 +15,7 @@ from Ranking.RTGCN.feeder.tools import get_metrics
 from Ranking.RTGCN.net.loss import Loss
 from Ranking.RTGCN.processor.processor import Processor
 from Ranking.RTGCN.torchlight.torchlight import str2bool
+from utils.save_results import save_results
 
 
 def weights_init(m):
@@ -155,17 +156,16 @@ class REC_Processor(Processor):
         self.show_epoch_info()
         self.io.print_log('Time consumption:{:.4f}s'.format(time.time()-start_time))
 
-    def test(self, evaluation=True):
+    def test(self, metrics_path, flag='valid', evaluation=True):
 
         self.model.eval()
-        loader_test = self.data_loader['test']
-        loader_valid = self.data_loader['valid']
+        loader = self.data_loader[flag]
 
         loss_value = []
         result_frag = []
         label_frag = []
 
-        for data, closing_price, label in loader_valid:
+        for data, closing_price, label in loader:
 
             # get data
             data = data.float().to(self.dev)
@@ -187,65 +187,18 @@ class REC_Processor(Processor):
         label_frag = np.concatenate(label_frag, axis=0)
         result_frag = np.concatenate(result_frag, axis=0)
 
-        metrics_path = f'./results/{self.arg.universe}/{self.arg.model_name}/{self.arg.seed}/y{self.arg.start_test_date.split("-")[0]}'
-        os.makedirs(metrics_path, exist_ok=True)
+        metrics = get_metrics(label_frag, result_frag)
 
-        valid_metrics = get_metrics(label_frag, result_frag)
-        valid_metrics = {k: float(v) for k, v in valid_metrics.items()}
+        if flag == 'valid':
+            metrics = {k: float(v) for k, v in metrics.items()}
 
-        with open(f'{metrics_path}/val_metrics_sl{self.arg.seq_len}_pl{self.arg.pred_len}.json', 'w') as f:
-            json.dump(valid_metrics, f, indent=4)
+            with open(f'{metrics_path}/val_metrics_sl{self.arg.seq_len}_pl{self.arg.pred_len}.json', 'w') as f:
+                json.dump(metrics, f, indent=4)
+        else:
+            label_frag = [np.expand_dims(label_frag[i], axis=1) for i in range(label_frag.shape[0])]
+            result_frag = [np.expand_dims(result_frag[i], axis=1) for i in range(result_frag.shape[0])]
 
-        loss_value = []
-        result_frag = []
-        label_frag = []
-
-        for data, closing_price, label in loader_test:
-            
-            # get data
-            data = data.float().to(self.dev)
-            closing_price = closing_price.float().to(self.dev)
-            label = label.float().to(self.dev)
-
-            # inference
-            with torch.no_grad():
-                output = self.model(data)
-                prediction = torch.div(torch.sub(output, closing_price), closing_price)
-            result_frag.append(prediction.data.cpu().numpy())
-
-            # get loss
-            if evaluation:
-                loss = self.loss(prediction, label, self.arg.alpha)
-                loss_value.append(loss.item())
-                label_frag.append(label.data.cpu().numpy())
-
-        label_frag = np.concatenate(label_frag, axis=0)
-        result_frag = np.concatenate(result_frag, axis=0)
-
-        test_metrics = get_metrics(label_frag, result_frag)
-        test_metrics = {k: float(v) for k, v in test_metrics.items()}
-
-        label_frag = [np.expand_dims(label_frag[i], axis=1) for i in range(label_frag.shape[0])]
-        result_frag = [np.expand_dims(result_frag[i], axis=1) for i in range(result_frag.shape[0])]
-
-        dataset = self.data_loader['test'].dataset
-
-        results = {
-            'metrics': test_metrics,
-            'preds': result_frag,
-            'labels': label_frag,
-            'pred_date': dataset.dates_gt.to_list(),
-            'last_date': dataset.last_seq_date.to_list(),
-            'tickers': [dataset.tickers]*len(result_frag)
-        }
-
-        with open(f'{metrics_path}/metrics_sl{self.arg.seq_len}_pl{self.arg.pred_len}.json', 'w') as f:
-            json.dump(test_metrics, f, indent=4)
-
-        with open(f'{metrics_path}/results_sl{self.arg.seq_len}_pl{self.arg.pred_len}.pkl', 'wb') as f:
-            pickle.dump(results, f)
-
-        print('Metrics: ', test_metrics)
+        return metrics, result_frag, label_frag, loader.dataset
 
     @staticmethod
     def get_parser(add_help=False):

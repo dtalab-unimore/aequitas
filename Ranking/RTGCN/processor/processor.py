@@ -91,15 +91,16 @@ class Processor(IO):
         self.epoch_info['mean loss'] = 0
         self.show_epoch_info()
 
-    def test(self):
+    def test(self, metrics_path, flag):
         for _ in range(100):
             self.iter_info['loss'] = 1
             self.show_iter_info()
         self.epoch_info['mean loss'] = 1
         self.epoch_info['MAE'] = 0
         self.show_epoch_info()
+        return {}, [], [], None
 
-    def start(self):
+    def start(self, model_save_path, metrics_path):
         self.io.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
         self.best_performance = {'mean_loss':99999, 'mrr':0, 'top1':0, 'top5':0, 'top10':0}
         # training phase
@@ -115,7 +116,10 @@ class Processor(IO):
 
         # evaluation
         self.io.print_log('Evaluation Start:')
-        self.test()
+        _, _, _, _ = self.test(metrics_path, flag='valid')
+        metrics, preds, labels, dataset = self.test(metrics_path, flag='test')
+
+        return metrics, preds, labels, dataset
 
     @staticmethod
     def get_parser(add_help=False):

@@ -77,7 +77,9 @@ class IO():
         if self.arg.use_gpu and len(self.gpus) > 1:
             self.model = nn.DataParallel(self.model, device_ids=self.gpus)
 
-    def start(self):
+    def start(self, model_save_path, metrics_path):
+        self.io.print_log('Metrics Path: {}'.format(metrics_path))
+        self.io.print_log('Model Save Path: {}'.format(model_save_path))
         self.io.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
 
     @staticmethod
