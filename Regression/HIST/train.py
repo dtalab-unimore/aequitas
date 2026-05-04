@@ -20,8 +20,9 @@ from qlib.contrib.model.pytorch_sfm import SFM_Model
 from qlib.contrib.model.pytorch_alstm import ALSTMModel
 from qlib.contrib.model.pytorch_transformer import Transformer
 from model import MLP, HIST
-from utils import metric_fn, mse, filter_constituents_by_date, select_valid_ticker
+from utils import metric_fn, mse, select_valid_ticker
 from dataloader import DataLoader, RobustZScoreNormalization
+from utils.filter_constituents import filter_constituents_by_date
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 

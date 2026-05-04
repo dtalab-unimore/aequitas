@@ -10,8 +10,11 @@ import argparse
 from module import FactorVAE, FeatureExtractor, FactorDecoder, FactorEncoder, FactorPredictor, AlphaLayer, BetaLayer
 from dataset import init_data_loader, RobustZScoreNormalization
 from model import train, validate, test
-from utils import set_seed, DataArgument, filter_constituents_by_date
+from utils import set_seed, DataArgument
 import wandb
+
+from utils.filter_constituents import filter_constituents_by_date
+
 
 def create_saving_path(args):
     model_save_path = f"./model_params/{args.universe}/{args.model_name}/{args.seed}"

@@ -8,8 +8,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from load_dataset import RobustZScoreNormalization, CustomDataset
-from utils import build_config_from_args, filter_constituents_by_date
+from utils import build_config_from_args
 from finformer import trainer
+from utils.filter_constituents import filter_constituents_by_date
 
 
 def select_valid_ticker(df, start_date, end_date):

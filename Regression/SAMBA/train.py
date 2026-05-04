@@ -14,7 +14,7 @@ from training import print_model_parameters, Trainer
 from config.model_config import ModelArgs
 from models.samba import SAMBA
 from preprocessing import CustomDataset
-from utils import filter_constituents_by_date
+from utils.filter_constituents import filter_constituents_by_date
 
 
 def apply_normalization(df, start_date, end_date):
