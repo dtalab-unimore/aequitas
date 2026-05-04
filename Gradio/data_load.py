@@ -4,28 +4,341 @@ import json
 import gradio as gr
 import pandas as pd
 import numpy as np
+import math
+from functools import lru_cache
 
 # -------------------------------------------------
 # CONFIG
 # -------------------------------------------------
-DRY_RUN = False  # True = non chiama API a pagamento, crea dati mock
+DRY_RUN = False  # True = does not call paid APIs; generates mock data
 
 # -------------------------------------------------
 # PATH HELPERS
 # -------------------------------------------------
 def dataset_base_path(universe: str) -> str:
-    return os.path.join("./Evaluation/data", universe, f"{universe}.csv")
+     return os.path.join("./Evaluation/data", universe, f"{universe}.csv")
 
 
 def dataset_exists(universe: str) -> bool:
-    if not universe:
-        return False
-    return os.path.exists(dataset_base_path(universe))
-
+     if not universe:
+         return False
+     return os.path.exists(dataset_base_path(universe))
 
 def _ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
+     os.makedirs(path, exist_ok=True)
 
+PREVIEW_PAGE_SIZE = 10
+
+
+def _build_file_map(universe: str) -> dict:
+    out_dir = os.path.join("./Evaluation/data", universe)
+    data_dir = "./Evaluation/data"
+    return {
+        "Dataset":                 os.path.join(out_dir,  f"{universe}.csv"),
+        "Info":                    os.path.join(out_dir,  f"{universe}_info.csv"),
+        "Market Cap":              os.path.join(out_dir,  f"{universe}_market_cap.csv"),
+        "Alpha158":                os.path.join(out_dir,  f"{universe}_alpha158.csv"),
+        "Alpha360":                os.path.join(out_dir,  f"{universe}_alpha360.csv"),
+        "Technicals":              os.path.join(out_dir,  f"{universe}_tech.csv"),
+        "US Indexes":              os.path.join(data_dir, "us_indexes.csv"),
+        "EU Indexes":              os.path.join(data_dir, "eu_indexes.csv"),
+        "US Market Info":          os.path.join(data_dir, "us_market.csv"),
+        "EU Market Info":          os.path.join(data_dir, "eu_market.csv"),
+        "CNNPred Market Features": os.path.join(data_dir, "cnnpred_market.csv"),
+        "News Relations":          os.path.join(data_dir, "news"),
+    }
+
+
+@lru_cache(maxsize=256)
+def _count_csv_rows(path: str) -> int:
+    """
+    Counts CSV rows without loading the full file into memory.
+    Subtracts 1 for the header.
+    """
+    try:
+        with open(path, "rb") as f:
+            total_lines = sum(
+                chunk.count(b"\n")
+                for chunk in iter(lambda: f.read(1024 * 1024), b"")
+            )
+        return max(total_lines - 1, 0)
+    except Exception:
+        return 0
+
+
+def _csv_preview_page_df(
+    path: str,
+    page: int = 0,
+    page_size: int = PREVIEW_PAGE_SIZE,
+) -> tuple[pd.DataFrame, int]:
+    """
+    Loads only one page from a CSV file.
+    """
+    total_rows = _count_csv_rows(path)
+    total_pages = max(math.ceil(total_rows / page_size), 1)
+
+    page = max(0, min(int(page), total_pages - 1))
+    start_row = page * page_size
+
+    try:
+        df = pd.read_csv(
+            path,
+            skiprows=range(1, start_row + 1),
+            nrows=page_size,
+        )
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame()
+
+    return df, total_rows
+
+
+def _safe_json_load(path: str):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f), None
+    except Exception as e:
+        return None, str(e)
+
+
+def _flatten_json_records(file_name: str, payload) -> list[dict]:
+    """
+    Returns a list of table rows based on the JSON content.
+    - dict -> 1 row
+    - list[dict] -> one row per element
+    - other types -> 1 row with raw_json
+    """
+    if isinstance(payload, dict):
+        row = pd.json_normalize(payload, sep=".").to_dict(orient="records")[0]
+        row["file_name"] = file_name
+        return [row]
+
+    if isinstance(payload, list):
+        if len(payload) == 0:
+            return [{
+                "file_name": file_name,
+                "message": "Empty JSON list",
+            }]
+
+        if all(isinstance(item, dict) for item in payload):
+            rows = pd.json_normalize(payload, sep=".").to_dict(orient="records")
+            for row in rows:
+                row["file_name"] = file_name
+            return rows
+
+        return [{
+            "file_name": file_name,
+            "raw_json": json.dumps(payload, ensure_ascii=False),
+        }]
+
+    return [{
+        "file_name": file_name,
+        "raw_json": json.dumps(payload, ensure_ascii=False),
+    }]
+
+
+def _directory_json_preview_page_df(
+    path: str,
+    page: int = 0,
+    page_size: int = PREVIEW_PAGE_SIZE,
+    max_rows_per_file: int = 20,
+) -> tuple[pd.DataFrame, int]:
+    """
+    Pagetes JSON files inside a directory.
+    Each JSON file can produce multiple rows.
+    For speed, Pagetion is file-based first, then flattened.
+    """
+    json_files = sorted([
+        f for f in os.listdir(path)
+        if os.path.isfile(os.path.join(path, f)) and f.lower().endswith(".json")
+    ])
+
+    total_files = len(json_files)
+
+    if total_files == 0:
+        return pd.DataFrame({
+            "message": [f"No JSON files found in: {path}"]
+        }), 0
+
+    page = max(0, int(page))
+    start_file = page * page_size
+    end_file = start_file + page_size
+
+    selected_files = json_files[start_file:end_file]
+
+    rows = []
+
+    for file_name in selected_files:
+        full_path = os.path.join(path, file_name)
+        payload, err = _safe_json_load(full_path)
+
+        if err is not None:
+            rows.append({
+                "file_name": file_name,
+                "error": err,
+            })
+            continue
+
+        file_rows = _flatten_json_records(file_name, payload)
+        rows.extend(file_rows[:max_rows_per_file])
+
+    if not rows:
+        return pd.DataFrame({
+            "message": [f"No JSON rows found in: {path}"]
+        }), total_files
+
+    df = pd.DataFrame(rows)
+
+    cols = list(df.columns)
+    preferred = [
+        "file_name", "date", "title", "source", "ticker",
+        "content", "summary", "url", "error"
+    ]
+    ordered = [c for c in preferred if c in cols] + [
+        c for c in cols if c not in preferred
+    ]
+
+    df = df[ordered]
+
+    return df, total_files
+
+
+def load_preview_file_page(
+    universe: str,
+    preview_name: str,
+    page: int = 0,
+    page_size: int = PREVIEW_PAGE_SIZE,
+):
+    """
+    Loads one preview page and returns:
+    dataframe,
+    page label,
+    previous button update,
+    next button update,
+    normalized current page.
+    """
+    if not preview_name:
+        return (
+            pd.DataFrame(),
+            "0 / 0",
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            0,
+        )
+
+    path = _build_file_map(universe).get(preview_name)
+
+    if not path or not os.path.exists(path):
+        return (
+            pd.DataFrame({"message": [f"File not found: {preview_name}"]}),
+            "0 / 0",
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            0,
+        )
+
+    page = max(0, int(page))
+
+    if path.endswith(".csv"):
+        df, total_items = _csv_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+        # item_label = "righe"
+
+    elif os.path.isdir(path):
+        df, total_items = _directory_json_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+        # item_label = "file JSON"
+
+    else:
+        return (
+            pd.DataFrame({"message": [f"Format not supported: {path}"]}),
+            "0 / 0",
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            0,
+        )
+
+    total_pages = max(math.ceil(total_items / page_size), 1)
+    page = max(0, min(page, total_pages - 1))
+
+    # start_item = page * page_size + 1 if total_items > 0 else 0
+    # end_item = min((page + 1) * page_size, total_items)
+
+    page_label = f"{page + 1} / {total_pages}"
+        # f"— {item_label} {start_item}-{end_item} di {total_items}"
+
+
+    return (
+        df,
+        page_label,
+        gr.update(interactive=page > 0),
+        gr.update(interactive=page < total_pages - 1),
+        page,
+    )
+
+
+def reset_preview_page(universe: str, preview_name: str):
+    return load_preview_file_page(
+        universe=universe,
+        preview_name=preview_name,
+        page=0,
+    )
+
+
+def next_preview_page(universe: str, preview_name: str, current_page: int):
+    return load_preview_file_page(
+        universe=universe,
+        preview_name=preview_name,
+        page=int(current_page) + 1,
+    )
+
+
+def prev_preview_page(universe: str, preview_name: str, current_page: int):
+    return load_preview_file_page(
+        universe=universe,
+        preview_name=preview_name,
+        page=int(current_page) - 1,
+    )
+
+
+def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
+    """
+    Backward-compatible function.
+    It now returns only the first preview page.
+    """
+    df, _, _, _, _ = load_preview_file_page(
+        universe=universe,
+        preview_name=preview_name,
+        page=0,
+    )
+    return df
+
+
+def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
+    """
+    Backward-compatible function.
+    Prefer reset_preview_page in the Gradio UI.
+    """
+    return load_preview_file(universe, preview_name)
+
+
+def refresh_preview_controls(universe: str):
+    """
+    Only refreshes the dropdown options.
+    Does not load the full preview automatically.
+    """
+    if not universe:
+        return gr.update(choices=[], value=None)
+
+    options = get_preview_options(universe)
+    default_preview = options[0] if options else None
+
+    return gr.update(choices=options, value=default_preview)
 
 # -------------------------------------------------
 # BUTTON STATE
@@ -47,31 +360,81 @@ def update_existing_button(universe: str):
 # -------------------------------------------------
 # USE EXISTING DATASET
 # -------------------------------------------------
+# def use_existing_dataset(universe: str):
+#     if not universe:
+#         return (
+#             "❌ Select a dataset",
+#             gr.update(choices=[], value=None),
+#             pd.DataFrame(),
+#             update_existing_button(universe),
+#         )
+#
+#     if not dataset_exists(universe):
+#         return (
+#             f"❌ The dataset '{universe}' does not exist",
+#             gr.update(choices=[], value=None),
+#             pd.DataFrame(),
+#             update_existing_button(universe),
+#         )
+#
+#     options = get_preview_options(universe)
+#     default_preview = options[0] if options else None
+#     preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
+#
+#     return (
+#         f"✅ Dataset '{universe}' already present, preview loaded",
+#         gr.update(choices=options, value=default_preview),
+#         preview_df,
+#         update_existing_button(universe),
+#     )
 def use_existing_dataset(universe: str):
     if not universe:
         return (
-            "❌ Seleziona un dataset",
+            "❌ Select a dataset",
             gr.update(choices=[], value=None),
             pd.DataFrame(),
+            "Page 0 / 0",
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            0,
             update_existing_button(universe),
         )
 
     if not dataset_exists(universe):
         return (
-            f"❌ Il dataset '{universe}' non è presente",
+            f"❌ The dataset '{universe}' does not exist",
             gr.update(choices=[], value=None),
             pd.DataFrame(),
+            "Page 0 / 0",
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            0,
             update_existing_button(universe),
         )
 
     options = get_preview_options(universe)
     default_preview = options[0] if options else None
-    preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
+
+    if default_preview:
+        preview_df, page_label, prev_btn, next_btn, page_state = reset_preview_page(
+            universe,
+            default_preview,
+        )
+    else:
+        preview_df = pd.DataFrame()
+        page_label = "Page 0 / 0"
+        prev_btn = gr.update(interactive=False)
+        next_btn = gr.update(interactive=False)
+        page_state = 0
 
     return (
-        f"✅ Dataset '{universe}' già presente, preview caricata",
+        f"✅ Dataset '{universe}' already present, preview loaded",
         gr.update(choices=options, value=default_preview),
         preview_df,
+        page_label,
+        prev_btn,
+        next_btn,
+        page_state,
         update_existing_button(universe),
     )
 
@@ -81,9 +444,9 @@ def use_existing_dataset(universe: str):
 # -------------------------------------------------
 def _mock_create_dataset_files(universe: str) -> None:
     """
-    Crea file fake compatibili con la preview UI.
-    Non sostituisce la logica reale di Evaluation/main.py:
-    serve solo per demo senza usare API a pagamento.
+     Creates fake files compatible with the UI preview.
+    This does not replace the actual logic in Evaluation/main.py:
+    it is intended solely for demonstration purposes without using paid APIs.
     """
     out_dir = os.path.join("./Evaluation/data", universe)
     _ensure_dir(out_dir)
@@ -165,6 +528,9 @@ def _mock_create_dataset_files(universe: str) -> None:
         "world_index_1":  rng.normal(0, 1, len(dates)),
     }).to_csv("./Evaluation/data/cnnpred_market.csv", index=False)
 
+    news_dir = os.path.join("./Evaluation/data", "news")
+    _ensure_dir(news_dir)
+
     # --- fake news json files ---
     for i in range(25):
         payload = {
@@ -226,24 +592,6 @@ def _write_incidence_matrix(out_dir, universe, tickers, rng):
 # -------------------------------------------------
 # PREVIEW HELPERS
 # -------------------------------------------------
-def _build_file_map(universe: str) -> dict:
-    out_dir = os.path.join("./Evaluation/data", universe)
-    data_dir = "./Evaluation/data"
-    return {
-        "Dataset":                os.path.join(out_dir,  f"{universe}.csv"),
-        "Info":                   os.path.join(out_dir,  f"{universe}_info.csv"),
-        "Market Cap":             os.path.join(out_dir,  f"{universe}_market_cap.csv"),
-        "Alpha158":               os.path.join(out_dir,  f"{universe}_alpha158.csv"),
-        "Alpha360":               os.path.join(out_dir,  f"{universe}_alpha360.csv"),
-        "Technicals":             os.path.join(out_dir,  f"{universe}_tech.csv"),
-        "US Indexes":             os.path.join(data_dir, "us_indexes.csv"),
-        "EU Indexes":             os.path.join(data_dir, "eu_indexes.csv"),
-        "US Market Info":         os.path.join(data_dir, "us_market.csv"),
-        "EU Market Info":         os.path.join(data_dir, "eu_market.csv"),
-        "CNNPred Market Features": os.path.join(data_dir, "cnnpred_market.csv"),
-        "News Relations":         os.path.join(data_dir,  "news"),
-    }
-
 
 def get_preview_options(universe: str) -> list[str]:
     return [label for label, path in _build_file_map(universe).items() if os.path.exists(path)]
@@ -262,18 +610,18 @@ def _safe_json_load(path: str):
 
 def _flatten_json_records(file_name: str, payload) -> list[dict]:
     """
-    Restituisce una lista di righe tabellari a partire dal contenuto JSON.
-    - dict  -> 1 riga
-    - list[dict] -> una riga per elemento
-    - altri tipi -> 1 riga con raw_json
+    Returns a list of table rows based on the JSON content.
+    - dict  -> 1 row
+    - list[dict] -> one row per element
+    - other types -> 1 row with raw_json
     """
-    # Caso 1: singolo oggetto JSON
+    # Case 1: single JSON object
     if isinstance(payload, dict):
         row = pd.json_normalize(payload, sep=".").to_dict(orient="records")[0]
         row["file_name"] = file_name
         return [row]
 
-    # Caso 2: lista di oggetti JSON
+    # Case 2: JSON object list
     if isinstance(payload, list):
         if len(payload) == 0:
             return [{
@@ -281,20 +629,20 @@ def _flatten_json_records(file_name: str, payload) -> list[dict]:
                 "message": "Empty JSON list",
             }]
 
-        # se tutti o quasi sono dict, esplodili in righe
+        # if all or almost all are strings, split them into lines
         if all(isinstance(item, dict) for item in payload):
             rows = pd.json_normalize(payload, sep=".").to_dict(orient="records")
             for row in rows:
                 row["file_name"] = file_name
             return rows
 
-        # lista non tabellare
+        # non-tabular list
         return [{
             "file_name": file_name,
             "raw_json": json.dumps(payload, ensure_ascii=False),
         }]
 
-    # Caso 3: tipo non gestibile tabellarmente
+    # Case 3: type that cannot be handled in a table
     return [{
         "file_name": file_name,
         "raw_json": json.dumps(payload, ensure_ascii=False),
@@ -322,17 +670,16 @@ def _directory_json_preview_df(path: str, max_files: int = 20, max_rows_per_file
 
         file_rows = _flatten_json_records(file_name, payload)
 
-        # limita il numero di righe per file, così la preview non esplode
+        # limits the number of lines per file, so the preview doesn't get too long
         rows.extend(file_rows[:max_rows_per_file])
 
     if not rows:
         return pd.DataFrame({
-            "message": [f"Nessun file JSON trovato in: {path}"]
+            "message": [f"No JSON files found in: {path}"]
         })
 
     df = pd.DataFrame(rows)
 
-    # ordine colonne più leggibile
     cols = list(df.columns)
     preferred = [
         "file_name", "date", "title", "source", "ticker",
@@ -349,7 +696,7 @@ def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
 
     path = _build_file_map(universe).get(preview_name)
     if not path or not os.path.exists(path):
-        return pd.DataFrame({"message": [f"File non trovato: {preview_name}"]})
+        return pd.DataFrame({"message": [f"File not found: {preview_name}"]})
 
     if path.endswith(".csv"):
         return _csv_preview_df(path, max_rows=20)
@@ -357,7 +704,7 @@ def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
     if os.path.isdir(path):
         return _directory_json_preview_df(path, max_files=20)
 
-    return pd.DataFrame({"message": [f"Formato non supportato: {path}"]})
+    return pd.DataFrame({"message": [f"Format not supported: {path}"]})
 
 
 def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
@@ -369,40 +716,34 @@ def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
 def run_data_pipeline(universe: str, progress=gr.Progress(track_tqdm=False)):
     if not universe:
         return (
-            "❌ Seleziona un dataset",
-            gr.update(choices=[], value=None),
-            pd.DataFrame(),
+            "❌ Select a dataset",
             update_existing_button(universe),
         )
 
     try:
-        progress(0.0, desc="Inizializzazione pipeline...")
+        progress(0.0, desc="Pipeline initialisation...")
 
         if DRY_RUN:
             _run_mock_pipeline(universe, progress)
-            status_msg = f"✅ Pipeline DEMO completata per '{universe}' (nessun download reale eseguito)"
+            status_msg = f"✅ DEMO pipeline completed for “{universe}” (no actual downloads performed)"
         else:
             _run_real_pipeline(universe, progress)
-            status_msg = f"✅ Pipeline completata per '{universe}'"
+            status_msg = f"✅ Pipeline completed for '{universe}'"
 
-        progress(0.97, desc="Caricamento preview...")
+        progress(0.97, desc="Loading preview...")
         options = get_preview_options(universe)
         default_preview = options[0] if options else None
         preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
 
-        progress(1.0, desc="Completato")
+        progress(1.0, desc="Completed")
         return (
             status_msg,
-            # gr.update(choices=options, value=default_preview),
-            # preview_df,
             update_existing_button(universe),
         )
 
     except Exception as e:
         return (
-            f"❌ Errore durante la pipeline: {str(e)}",
-            # gr.update(choices=[], value=None),
-            # pd.DataFrame(),
+            f"❌ Error during the pipeline: {str(e)}",
             update_existing_button(universe),
         )
 
@@ -421,12 +762,12 @@ def refresh_preview_controls(universe: str):
 
 def _run_mock_pipeline(universe: str, progress) -> None:
     steps = [
-        (0.10, f"Creazione dataset mock per {universe}..."),
-        (0.30, "Simulazione feature extraction..."),
-        (0.45, "Simulazione compute relation..."),
-        (0.60, "Simulazione incidence matrix..."),
-        (0.75, "Simulazione market information..."),
-        (0.90, "Simulazione CNNPred market features..."),
+        (0.10, f"Creating mock dataset for {universe}..."),
+        (0.30, "Simulating feature extraction..."),
+        (0.45, "Simulating compute relation..."),
+        (0.60, "Simulating incidence matrix..."),
+        (0.75, "Simulating market information..."),
+        (0.90, "Simulating CNNPred market features..."),
     ]
     for pct, desc in steps:
         progress(pct, desc=desc)

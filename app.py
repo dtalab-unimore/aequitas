@@ -1,7 +1,6 @@
 import os
 import sys
 
-
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ""))
 EVALUATION_DIR = os.path.join(PROJECT_ROOT, "Evaluation")
@@ -17,8 +16,10 @@ from Gradio.data_load import (
     run_data_pipeline,
     use_existing_dataset,
     update_existing_button,
-    update_preview,
-    refresh_preview_controls
+    refresh_preview_controls,
+    reset_preview_page,
+    next_preview_page,
+    prev_preview_page,
 )
 
 from Gradio.test_models import (
@@ -32,6 +33,7 @@ from Gradio.test_models import (
     on_pl_change,
     run_test_with_logs
 )
+
 
 # -------------------------------------------------
 # TAB 1 / 2 / 3 HELPERS
@@ -61,6 +63,7 @@ def on_market_change(market_value):
         pd.DataFrame(),
     )
 
+
 # -------------------------------------------------
 # UI
 # -------------------------------------------------
@@ -85,9 +88,9 @@ with gr.Blocks() as demo:
     # ── TAB 1: DOWNLOAD DATA ──────────────────────────────────────────────
     with gr.Tab("Download Data"):
         with gr.Row():
-            market  = gr.Dropdown(["EU", "USA"], label="Market", value=None)
+            market = gr.Dropdown(["EU", "USA"], label="Market", value=None)
             dataset = gr.Dropdown(label="Dataset")
-            status  = gr.Textbox(label="Status")
+            status = gr.Textbox(label="Status")
 
         with gr.Row():
             with gr.Column(scale=2): gr.Markdown("")
@@ -101,12 +104,50 @@ with gr.Blocks() as demo:
 
         gr.Markdown("---")
 
-        with gr.Row():
-            preview_selector = gr.Dropdown(
-                label="Preview file", choices=[], value=None, scale=1
-            )
-            preview = gr.Dataframe(label="Data Preview", scale=4)
+        preview_page_state = gr.State(0)
 
+        with gr.Row():
+            with gr.Column(scale=1):
+                preview_selector = gr.Dropdown(
+                    label="Preview file",
+                    choices=[],
+                    value=None,
+                )
+
+            with gr.Column(scale=4):
+                preview = gr.Dataframe(
+                    label="Data Preview",
+                    interactive=False,
+                    max_height=390,
+                    buttons=["fullscreen", "copy"],
+                )
+
+                with gr.Row(elem_classes="preview-pagination-outer"):
+                    with gr.Column(scale=1):
+                        gr.Markdown("")
+
+                    with gr.Column(scale=0, min_width=200, elem_classes="preview-pagination-box"):
+                        with gr.Row(elem_classes="preview-pagination-inner"):
+                            btn_prev_preview = gr.Button(
+                                "‹",
+                                interactive=False,
+                                elem_classes="preview-round-btn",
+                                scale=0,
+                                min_width=36,
+                            )
+
+                            preview_page_label = gr.HTML(
+                                "",
+                                elem_classes="preview-page-label",
+                            )
+
+                            btn_next_preview = gr.Button(
+                                "›",
+                                interactive=False,
+                                elem_classes="preview-round-btn",
+                                scale=0,
+                                min_width=36,
+                            )
         # ── wiring ─────────────────────────────────────────────────────────
         market.change(
             fn=on_market_change,
@@ -126,15 +167,79 @@ with gr.Blocks() as demo:
             outputs=[status, btn_existing],
         )
 
+        # download_evt.then(
+        #     fn=refresh_preview_controls,
+        #     inputs=[dataset],
+        #     outputs=[preview_selector, preview],
+        # )
         download_evt.then(
             fn=refresh_preview_controls,
             inputs=[dataset],
-            outputs=[preview_selector, preview],
+            outputs=[preview_selector],
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
         )
 
-        btn_existing.click(fn=use_existing_dataset, inputs=[dataset],
-                           outputs=[status, preview_selector, preview, btn_existing])
-        preview_selector.change(fn=update_preview, inputs=[dataset, preview_selector], outputs=preview)
+        # btn_existing.click(fn=use_existing_dataset, inputs=[dataset],
+        #                    outputs=[status, preview_selector, preview, btn_existing])
+        btn_existing.click(
+            fn=use_existing_dataset,
+            inputs=[dataset],
+            outputs=[
+                status,
+                preview_selector,
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+                btn_existing,
+            ],
+        )
+        # preview_selector.change(fn=update_preview, inputs=[dataset, preview_selector], outputs=preview)
+        preview_selector.change(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+        )
+
+        btn_next_preview.click(
+            fn=next_preview_page,
+            inputs=[dataset, preview_selector, preview_page_state],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+        )
+
+        btn_prev_preview.click(
+            fn=prev_preview_page,
+            inputs=[dataset, preview_selector, preview_page_state],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+        )
 
     # ── TAB 2: TEST ───────────────────────────────────────────────
     with gr.Tab("Test Model"):
@@ -192,8 +297,6 @@ with gr.Blocks() as demo:
                         value="",
                         interactive=False,
                     )
-
-
 
             gr.Markdown("---")
 
@@ -297,7 +400,6 @@ with gr.Blocks() as demo:
                 inputs=[test_universe, test_task, test_model, test_config, sl, pl, start_test, end_test],
                 outputs=[test_logs, test_result],
             )
-
 
     # ── TAB 3: EVALUATION ───────────────────────────────────────────────────────
     with gr.Tab("Evaluation"):
