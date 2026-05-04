@@ -1,22 +1,26 @@
 import json
 import os
-import pickle
 import random
 from argparse import ArgumentParser
 
 import numpy as np
 import torch.random
 
-from evaluator import get_metrics
-from load_datasets import load_dataset, load_incidence_matrix, save_dates
-from model import ReRaLSTM
+from .evaluator import get_metrics
+from .load_datasets import load_dataset, load_incidence_matrix, save_dates
+from .model import ReRaLSTM
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 if __name__=='__main__':
     
     args = ArgumentParser(description='Train a relational rank lstm model')
 
     args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-    args.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
+    args.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
     args.add_argument('--model_name', type=str, default='STHAN-SR', help='Name of the model to use')
 
     args.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
@@ -38,8 +42,10 @@ if __name__=='__main__':
 
     args = args.parse_args()
 
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
+    model_save_path, metrics_path = create_saving_path(args, "Ranking", "STHAN-SR", PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -74,38 +80,33 @@ if __name__=='__main__':
         early_stop=args.early_stopping
     )
 
-    test_gt, test_pred, valid_gt, valid_pred = RR_LSTM.train()
+    test_gt, test_pred, valid_gt, valid_pred = RR_LSTM.train(model_save_path)
 
     valid_metrics = get_metrics(valid_gt, valid_pred)
     valid_metrics = {k: float(v) for k, v in valid_metrics.items()}
     print(f'Validation Metrics: {valid_metrics}')
 
+    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
+        json.dump(valid_metrics, f, indent=4)
+
     test_gt = test_gt.swapaxes(0, 1)
     test_pred = test_pred.swapaxes(0, 1)
 
     test_metrics = get_metrics(test_gt, test_pred)
-    test_metrics = {k: float(v) for k, v in test_metrics.items()}
-    dates_gt, last_seq_date, tickers = save_dates(dates, tickers, test_index, args.pred_len, args.seq_len)
-
     test_pred = [np.expand_dims(test_pred[i], axis=1) for i in range(test_pred.shape[0])]
     test_gt = [np.expand_dims(test_gt[i], axis=1) for i in range(test_gt.shape[0])]
 
-    results = {
-        'metrics': test_metrics,
-        'preds': test_pred,
-        'labels': test_gt,
-        'pred_date': dates_gt.to_list(),
-        'last_date': last_seq_date.to_list(),
-        'tickers': tickers
-    }
+    dates_gt, last_seq_date, tickers = save_dates(dates, tickers, test_index, args.pred_len, args.seq_len)
 
-    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(valid_metrics, f, indent=4)
-
-    with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(test_metrics, f, indent=4)
-
-    with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-        pickle.dump(results, f)
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        test_metrics,
+        test_pred,
+        test_gt,
+        dates_gt.to_list(),
+        last_seq_date.to_list(),
+        tickers,
+        metrics_path
+    )
 
     print(f'Metrics: {test_metrics}')

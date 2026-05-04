@@ -8,11 +8,11 @@ from torch import optim
 from torch_geometric import utils
 from tqdm import tqdm
 
-from evaluator import evaluate
-from hgat import HGAT
+from .evaluator import evaluate
+from .hgat import HGAT
 import torch.nn as nn
 
-from loss import trr_loss_mse_rank
+from .loss import trr_loss_mse_rank
 
 
 class ReRaLSTM:
@@ -53,7 +53,7 @@ class ReRaLSTM:
             np.expand_dims(self.price_data[:, offset + self.seq_len - 1], axis=1), \
             np.expand_dims(self.gt_data[:, offset + self.seq_len + self.steps - 1], axis=1)
 
-    def train(self):
+    def train(self, model_save_path):
         global df
         print('device name:', self.device)
 
@@ -214,6 +214,8 @@ class ReRaLSTM:
                 if best_loss is None or val_loss < best_loss:
                     best_loss = val_loss
 
+                    torch.save(model.state_dict(), f'{model_save_path}/model.pth')
+
                     best_valid_gt = cur_valid_gt
                     best_valid_pred = cur_valid_pred
                     best_gt = cur_test_gt
@@ -229,3 +231,48 @@ class ReRaLSTM:
 
 
         return best_gt, best_pred, best_valid_gt, best_valid_pred
+
+    def test(self, model_save_path):
+        global df
+        print('device name:', self.device)
+
+        model = HGAT(self.batch_size).to(self.device)
+        checkpoint = torch.load(f"{model_save_path}/model.pth")
+        model.load_state_dict(checkpoint)
+
+        inci_sparse = sparse.coo_matrix(self.inci_matrix)
+        incidence_edge, edge_weight = utils.from_scipy_sparse_matrix(inci_sparse)
+
+        cur_test_pred = np.zeros(
+            [len(self.tickers), self.trade_dates - self.seq_len - self.steps + 1 - self.test_index],
+            dtype=float
+        )
+        cur_test_gt = np.zeros(
+            [len(self.tickers), self.trade_dates - self.seq_len - self.steps + 1 - self.test_index],
+            dtype=float
+        )
+
+        model.eval()
+        for cur_offset in range(self.test_index, self.trade_dates - self.seq_len - self.steps + 1):
+            emb_batch, mask_batch, price_batch, gt_batch = self.get_batch(cur_offset)
+
+            num_hyperedges = int(incidence_edge[1].max().item() + 1)
+            hyperedge_attr = torch.ones((num_hyperedges, 32), device=self.device)
+
+            output_test = model(torch.FloatTensor(emb_batch).to(self.device), incidence_edge.to(self.device),
+                                hyperedge_attr.to(self.device))
+
+            cur_loss, cur_reg_loss, cur_rank_loss, cur_rr = trr_loss_mse_rank(
+                output_test,
+                torch.FloatTensor(price_batch).to(self.device),
+                torch.FloatTensor(gt_batch).to(self.device),
+                torch.FloatTensor(mask_batch).to(self.device),
+                self.alpha, self.batch_size
+            )
+
+            cur_rr = cur_rr.detach().cpu().numpy().reshape((self.batch_size, 1))
+            cur_test_pred[:, cur_offset - self.test_index] = copy.copy(cur_rr[:, 0])
+            cur_test_gt[:, cur_offset - self.test_index] = copy.copy(gt_batch[:, 0])
+
+        return cur_test_gt, cur_test_pred
+
