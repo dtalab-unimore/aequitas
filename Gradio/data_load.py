@@ -14,7 +14,7 @@ DRY_RUN = False  # True = non chiama API a pagamento, crea dati mock
 # PATH HELPERS
 # -------------------------------------------------
 def dataset_base_path(universe: str) -> str:
-    return os.path.join("../Evaluation/data", universe, f"{universe}.csv")
+    return os.path.join("./Evaluation/data", universe, f"{universe}.csv")
 
 
 def dataset_exists(universe: str) -> bool:
@@ -85,9 +85,9 @@ def _mock_create_dataset_files(universe: str) -> None:
     Non sostituisce la logica reale di Evaluation/main.py:
     serve solo per demo senza usare API a pagamento.
     """
-    out_dir = os.path.join("../Evaluation/data", universe)
+    out_dir = os.path.join("./Evaluation/data", universe)
     _ensure_dir(out_dir)
-    _ensure_dir("../Evaluation/data")
+    _ensure_dir("./Evaluation/data")
 
     rng = np.random.default_rng(42)
     dates = pd.date_range(start="2020-01-01", periods=120, freq="D")
@@ -149,13 +149,13 @@ def _mock_create_dataset_files(universe: str) -> None:
             "date": dates,
             f"{region}_index_1": 100 + np.cumsum(rng.normal(0, 1, len(dates))),
             f"{region}_index_2": 110 + np.cumsum(rng.normal(0, 1, len(dates))),
-        }).to_csv(os.path.join("../Evaluation/data", f"{region}_indexes.csv"), index=False)
+        }).to_csv(os.path.join("./Evaluation/data", f"{region}_indexes.csv"), index=False)
 
         pd.DataFrame({
             "date":              dates,
             "market_return":     rng.normal(0, 0.01, len(dates)),
             "market_volatility": np.abs(rng.normal(0.02, 0.01, len(dates))),
-        }).to_csv(os.path.join("../Evaluation/data", f"{region}_market.csv"), index=False)
+        }).to_csv(os.path.join("./Evaluation/data", f"{region}_market.csv"), index=False)
 
     # --- CNNPred market features ---
     pd.DataFrame({
@@ -163,7 +163,7 @@ def _mock_create_dataset_files(universe: str) -> None:
         "fred_1":         rng.normal(0, 1, len(dates)),
         "commodity_1":    rng.normal(0, 1, len(dates)),
         "world_index_1":  rng.normal(0, 1, len(dates)),
-    }).to_csv("../Evaluation/data/cnnpred_market.csv", index=False)
+    }).to_csv("./Evaluation/data/cnnpred_market.csv", index=False)
 
     # --- fake news json files ---
     for i in range(25):
@@ -227,8 +227,8 @@ def _write_incidence_matrix(out_dir, universe, tickers, rng):
 # PREVIEW HELPERS
 # -------------------------------------------------
 def _build_file_map(universe: str) -> dict:
-    out_dir = os.path.join("../Evaluation/data", universe)
-    data_dir = "../Evaluation/data"
+    out_dir = os.path.join("./Evaluation/data", universe)
+    data_dir = "./Evaluation/data"
     return {
         "Dataset":                os.path.join(out_dir,  f"{universe}.csv"),
         "Info":                   os.path.join(out_dir,  f"{universe}_info.csv"),
