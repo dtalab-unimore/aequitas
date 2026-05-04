@@ -6,11 +6,10 @@ import argparse
 import torch
 
 # torchlight
-import torchlight
-from torchlight import str2bool
-from torchlight import import_class
 
-from processor.io import IO
+from Ranking.RTGCN.processor.io import IO
+from Ranking.RTGCN.torchlight import torchlight
+from Ranking.RTGCN.torchlight.torchlight import import_class, str2bool
 
 
 class Processor(IO):
@@ -124,7 +123,7 @@ class Processor(IO):
 
         # data
         parser.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-        parser.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
+        parser.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
         parser.add_argument('--model_name', type=str, default='RT-GCN', help='Name of the model to use')
         parser.add_argument('--config', default=None, help='path to the configuration file')
         parser.add_argument('--work_dir', default='./work_dir/tmp', help='the work folder for storing results')

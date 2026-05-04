@@ -11,14 +11,11 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from feeder.tools import get_metrics
-# loss
-from net.loss import Loss
+from Ranking.RTGCN.feeder.tools import get_metrics
+from Ranking.RTGCN.net.loss import Loss
+from Ranking.RTGCN.processor.processor import Processor
+from Ranking.RTGCN.torchlight.torchlight import str2bool
 
-# torchlight
-from torchlight import str2bool
-
-from processor.processor import Processor
 
 def weights_init(m):
     classname = m.__class__.__name__

@@ -6,9 +6,9 @@ import argparse
 import torch.nn as nn
 
 # torchlight
-import torchlight
-from torchlight import str2bool
-from torchlight import DictAction
+from Ranking.RTGCN.torchlight import torchlight
+from Ranking.RTGCN.torchlight.torchlight import str2bool, DictAction
+
 
 class IO():
     """

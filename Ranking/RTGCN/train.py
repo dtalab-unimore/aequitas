@@ -6,8 +6,7 @@ import sys
 import numpy as np
 import torch
 
-# torchlight
-from torchlight import import_class
+from Ranking.RTGCN.torchlight.torchlight import import_class
 
 
 def set_seed(seed):
