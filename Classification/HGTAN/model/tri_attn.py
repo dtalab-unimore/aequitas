@@ -1,11 +1,9 @@
 """Hypergraph Tri-attention Network."""
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import scipy.sparse as sp
-from model.hyperedge_attn import hyperedge_attn
-from model.layers import edge_attn
+from .hyperedge_attn import hyperedge_attn
+from .layers import edge_attn
 
 
 class HGAT(nn.Module):

@@ -8,7 +8,7 @@ import time
 import torch.utils.data as Data
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, matthews_corrcoef
 
-from load_data import get_batch
+from .load_data import get_batch
 
 
 def cal_performance(pred, gold, smoothing=False):
@@ -57,9 +57,9 @@ def get_metrics(preds, labels):
     return metrics
 
 
-def eval_model(model, test_data, adj, H, device, args):
+def eval_model(model, test_data, adj, H, device, args, model_save_path):
 
-    log_dir = args.save_model + '.chkpt'
+    log_dir = f'{model_save_path}/model.pth'
     if os.path.exists(log_dir):
         checkpoint = torch.load(log_dir, weights_only=False)
         model.load_state_dict(checkpoint['model'])
@@ -147,7 +147,7 @@ def eval_epoch(model, validation_data, adj, H, device,args):
     return epoch_loss, accuracy, valid_pred, all_gt
 
 
-def train(model, training_data, validation_data, adj, H, optimizer, device, args, metrics_path):
+def train(model, training_data, validation_data, adj, H, optimizer, device, args, model_save_path, metrics_path):
     ''' Start training '''
 
     valid_accus = []
@@ -156,7 +156,7 @@ def train(model, training_data, validation_data, adj, H, optimizer, device, args
     Val_Loss_list = []
     Val_Accuracy_list = []
 
-    for epoch_i in range(args.epochs):
+    for epoch_i in range(args.n_epochs):
         print('[ Epoch', epoch_i, ']')
 
         start = time.time()
@@ -186,28 +186,22 @@ def train(model, training_data, validation_data, adj, H, optimizer, device, args
             'epoch': epoch_i
         }
 
-        if args.save_model:
-            if args.save_mode == 'all':
-                model_name = args.save_model + '_accu_{accu:3.3f}.chkpt'.format(accu=100 * valid_accu)
+        if model_save_path:
+            model_name = f'{model_save_path}/model.pth'
+            if valid_accu >= max(valid_accus):
                 torch.save(checkpoint, model_name)
-            elif args.save_mode == 'best':
-                model_name = args.save_model + '.chkpt'
-                if valid_accu >= max(valid_accus):
-                    torch.save(checkpoint, model_name)
-                    print('    - [Info] The checkpoint file has been updated.')
+                print('    - [Info] The checkpoint file has been updated.')
 
-                    val_metrics = get_metrics(val_preds, val_labels)
-                    val_metrics = {k: float(v) for k, v in val_metrics.items()}
+                val_metrics = get_metrics(val_preds, val_labels)
+                val_metrics = {k: float(v) for k, v in val_metrics.items()}
 
-                    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                        json.dump(val_metrics, f, indent=4)
+                with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
+                    json.dump(val_metrics, f, indent=4)
 
     print('{Best:3.3f}\n'.format(Best=100 * max(valid_accus)))
     print('{Best_epoch: 4.0f}\n'.format(Best_epoch=valid_accus.index(max(valid_accus))))
 
-
-def prepare_dataloaders(eod_data, gt_data, valid_index, test_index, args):
-    # ========= Preparing DataLoader =========#
+def exctract_gt(eod_data, gt_data, args):
     EOD, GT = [], []
 
     for i in range(eod_data.shape[1] - args.seq_len - args.pred_len + 1):
@@ -215,21 +209,22 @@ def prepare_dataloaders(eod_data, gt_data, valid_index, test_index, args):
         EOD.append(eod)
         GT.append(gt)
 
-    train_eod, train_gt = EOD[:valid_index], GT[:valid_index]
-    valid_eod, valid_gt = EOD[valid_index:test_index], GT[valid_index:test_index]
-    test_eod, test_gt = EOD[test_index:], GT[test_index:]
+    return EOD, GT
 
-    train_eod, valid_eod, test_eod = np.array(train_eod), np.array(valid_eod), np.array(test_eod)
-    train_eod, valid_eod, test_eod = torch.FloatTensor(train_eod), torch.FloatTensor(valid_eod), torch.FloatTensor(test_eod)
-    train_gt, valid_gt, test_gt = torch.LongTensor(train_gt), torch.LongTensor(valid_gt), torch.LongTensor(test_gt)
+def prepare_data(eod_data, gt_data, start_index, end_index, args, flag='train'):
+    EOD, GT = exctract_gt(eod_data, gt_data, args)
+    eod_data = EOD[start_index:end_index]
+    gt_data = GT[start_index:end_index]
 
-    train_dataset = Data.TensorDataset(train_eod, train_gt)
-    valid_dataset = Data.TensorDataset(valid_eod, valid_gt)
-    test_dataset = Data.TensorDataset(test_eod, test_gt)
+    eod_data = np.array(eod_data)
+    eod_data = torch.FloatTensor(eod_data)
+    gt_data = torch.LongTensor(gt_data)
 
-    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-    valid_loader = Data.DataLoader(dataset=valid_dataset, batch_size=args.batch_size)
-    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=args.batch_size)
+    dataset = Data.TensorDataset(eod_data, gt_data)
 
-    return train_loader, valid_loader, test_loader
+    if flag == 'train':
+        return Data.DataLoader(dataset=dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
+
+    return Data.DataLoader(dataset=dataset, batch_size=args.batch_size)
+
 

@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import csv
 np.set_printoptions(threshold=np.inf)
+
 class Attn_head_adj(nn.Module):
     def __init__(self,
                  in_channel,

@@ -1,22 +1,26 @@
 import json
 import os
-import pickle
 from argparse import ArgumentParser
 
 import numpy as np
 import torch
 from torch import optim
 
-from model.Optim import ScheduledOptim
-from model.models import HGTAN
-from tool import prepare_dataloaders, train, eval_model, get_metrics
-from load_data import load_data, load_matrices, extract_dates
+from .model.Optim import ScheduledOptim
+from .model.models import HGTAN
+from .tool import train, eval_model, get_metrics, prepare_data
+from .load_data import load_data, load_matrices, extract_dates
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 if __name__ == '__main__':
     args = ArgumentParser()
 
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-    args.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data', help='Path to the dataset')
+    args.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
     args.add_argument('--model_name', type=str, default='HGTAN', help='Name of the model to use')
 
     args.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
@@ -30,7 +34,7 @@ if __name__ == '__main__':
 
     args.add_argument('--feature', type=int, default=9, help='Number of features to use')
     args.add_argument('--n_class', type=int, default=3, help='Number of classes to use')
-    args.add_argument('--epochs', type=int, default=600, help='Number of epochs')
+    args.add_argument('--n_epochs', type=int, default=600, help='Number of epochs')
     args.add_argument('--batch_size', type=int, default=64, help='Batch length')
     args.add_argument('--rnn_unit', type=int, default=32, help='Number of GRU hidden units.')
     args.add_argument('--d_model', type=int, default=16)
@@ -44,7 +48,6 @@ if __name__ == '__main__':
     args.add_argument('--seed', type=int, default=42, help='Random seed')
 
     args.add_argument('--job_id', type=int, default=0, help='Job identifier to save the model')
-    args.add_argument('--save_mode', type=str, choices=['all', 'best'], default='best')
 
     args.add_argument('--label_smoothing', default=True, action='store_true')
     args.add_argument('--n_warmup_steps', type=int, default=4000)
@@ -56,20 +59,22 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.random.manual_seed(args.seed)
 
-    args.save_model = f'./checkpoints/{args.job_id}'
     args.d_word_vec = args.d_model
-    print(args)
 
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
-    os.makedirs('./checkpoints/', exist_ok=True)
+    model_save_path, metrics_path = create_saving_path(args, "Classification", "HGTAN", PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     print('Extracting data...')
     eod_data, ground_truth, valid_index, test_index, dates, tickers = load_data(args)
     pred_dates, last_dates = extract_dates(test_index, dates, args)
     adj, H = load_matrices(tickers, args)
 
-    train_loader, valid_loader, test_loader = prepare_dataloaders(eod_data, ground_truth, valid_index, test_index, args)
+    len_data = eod_data.shape[1] - args.seq_len - args.pred_len + 1
+    train_loader = prepare_data(eod_data, ground_truth, 0, valid_index, args)
+    valid_loader = prepare_data(eod_data, ground_truth, valid_index, test_index, args, flag='valid')
+    test_loader = prepare_data(eod_data, ground_truth, test_index, len_data, args, flag='test')
 
     model = HGTAN(
         rnn_unit=args.rnn_unit,
@@ -91,26 +96,21 @@ if __name__ == '__main__':
             betas=(0.9, 0.98), eps=1e-09),
         args.d_model, args.n_warmup_steps)
 
-    train(model, train_loader, valid_loader, adj, H, optimizer, device, args, metrics_path)
+    train(model, train_loader, valid_loader, adj, H, optimizer, device, args, model_save_path,metrics_path)
 
-    preds, labels = eval_model(model, test_loader, adj, H, device, args)
+    preds, labels = eval_model(model, test_loader, adj, H, device, args, model_save_path)
 
-    test_metrics = get_metrics(preds, labels)
-    test_metrics = {k: float(v) for k, v in test_metrics.items()}
+    metrics = get_metrics(preds, labels)
 
-    results = {
-        'metrics': test_metrics,
-        'preds': preds,
-        'labels': labels,
-        'pred_date': pred_dates.dt.strftime("%Y-%m-%d").to_list(),
-        'last_date': last_dates.dt.strftime("%Y-%m-%d").to_list(),
-        'tickers': [tickers] * len(preds)
-    }
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        metrics,
+        preds,
+        labels,
+        pred_dates.dt.strftime("%Y-%m-%d").to_list(),
+        last_dates.dt.strftime("%Y-%m-%d").to_list(),
+        [tickers] * len(preds),
+        metrics_path
+    )
 
-    with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(test_metrics, f, indent=4)
-
-    with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-        pickle.dump(results, f)
-
-    print('Test Metrics:\n', test_metrics)
+    print('Test Metrics:\n', metrics)

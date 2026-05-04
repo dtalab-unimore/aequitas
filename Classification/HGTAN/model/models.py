@@ -2,8 +2,8 @@
 import torch
 
 import torch.nn as nn
-from model.tri_attn import HGAT
-from model.temp_layers import TemporalAttention
+from .tri_attn import HGAT
+from .temp_layers import TemporalAttention
 
 
 def get_subsequent_mask(seq):

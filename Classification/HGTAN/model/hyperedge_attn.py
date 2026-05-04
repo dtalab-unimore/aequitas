@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import scipy.sparse as sp
 
-from model.layers import Attn_head, Attn_head_adj
+from .layers import Attn_head, Attn_head_adj
 
 
 
