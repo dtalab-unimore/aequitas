@@ -51,7 +51,12 @@ def on_dataset_change(dataset_value):
     return (
         btn_update,
         "",
+        gr.update(choices=[], value=None),
         pd.DataFrame(),
+        "",
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+        0,
     )
 
 
@@ -60,7 +65,12 @@ def on_market_change(market_value):
     return (
         new_dataset_update,
         "",
+        gr.update(choices=[], value=None),
         pd.DataFrame(),
+        "",
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+        0,
     )
 
 
@@ -80,8 +90,6 @@ with gr.Blocks() as demo:
         gr.HTML("""
         <div class="hero">
             <h1>📊 FinBench</h1>
-            <p>Benchmarking framework for stock market prediction with reproducible evaluation of financial ML models.</p>
-            <p style="margin-top:8px; font-size:0.92rem; opacity:0.88;">CIKM Demo Track</p>
         </div>
         """)
 
@@ -118,7 +126,7 @@ with gr.Blocks() as demo:
                 preview = gr.Dataframe(
                     label="Data Preview",
                     interactive=False,
-                    max_height=390,
+                    max_height=420,
                     buttons=["fullscreen", "copy"],
                 )
 
@@ -152,13 +160,31 @@ with gr.Blocks() as demo:
         market.change(
             fn=on_market_change,
             inputs=market,
-            outputs=[dataset, status, preview]
+            outputs=[
+                dataset,
+                status,
+                preview_selector,
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
         )
 
         dataset.change(
             fn=on_dataset_change,
             inputs=dataset,
-            outputs=[btn_existing, status, preview]
+            outputs=[
+                btn_existing,
+                status,
+                preview_selector,
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
         )
 
         download_evt = btn_download.click(
@@ -167,11 +193,6 @@ with gr.Blocks() as demo:
             outputs=[status, btn_existing],
         )
 
-        # download_evt.then(
-        #     fn=refresh_preview_controls,
-        #     inputs=[dataset],
-        #     outputs=[preview_selector, preview],
-        # )
         download_evt.then(
             fn=refresh_preview_controls,
             inputs=[dataset],
@@ -188,8 +209,6 @@ with gr.Blocks() as demo:
             ],
         )
 
-        # btn_existing.click(fn=use_existing_dataset, inputs=[dataset],
-        #                    outputs=[status, preview_selector, preview, btn_existing])
         btn_existing.click(
             fn=use_existing_dataset,
             inputs=[dataset],
@@ -204,7 +223,7 @@ with gr.Blocks() as demo:
                 btn_existing,
             ],
         )
-        # preview_selector.change(fn=update_preview, inputs=[dataset, preview_selector], outputs=preview)
+
         preview_selector.change(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector],
@@ -294,7 +313,9 @@ with gr.Blocks() as demo:
                     config_info = gr.Code(
                         label="Configuration Parameters",
                         language="json",
-                        value="",
+                        lines=31,
+                        max_lines=31,
+                        value=None,
                         interactive=False,
                     )
 
@@ -307,23 +328,26 @@ with gr.Blocks() as demo:
                     with gr.Column():
                         start_test = gr.Dropdown(
                             choices=[2020, 2021, 2022, 2023, 2024],
-                            value="",
+                            value=None,
                             label="Start Year",
                         )
 
                         end_test = gr.Dropdown(
                             choices=[],
-                            value="",
+                            value=None,
                             label="End Year",
                             interactive=False,
                         )
 
                     with gr.Column():
-                        test_logs = gr.Code(
+                        test_logs = gr.Textbox(
                             label="Test Progress",
-                            language="shell",
                             value="",
+                            lines=6,
+                            max_lines=6,
                             interactive=False,
+                            autoscroll=True,
+                            elem_classes="test-logs-box",
                         )
 
                 with gr.Row():
@@ -343,32 +367,32 @@ with gr.Blocks() as demo:
                     test_result = gr.Code(
                         label="Test Result",
                         language="json",
-                        value="",
+                        value=None,
                         interactive=False,
                     )
 
             test_universe.input(
                 fn=on_universe_change,
                 inputs=[test_universe],
-                outputs=[test_task, test_model, test_config, sl, pl, config_info, test_dates_section]
+                outputs=[test_task]
             )
 
             test_task.input(
                 fn=on_task_change,
                 inputs=[test_universe, test_task],
-                outputs=[test_model, test_config, sl, pl, config_info, test_dates_section]
+                outputs=[test_model]
             )
 
             test_model.input(
                 fn=on_model_change,
                 inputs=[test_universe, test_task, test_model],
-                outputs=[test_config, sl, pl, config_info, test_dates_section],
+                outputs=[test_config]
             )
 
             test_config.input(
                 fn=on_config_change,
                 inputs=[test_universe, test_task, test_model, test_config],
-                outputs=[sl, pl, config_info, test_dates_section],
+                outputs=[sl]
             )
 
             start_test.change(
@@ -380,13 +404,13 @@ with gr.Blocks() as demo:
             sl.input(
                 fn=on_sl_change,
                 inputs=[test_universe, test_task, test_model, test_config, sl],
-                outputs=[pl, config_info, test_dates_section],
+                outputs=[pl]
             )
 
             pl.input(
                 fn=on_pl_change,
                 inputs=[test_universe, test_task, test_model, test_config, sl, pl],
-                outputs=[config_info, test_dates_section],
+                outputs=[config_info, test_dates_section]
             )
 
             end_test.change(
@@ -405,4 +429,4 @@ with gr.Blocks() as demo:
     with gr.Tab("Evaluation"):
         gr.Markdown("Evaluation interface coming soon...")
 
-demo.launch(theme=theme, css="style.css")
+demo.queue().launch(theme=theme, css="style.css")
