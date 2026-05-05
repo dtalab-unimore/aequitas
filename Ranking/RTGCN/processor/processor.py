@@ -151,7 +151,7 @@ class Processor(IO):
         parser.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
         parser.add_argument('--model_name', type=str, default='RT-GCN', help='Name of the model to use')
         parser.add_argument('--config', default=None, help='path to the configuration file')
-        parser.add_argument('--work_dir', default='./work_dir/tmp', help='the work folder for storing results')
+        parser.add_argument('--work_dir', default='./Ranking/RTGCN/work_dir/tmp', help='the work folder for storing results')
 
         parser.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
         parser.add_argument('--seq_len', type=int, default=4, help='Lookback length for the model')
@@ -179,7 +179,6 @@ class Processor(IO):
         parser.add_argument('--pavi_log', type=bool, default=False, help='logging on pavi or not')
 
         # feeder
-        # parser.add_argument('--feeder', default='Ranking.RTGCN.feeder.feeder.Feeder', help='data loader will be used')
         parser.add_argument('--num_worker', type=int, default=1, help='the number of worker per gpu for data loader')
         parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
         parser.add_argument('--test_batch_size', type=int, default=64, help='test batch size')
@@ -187,7 +186,6 @@ class Processor(IO):
         parser.add_argument('--in_channels', type=int, default=4, help='the number of input image channels')
 
         # model
-        # parser.add_argument('--model', default='net.rt_gcn.Model', help='the model will be used')
         parser.add_argument('--weights', default=None, help='the weights for network initialization')
         parser.add_argument('--ignore_weights', type=str, default=[], nargs='+', help='the name of weights which will be ignored in the initialization')
         parser.add_argument('--dropout', type=float, default=0.5, help='the dropout rate for the model')
