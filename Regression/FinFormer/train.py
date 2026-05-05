@@ -9,8 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from .load_dataset import RobustZScoreNormalization, CustomDataset
-from .utils import build_config_from_args
-from .finformer import trainer
+from .finformer import Finformer_Model
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 
@@ -70,7 +69,6 @@ if __name__ == '__main__':
     args.add_argument('--lr', type=float, default=0.0002)
 
     args = args.parse_args()
-    data_config, model_config = build_config_from_args(args)
     torch.cuda.manual_seed(args.seed)
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -131,7 +129,14 @@ if __name__ == '__main__':
     adj_matrix, ticker_list = matrix['adj_matrix'][:11, :, :], matrix['tickers']
     adj_matrix = preprocess_matrix(adj_matrix)
 
-    trainer(args, train_loader, valid_loader, test_loader, model_config, adj_matrix, ticker_list, metrics_path, model_save_path, device)
+    model = Finformer_Model(d_feat=args.d_feat,
+                            hidden_size=args.hidden_size,
+                            num_layers=args.num_layers,
+                            temporal_dropout=args.temporal_dropout,
+                            snum_head=args.snum_head,
+                            device=device)
+
+    model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
 
     print(f"Training completed. Metrics saved to {metrics_path}")
 

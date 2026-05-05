@@ -25,23 +25,6 @@ def metric_fn_2(preds):
     return ic, rank_ic
 
 
-def trainer(args, train_loader, valid_loader, test_loader, model_config, adj_matrix, ticker_list, metrics_path, model_save_path, device):
-    d_feat = model_config['d_feat']
-    hidden_size = model_config['hidden_size']
-    num_layers = model_config['num_layers']
-    temporal_dropout = model_config['temporal_dropout']
-    snum_head = model_config['snum_head']
-    model = Finformer_Model(d_feat=d_feat,
-                            hidden_size=hidden_size,
-                            num_layers=num_layers,
-                            temporal_dropout=temporal_dropout,
-                            snum_head=snum_head,
-                            device=device)
-
-    model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
-
-
-
 class Finformer_Model:
     def __init__(self, d_feat, hidden_size, num_layers, temporal_dropout, snum_head, device):
         super().__init__()
