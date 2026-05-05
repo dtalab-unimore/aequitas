@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
-from net.utils.tgcn import ConvTemporalGraphical
-from net.utils.graph import Graph
+from Ranking.RTGCN.net.utils.tgcn import ConvTemporalGraphical
+from Ranking.RTGCN.net.utils.graph import Graph
 
 class Model(nn.Module):
     r"""Relational temporal graph convolutional networks.

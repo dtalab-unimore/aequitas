@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
 import json
-import os
-import pickle
 import time
 import argparse
 import numpy as np
@@ -13,9 +11,9 @@ import torch.optim as optim
 
 from Ranking.RTGCN.feeder.tools import get_metrics
 from Ranking.RTGCN.net.loss import Loss
+from Ranking.RTGCN.net.rt_gcn import Model
 from Ranking.RTGCN.processor.processor import Processor
 from Ranking.RTGCN.torchlight.torchlight import str2bool
-from utils.save_results import save_results
 
 
 def weights_init(m):
@@ -38,7 +36,8 @@ class REC_Processor(Processor):
     """
 
     def load_model(self):
-        self.model = self.io.load_model(self.arg.model,**(self.model_args))
+        self.model = Model(**(self.model_args))
+        self.io.model_text += '\n\n' + str(self.model)
         self.model.apply(weights_init)
         # self.loss = nn.CrossEntropyLoss()
         # self.loss = nn.MSELoss()
@@ -217,7 +216,7 @@ class REC_Processor(Processor):
         parser.add_argument('--base_lr', type=float, default=0.01, help='initial learning rate')
         parser.add_argument('--step', type=int, default=[], nargs='+', help='the epoch where optimizer reduce the learning rate')
         parser.add_argument('--optimizer', default='Adam', help='type of optimizer')
-        parser.add_argument('--nesterov', type=str2bool, default=True, help='use nesterov or not')
+        parser.add_argument('--nesterov', type=bool, default=True, help='use nesterov or not')
         parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay for optimizer')
         # endregion yapf: enable
 
