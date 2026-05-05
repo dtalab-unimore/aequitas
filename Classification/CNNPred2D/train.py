@@ -1,6 +1,5 @@
 import json
 import os
-import pickle
 import shutil
 import tempfile
 from argparse import ArgumentParser
@@ -16,6 +15,13 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten
 
 from load_data import construct_data_warehouse_2d, split_train_val_test, extract_sequences_2d
 from tensorflow.keras import backend as K, callbacks
+
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 
 def get_metrics(preds, labels):
@@ -79,8 +85,7 @@ def train(data_warehouse, checkpoint_dir, n_features, args):
     cnn_train_data, cnn_train_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len)
     cnn_valid_data, cnn_valid_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len, idx=(2,3))
 
-    filepath = join(checkpoint_dir, '2D-models/best-{}-{}-{}-{}-{}-{}.weights.h5'.format(
-        args.epochs, args.seq_len, args.pred_len, args.number_filter, args.dropout, args.seed))
+    filepath = join(checkpoint_dir, 'model.weights.h5')
 
     print(' fitting model to target')
     model = Sequential()
@@ -106,7 +111,7 @@ def train(data_warehouse, checkpoint_dir, n_features, args):
     best_model = callbacks.ModelCheckpoint(filepath, monitor='val_f1', verbose=1, save_best_only=True,
                                            save_weights_only=True, mode='max')
 
-    model.fit(cnn_train_data, cnn_train_target, epochs=args.epochs, batch_size=128, verbose=1,
+    model.fit(cnn_train_data, cnn_train_target, epochs=args.n_epochs, batch_size=128, verbose=1,
                     validation_data=(cnn_valid_data, cnn_valid_target), callbacks=[best_model])
 
     model.load_weights(filepath)
@@ -132,26 +137,21 @@ def run_cnn_ann(data_warehouse, checkpoint_dir, n_features, dates, args):
     val_metrics = get_metrics(val_preds, val_labels)
     val_metrics = {k: float(v) for k, v in val_metrics.items()}
 
-    metrics = get_metrics(preds, labels)
-    metrics = {k: float(v) for k, v in metrics.items()}
-
-    results = {
-        'metrics': metrics,
-        'preds': preds_prob,
-        'labels': np.expand_dims(labels, axis=1),
-        'pred_date': pred_date,
-        'last_date': last_date,
-        'tickers': tickers
-    }
-
     with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
         json.dump(val_metrics, f, indent=4)
 
-    with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(metrics, f, indent=4)
+    metrics = get_metrics(preds, labels)
 
-    with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-        pickle.dump(results, f)
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        metrics,
+        preds,
+        np.expand_dims(labels, axis=1),
+        pred_date,
+        last_date,
+        tickers,
+        metrics_path
+    )
 
     return metrics
 
@@ -173,15 +173,14 @@ if __name__=='__main__':
     args.add_argument('--start_test_date', type=str, default='2023-06-01', help='Start date for the test set')
     args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
 
-    args.add_argument('--epochs', type=int, default=200, help='Number of epochs')
+    args.add_argument('--n_epochs', type=int, default=200, help='Number of epochs')
     args.add_argument('--number_filter', type=int, nargs='+', default=[8, 8, 8])
     args.add_argument('--dropout', type=float, default=0.1)
     args.add_argument('--seed', type=int, default=42)
 
     args = args.parse_args()
 
-    current_path = os.getcwd()
-    base_tmp = os.path.join(current_path, "tmp")
+    base_tmp = os.path.join(CURRENT_DIR, "tmp")
     os.makedirs(base_tmp, exist_ok=True)
 
     tmpdir = tempfile.mkdtemp(prefix="tf_run_", dir=base_tmp)
@@ -203,16 +202,12 @@ if __name__=='__main__':
 
     tf.random.set_seed(args.seed)
 
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
-
-    checkpoint_dir = f'./checkpoints/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    model_save_path, metrics_path = create_saving_path(args, "Classification", "CNNPred2D", PROJECT_ROOT)
 
     data_warehouse, n_stocks, n_features = construct_data_warehouse_2d(args)
     data_warehouse, dates = split_train_val_test(data_warehouse, args)
 
-    test_metrics = run_cnn_ann(data_warehouse, checkpoint_dir, n_features, dates, args)
+    test_metrics = run_cnn_ann(data_warehouse, model_save_path, n_features, dates, args)
 
     shutil.rmtree(tmpdir)
     print('Test Metrics:\n', test_metrics)
