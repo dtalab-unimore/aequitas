@@ -7,13 +7,14 @@ import pandas as pd
 import os
 from tqdm.auto import tqdm
 import argparse
-from module import FactorVAE, FeatureExtractor, FactorDecoder, FactorEncoder, FactorPredictor, AlphaLayer, BetaLayer
-from dataset import init_data_loader, RobustZScoreNormalization
-from model import train, validate, test
-from utils import set_seed, DataArgument
+from .module import FactorVAE, FeatureExtractor, FactorDecoder, FactorEncoder, FactorPredictor, AlphaLayer, BetaLayer
+from .dataset import init_data_loader
+from .model import train, validate, test
+from .utils import set_seed, DataArgument
 import wandb
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.z_score import RobustZScoreNormalization
 
 
 def create_saving_path(args):

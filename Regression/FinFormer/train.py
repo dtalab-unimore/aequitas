@@ -8,10 +8,11 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from .load_dataset import RobustZScoreNormalization, CustomDataset
+from .load_dataset import CustomDataset
 from .finformer import Finformer_Model
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))

@@ -8,11 +8,12 @@ import torch
 from torch.utils.data import DataLoader
 
 from Regression.FinFormer.finformer import Finformer_Model
-from Regression.FinFormer.load_dataset import RobustZScoreNormalization, CustomDataset
+from Regression.FinFormer.load_dataset import CustomDataset
 from Regression.FinFormer.train import select_valid_ticker, preprocess_matrix, custom_collate
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import _log, load_configuration
 from utils.save_results import save_results
+from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
