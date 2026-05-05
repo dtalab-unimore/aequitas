@@ -1,5 +1,3 @@
-import pickle
-
 import torch
 import torch.optim as optim
 import os
@@ -19,6 +17,9 @@ from qlib.contrib.model.pytorch_gats import GATModel
 from qlib.contrib.model.pytorch_sfm import SFM_Model
 from qlib.contrib.model.pytorch_alstm import ALSTMModel
 from qlib.contrib.model.pytorch_transformer import Transformer
+
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
 from .model import MLP, HIST
 from .utils import metric_fn, mse, select_valid_ticker
 from .dataloader import DataLoader
@@ -27,6 +28,8 @@ from utils.z_score import RobustZScoreNormalization
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 def get_model(model_name):
 
@@ -283,8 +286,10 @@ def main(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    metrics_path = f"./results/{args.universe}/{args.run_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-    os.makedirs(metrics_path, exist_ok=True)
+    model_save_path, metrics_path = create_saving_path(args, task_type='Regression', test_model='HIST', project_root=PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     pprint('create loaders...')
     train_loader, valid_loader, test_loader, stock2concept_matrix, stock_index, test_last_dates, pred_dates = create_loaders(args)
@@ -311,6 +316,7 @@ def main(args):
     best_score = -np.inf
     best_epoch = 0
     stop_round = 0
+    best_param = None
 
     params_list = collections.deque(maxlen=args.smooth_steps)
     for epoch in range(args.n_epochs):
@@ -336,41 +342,36 @@ def main(args):
             best_score = val_score
             stop_round = 0
             best_epoch = epoch
+            best_param = copy.deepcopy(avg_params)
 
             tickers = [[stock_index.get(num, num) for num in sublist] for sublist in test_stock_indexes]
 
             val_metrics = get_metrics(valid_preds, valid_labels)
             val_metrics = {k: float(v) for k, v in val_metrics.items()}
 
-            best_metrics = get_metrics(test_preds, test_labels)
-            best_metrics = {k: float(v) for k, v in best_metrics.items()}
+            with open(f'{metrics_path}/val_metrics_sl1_pl{args.pred_len}.json', 'w') as f:
+                json.dump(val_metrics, f, indent=4)
 
+            best_metrics = get_metrics(test_preds, test_labels)
             pred_dates = [date for i, date in enumerate(pred_dates) if mask[i]]
             test_last_dates = [date for i, date in enumerate(test_last_dates) if mask[i]]
             test_labels = [np.expand_dims(lab, axis=1) for lab in test_labels]
             test_preds = [np.expand_dims(pred, axis=1) for pred in test_preds]
 
+            best_metrics, results_pkl, metrics_json = save_results(
+                args,
+                best_metrics,
+                test_preds,
+                test_labels,
+                pred_dates,
+                test_last_dates,
+                tickers,
+                metrics_path
+            )
+
             print('-------------------------------------------------------')
             print(f'Model updated with this results: {best_metrics}')
             print('-------------------------------------------------------')
-
-            results = {
-                'metrics': best_metrics,
-                'preds': test_preds,
-                'labels': test_labels,
-                'pred_date': pred_dates,
-                'last_date': test_last_dates,
-                'tickers': tickers
-            }
-
-            with open(f'{metrics_path}/results_sl1_pl{args.pred_len}.pkl', 'wb') as f:
-                pickle.dump(results, f)
-
-            with open(f'{metrics_path}/metrics_sl1_pl{args.pred_len}.json', 'w') as f:
-                json.dump(best_metrics, f, indent=4)
-
-            with open(f'{metrics_path}/val_metrics_sl1_pl{args.pred_len}.json', 'w') as f:
-                json.dump(val_metrics, f, indent=4)
 
         else:
             stop_round += 1
@@ -379,7 +380,7 @@ def main(args):
                 break
 
     pprint('best score:', best_score, '@', best_epoch)
-    #torch.save(best_param, output_path+'/model.bin')
+    torch.save(best_param, f'{model_save_path}/model.pth')
 
 
 def parse_args():
@@ -387,22 +388,22 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # data
-    parser.add_argument('--data_path', type=str, default='../../Evaluation/data')
+    parser.add_argument('--data_path', type=str, default='./Evaluation/data')
     parser.add_argument('--model_name', type=str, default='HIST')
     parser.add_argument('--run_name', type=str, default='HIST')
-    parser.add_argument('--universe', type=str, default='sp500')
+    parser.add_argument('--universe', type=str, default='sx5e')
 
     parser.add_argument('--pin_memory', action='store_false', default=True)
     parser.add_argument('--batch_size', type=int, default=-1) # -1 indicate daily batch
     parser.add_argument('--label', default='') # specify other labels
 
     # dates
-    parser.add_argument('--start_date', default='2015-01-01')
-    parser.add_argument('--end_train_date', default='2018-12-31')
-    parser.add_argument('--start_valid_date', default='2019-01-01')
-    parser.add_argument('--end_valid_date', default='2019-12-31')
-    parser.add_argument('--start_test_date', default='2020-01-01')
-    parser.add_argument('--end_date', default='2020-12-31')
+    parser.add_argument('--start_date', type=str, default='2020-01-01')
+    parser.add_argument('--end_train_date', type=str, default='2020-12-31')
+    parser.add_argument('--start_valid_date', type=str, default='2021-01-01')
+    parser.add_argument('--end_valid_date', type=str, default='2022-12-31')
+    parser.add_argument('--start_test_date', type=str, default='2023-01-01')
+    parser.add_argument('--end_date', type=str, default='2023-12-31')
     parser.add_argument('--pred_len', type=int, default=5)
 
     # model
