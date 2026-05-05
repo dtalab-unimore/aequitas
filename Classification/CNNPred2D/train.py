@@ -13,7 +13,7 @@ from tensorflow.keras.layers import Conv2D, MaxPool2D
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 
-from load_data import construct_data_warehouse_2d, split_train_val_test, extract_sequences_2d
+from .load_data import construct_data_warehouse_2d, split_train_val_test, extract_sequences_2d
 from tensorflow.keras import backend as K, callbacks
 
 from utils.load_configuation import create_saving_path
@@ -79,20 +79,12 @@ def f1(y_true, y_pred):
     return (f_posit + f_neg) / 2
 
 
-def train(data_warehouse, checkpoint_dir, n_features, args):
-
-    print('sequencing ...')
-    cnn_train_data, cnn_train_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len)
-    cnn_valid_data, cnn_valid_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len, idx=(2,3))
-
-    filepath = join(checkpoint_dir, 'model.weights.h5')
-
-    print(' fitting model to target')
+def create_model(args, n_features):
     model = Sequential()
 
     # layer 1
     model.add(Conv2D(args.number_filter[0], (1, n_features),
-               activation='relu', input_shape=(args.seq_len, n_features, 1)))
+                     activation='relu', input_shape=(args.seq_len, n_features, 1)))
 
     # layer 2
     model.add(Conv2D(args.number_filter[1], (3, 1), activation='relu'))
@@ -106,7 +98,20 @@ def train(data_warehouse, checkpoint_dir, n_features, args):
     model.add(Dropout(args.dropout))
     model.add(Dense(1, activation='sigmoid'))
 
-    model.compile(optimizer='Adam', loss='mae', metrics=['acc', f1]) # run_eagerly=True
+    model.compile(optimizer='Adam', loss='mae', metrics=['acc', f1])  # run_eagerly=True
+
+    return model
+
+def train(data_warehouse, checkpoint_dir, n_features, args):
+
+    print('sequencing ...')
+    cnn_train_data, cnn_train_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len)
+    cnn_valid_data, cnn_valid_target, _, _, _ = extract_sequences_2d(data_warehouse, args.seq_len, idx=(2,3))
+
+    filepath = join(checkpoint_dir, 'model.weights.h5')
+
+    print(' fitting model to target')
+    model = create_model(args, n_features)
 
     best_model = callbacks.ModelCheckpoint(filepath, monitor='val_f1', verbose=1, save_best_only=True,
                                            save_weights_only=True, mode='max')
@@ -160,9 +165,9 @@ if __name__=='__main__':
 
     args = ArgumentParser()
 
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data', help='Path to the dataset')
     args.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
-    args.add_argument('--model_name', type=str, default='CNNPRed', help='Name of the model to use')
+    args.add_argument('--model_name', type=str, default='CNNPred2D', help='Name of the model to use')
 
     args.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
     args.add_argument('--seq_len', type=int, default=60, help='Lookback length for the model')
@@ -203,6 +208,9 @@ if __name__=='__main__':
     tf.random.set_seed(args.seed)
 
     model_save_path, metrics_path = create_saving_path(args, "Classification", "CNNPred2D", PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     data_warehouse, n_stocks, n_features = construct_data_warehouse_2d(args)
     data_warehouse, dates = split_train_val_test(data_warehouse, args)
