@@ -126,9 +126,9 @@ def run_test(
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task_type", type=str, default='Regression')
-    parser.add_argument("--model_name", type=str, default='MATCC')
+    parser.add_argument("--model_name", type=str, default='MASTER')
     parser.add_argument("--universe", type=str, default='sxxp')
-    parser.add_argument("--config_name", type=str, default='MATCC')
+    parser.add_argument("--config_name", type=str, default='MASTER')
     parser.add_argument("--sl_value", type=int, default=5)
     parser.add_argument("--pl_value", type=int, default=1)
     parser.add_argument("--start_test_date", type=str, default='2023-01-01')

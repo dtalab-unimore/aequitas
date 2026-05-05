@@ -2,16 +2,16 @@ import os
 import json
 import traceback
 from datetime import datetime
-
+import queue
+import threading
+import time
 import gradio as gr
-
 from Gradio.test_model_dispatcher import dispatch_test
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
 ALL_TASKS = ["Classification", "Regression", "Ranking"]
-
 
 def get_universe_options():
     universes = set()
@@ -130,41 +130,56 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
             f"Prime 200 chars lette:\n{repr(preview)}"
         )
 
-
 def on_universe_change(universe: str):
     tasks = get_available_tasks(universe)
 
-    return (
-        gr.update(choices=tasks, value=None, interactive=bool(tasks)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value="", visible=True),
-        gr.update(visible=False),
-    )
-
-def on_model_change(universe: str, task_type: str, model_name: str):
-    configs = get_available_configs(universe, task_type, model_name)
-
-    return (
-        gr.update(choices=configs, value=None, interactive=bool(configs)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value="", visible=True),
-        gr.update(visible=False),
-    )
+    return gr.update(choices=tasks, value=None, interactive=bool(tasks))  # test_task
 
 def on_task_change(universe: str, task_type: str):
     models = get_available_models(universe, task_type)
 
+    return gr.update(choices=models, value=None, interactive=bool(models)) # test_model
+
+
+
+def on_model_change(universe: str, task_type: str, model_name: str):
+    configs = get_available_configs(universe, task_type, model_name)
+
+    return gr.update(choices=configs, value=None, interactive=bool(configs))# test_config
+
+
+def on_config_change(universe: str, task_type: str, model_name: str, config_name: str):
+    sl_values = get_available_sl(universe, task_type, model_name, config_name)
+
+    return gr.update(choices=sl_values, value=None, interactive=bool(sl_values)) # sl
+
+
+def on_sl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
+    pl_values = get_available_pl(universe, task_type, model_name, config_name, sl_value)
+
+    return gr.update(choices=pl_values, value=None, interactive=bool(pl_values)) # pl
+
+
+
+def on_pl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
+    params, config_text = load_config_params(
+        universe,
+        task_type,
+        model_name,
+        config_name,
+        sl_value,
+        pl_value,
+    )
+
+    if not params:
+        return (
+            gr.update(value=config_text, visible=True), # config_info
+            gr.update(visible=False),                   # test_dates_section
+        )
+
     return (
-        gr.update(choices=models, value=None, interactive=bool(models)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value="", visible=True),
-        gr.update(visible=False),
+        gr.update(value=config_text, visible=True), # config_info
+        gr.update(visible=True),                    # test_dates_section
     )
 
 def extract_numeric_suffix(folder_name: str, prefix: str):
@@ -221,41 +236,6 @@ def get_available_pl(universe: str, task_type: str, model_name: str, config_name
     return sorted(pl_values)
 
 
-def on_config_change(universe: str, task_type: str, model_name: str, config_name: str):
-    sl_values = get_available_sl(universe, task_type, model_name, config_name)
-
-    return (
-        gr.update(choices=sl_values, value=None, interactive=bool(sl_values)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value="", visible=True),
-        gr.update(visible=False),
-    )
-
-def on_sl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
-    pl_values = get_available_pl(universe, task_type, model_name, config_name, sl_value)
-
-    return (
-        gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),
-        gr.update(value="", visible=True),
-        gr.update(visible=False),
-    )
-
-def on_pl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
-    params, config_text = load_config_params(universe, task_type, model_name, config_name, sl_value, pl_value)
-
-    if not params:
-        return (
-            gr.update(value=config_text, visible=True),
-            gr.update(visible=False),
-        )
-
-    return (
-        gr.update(value=config_text, visible=True),
-        gr.update(visible=True),
-    )
-
-
-
 def update_end_year_choices(start_year):
     all_years = [2020, 2021, 2022, 2023, 2024]
 
@@ -277,39 +257,67 @@ def update_end_year_choices(start_year):
 
 def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year):
     logs = []
+    log_queue = queue.Queue()
+    done_queue = queue.Queue()
 
     def push_log(msg):
         ts = datetime.now().strftime("%H:%M:%S")
-        logs.append(f"[{ts}] {msg}")
+        log_queue.put(f"[{ts}] {msg}")
 
     def current_logs():
         return "\n".join(logs)
 
     if None in [universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year]:
-        yield "Parametri mancanti.", ""
+        yield gr.update(value="Missing parameters."), ""
         return
 
     start_test_date = f"{int(start_year)}-01-01"
     end_date = f"{int(end_year)}-12-31"
 
-    try:
-        push_log("Avvio test...")
-        yield current_logs(), ""
+    def worker():
+        try:
+            push_log("Start test...")
 
-        output = dispatch_test(
-            universe=universe,
-            task_type=task_type,
-            test_model=test_model,
-            config_name=config_name,
-            sl_value=int(sl_value),
-            pl_value=int(pl_value),
-            start_test_date=start_test_date,
-            end_date=end_date,
-            log_fn=push_log,
-        )
+            output = dispatch_test(
+                universe=universe,
+                task_type=task_type,
+                test_model=test_model,
+                config_name=config_name,
+                sl_value=int(sl_value),
+                pl_value=int(pl_value),
+                start_test_date=start_test_date,
+                end_date=end_date,
+                log_fn=push_log,
+            )
 
-        yield current_logs() + "\n[OK] Test completato.", json.dumps(output, indent=2, ensure_ascii=False)
+            done_queue.put(("ok", output))
 
-    except Exception:
-        push_log("Errore durante il test.")
-        yield current_logs(), traceback.format_exc()
+        except Exception:
+            push_log("Error during the test.")
+            done_queue.put(("error", traceback.format_exc()))
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    result_text = ""
+
+    while True:
+
+        if not log_queue.empty():
+            logs.append(log_queue.get())
+
+        yield gr.update(value=current_logs()), result_text
+
+        if not done_queue.empty() and log_queue.empty():
+            status, payload = done_queue.get()
+
+            if status == "ok":
+                logs.append("[OK] Test completato.")
+                result_text = json.dumps(payload, indent=2, ensure_ascii=False)
+            else:
+                result_text = payload
+
+            yield gr.update(value=current_logs()), result_text
+            break
+
+        time.sleep(0.15)

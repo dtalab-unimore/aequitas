@@ -6,7 +6,7 @@ import time
 
 import pandas as pd
 import torch
-
+from utils.load_configuation import create_saving_path
 from .load_dataset import RobustZScoreNormalization, CSVDataset
 from .master import MASTERModel
 from utils.filter_constituents import filter_constituents_by_date
@@ -35,21 +35,6 @@ def open_datasets(universe, seq_len, pred_len):
         dl_test = pickle.load(f)
 
     return dl_train, dl_valid, dl_test
-
-def create_saving_path(args, task_type='Regression', test_model='MASTER'):
-    model_save_path = f"model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
-    metrics_path = f"results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-
-    model_save_path = os.path.join(PROJECT_ROOT, task_type, test_model, model_save_path)
-    metrics_path = os.path.join(PROJECT_ROOT, task_type, test_model, metrics_path)
-
-    if not os.path.exists(model_save_path):
-        os.makedirs(model_save_path, exist_ok=True)
-
-    if not os.path.exists(metrics_path):
-        os.makedirs(metrics_path, exist_ok=True)
-
-    return model_save_path, metrics_path
 
 
 def select_valid_ticker(df, start_date, end_date):
@@ -123,7 +108,7 @@ if __name__ == '__main__':
 
     print(args)
 
-    model_save_path, metrics_path = create_saving_path(args)
+    model_save_path, metrics_path = create_saving_path(args, task_type='Regression', test_model='MASTER', project_root=PROJECT_ROOT)
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
