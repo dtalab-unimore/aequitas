@@ -1,8 +1,11 @@
 import datetime
+
+import numpy as np
+import pandas as pd
+import torch
 from torch.utils.data import Sampler
 import scipy.sparse as sp
 from torch_geometric.utils import to_undirected
-from loader import *
 
 
 def build_config_from_args(args):
