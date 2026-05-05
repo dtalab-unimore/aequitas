@@ -11,6 +11,7 @@ from sklearn.metrics import r2_score
 from torch import optim
 from torch.utils.data import DataLoader
 
+from utils.save_results import save_results
 from .load_dataset import CSVDataset, DailyBatchSamplerRandom, RobustZScoreNormalization
 from .lr_scheduler import ChainedScheduler
 from .model.MATCC import MATCC
@@ -256,26 +257,24 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
         if step % 5 == 0:
             model_param = copy.deepcopy(model.state_dict())
             torch.save(model_param,f'{model_save_path}/{args.model_name}_model_params_epoch_{step}_seed_{args.seed}.pth')
-            test_metrics = {k: float(v) for k, v in test_metrics.items()}
+
             valid_metrics = {k: float(v) for k, v in valid_metrics.items()}
-
-            results = {
-                'metrics': test_metrics,
-                'preds': preds,
-                'labels': labels,
-                'pred_date': dl_test.output_dates,
-                'last_date': dl_test.input_dates,
-                'tickers': dl_test.tickers_to_date
-            }
-
-            with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-                pickle.dump(results, f)
-
-            with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(test_metrics, f, indent=4)
 
             with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
                 json.dump(valid_metrics, f, indent=4)
+
+            metrics, results_pkl, metrics_json = save_results(
+                args,
+                test_metrics,
+                preds,
+                labels,
+                dl_test.output_dates,
+                dl_test.input_dates,
+                dl_test.tickers_to_date,
+                metrics_path
+            )
+
+            print('Test Metrics:\n', metrics)
 
     print("SAVING LAST EPOCH RESULT AS THE TEST RESULT!")
     torch.save(model.state_dict(),f'{model_save_path}/model.pth')

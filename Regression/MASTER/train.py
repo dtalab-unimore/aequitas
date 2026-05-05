@@ -7,6 +7,7 @@ import time
 import pandas as pd
 import torch
 from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
 from .load_dataset import RobustZScoreNormalization, CSVDataset
 from .master import MASTERModel
 from utils.filter_constituents import filter_constituents_by_date
@@ -181,20 +182,15 @@ if __name__ == '__main__':
 
     print('Seed: {:d} time cost : {:.2f} sec'.format(args.seed, running_time))
 
-    metrics = {k: float(v) for k, v in metrics.items()}
-    print(metrics)
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        metrics,
+        predictions,
+        labels,
+        dl_test.input_dates,
+        dl_test.input_dates,
+        dl_test.tickers_to_date,
+        metrics_path
+    )
 
-    results = {
-        'metrics': metrics,
-        'preds': predictions,
-        'labels': labels,
-        'pred_date': dl_test.output_dates,
-        'last_date': dl_test.input_dates,
-        'tickers': dl_test.tickers_to_date
-    }
-
-    with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-        pickle.dump(results, f)
-
-    with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(metrics, f)
+    print('Test Metrics:\n', metrics)
