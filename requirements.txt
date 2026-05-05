@@ -18,3 +18,4 @@ yfinance==0.2.66
 torch==2.11.0
 torch-geometric==2.7.0
 -e ./Ranking/RTGCN/torchlight
+h5py==3.16.0
