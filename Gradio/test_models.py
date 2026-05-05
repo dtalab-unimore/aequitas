@@ -207,7 +207,7 @@ def get_available_sl(universe: str, task_type: str, model_name: str, config_name
     for name in os.listdir(base_dir):
         full_path = os.path.join(base_dir, name)
         value = extract_numeric_suffix(name, "sl_")
-        if os.path.isdir(full_path) and value is not None:
+        if os.path.isdir(full_path):
             sl_values.append(value)
 
     return sorted(sl_values)
