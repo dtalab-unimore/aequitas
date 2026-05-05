@@ -11,12 +11,13 @@ from sklearn.metrics import r2_score
 from torch import optim
 from torch.utils.data import DataLoader
 
-from utils.save_results import save_results
-from .load_dataset import CSVDataset, DailyBatchSamplerRandom, RobustZScoreNormalization
+from .load_dataset import CSVDataset, DailyBatchSamplerRandom
 from .lr_scheduler import ChainedScheduler
 from .model.MATCC import MATCC
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
