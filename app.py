@@ -1,5 +1,7 @@
 import os
 import sys
+import gradio as gr
+
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ""))
@@ -9,17 +11,15 @@ for p in [PROJECT_ROOT, EVALUATION_DIR]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import gradio as gr
-import pandas as pd
-
 from Gradio.data_load import (
     run_data_pipeline,
     use_existing_dataset,
-    update_existing_button,
     refresh_preview_controls,
     reset_preview_page,
     next_preview_page,
     prev_preview_page,
+    on_dataset_change,
+    on_market_change
 )
 
 from Gradio.test_models import (
@@ -34,52 +34,21 @@ from Gradio.test_models import (
     run_test_with_logs
 )
 
-
-# -------------------------------------------------
-# TAB 1 / 2 / 3 HELPERS
-# -------------------------------------------------
-def update_datasets(market):
-    if market == "EU":
-        datasets = ["sx5e", "sxxp"]
-    else:
-        datasets = ["sp500", "nasdaq100", "dji"]
-    return gr.update(choices=datasets, value=datasets[0] if datasets else None)
-
-
-def on_dataset_change(dataset_value):
-    btn_update = update_existing_button(dataset_value)
-    return (
-        btn_update,
-        "",
-        gr.update(choices=[], value=None),
-        pd.DataFrame(),
-        "",
-        gr.update(interactive=False),
-        gr.update(interactive=False),
-        0,
-    )
-
-
-def on_market_change(market_value):
-    new_dataset_update = update_datasets(market_value)
-    return (
-        new_dataset_update,
-        "",
-        gr.update(choices=[], value=None),
-        pd.DataFrame(),
-        "",
-        gr.update(interactive=False),
-        gr.update(interactive=False),
-        0,
-    )
-
+from Gradio.metrics_view import (
+    on_metrics_task_change,
+    on_metrics_year_range_change,
+    on_metrics_model_change,
+    on_metrics_config_pl_change,
+    update_metrics_plot,
+    on_metrics_datasets_change,
+)
 
 # -------------------------------------------------
 # UI
 # -------------------------------------------------
 theme = gr.themes.Soft(
-    primary_hue="blue",
-    secondary_hue="gray",
+    primary_hue="indigo",
+    secondary_hue="blue",
     neutral_hue="slate",
     radius_size="md",
     font=[gr.themes.GoogleFont("Plus Jakarta Sans")],
@@ -89,7 +58,7 @@ with gr.Blocks() as demo:
     with gr.Column(elem_classes="main-shell"):
         gr.HTML("""
         <div class="hero">
-            <h1>📊 FinBench</h1>
+            <h1>FinBench Demo</h1>
         </div>
         """)
 
@@ -295,20 +264,20 @@ with gr.Blocks() as demo:
                         label="Configuration",
                         interactive=False,
                     )
+                    with gr.Row():
+                        sl = gr.Dropdown(
+                            choices=[],
+                            value=None,
+                            label="Sequence length",
+                            interactive=False,
+                        )
 
-                    sl = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Sequence length",
-                        interactive=False,
-                    )
-
-                    pl = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Prediction length",
-                        interactive=False,
-                    )
+                        pl = gr.Dropdown(
+                            choices=[],
+                            value=None,
+                            label="Prediction length",
+                            interactive=False,
+                        )
                 with gr.Column():
                     config_info = gr.Code(
                         label="Configuration Parameters",
@@ -363,54 +332,57 @@ with gr.Blocks() as demo:
                     with gr.Column(scale=5):
                         gr.Markdown("")
 
+
                 with gr.Row():
+
                     test_result = gr.Code(
                         label="Test Result",
                         language="json",
                         value=None,
                         interactive=False,
+                        elem_id="test-result-code"
                     )
 
             test_universe.input(
                 fn=on_universe_change,
                 inputs=[test_universe],
-                outputs=[test_task]
+                outputs=[test_task, test_model, test_config, sl, pl, config_info, test_dates_section],
             )
 
             test_task.input(
                 fn=on_task_change,
                 inputs=[test_universe, test_task],
-                outputs=[test_model]
+                outputs=[test_model, test_config, sl, pl, config_info, test_dates_section],
             )
 
             test_model.input(
                 fn=on_model_change,
                 inputs=[test_universe, test_task, test_model],
-                outputs=[test_config]
+                outputs=[test_config, sl, pl, config_info, test_dates_section],
             )
 
             test_config.input(
                 fn=on_config_change,
                 inputs=[test_universe, test_task, test_model, test_config],
-                outputs=[sl]
+                outputs=[sl, pl, config_info, test_dates_section],
+            )
+
+            sl.input(
+                fn=on_sl_change,
+                inputs=[test_universe, test_task, test_model, test_config, sl],
+                outputs=[pl, config_info, test_dates_section],
+            )
+
+            pl.input(
+                fn=on_pl_change,
+                inputs=[test_universe, test_task, test_model, test_config, sl, pl],
+                outputs=[config_info, test_dates_section],
             )
 
             start_test.change(
                 fn=update_end_year_choices,
                 inputs=[start_test],
                 outputs=[end_test],
-            )
-
-            sl.input(
-                fn=on_sl_change,
-                inputs=[test_universe, test_task, test_model, test_config, sl],
-                outputs=[pl]
-            )
-
-            pl.input(
-                fn=on_pl_change,
-                inputs=[test_universe, test_task, test_model, test_config, sl, pl],
-                outputs=[config_info, test_dates_section]
             )
 
             end_test.change(
@@ -427,6 +399,167 @@ with gr.Blocks() as demo:
 
     # ── TAB 3: EVALUATION ───────────────────────────────────────────────────────
     with gr.Tab("Evaluation"):
-        gr.Markdown("Evaluation interface coming soon...")
+        gr.Markdown("Evaluation content goes here...")
 
-demo.queue().launch(theme=theme, css="style.css")
+    # ── TAB 4: VISUALIZATION ───────────────────────────────────────────────────────
+    with gr.Tab("Metrics"):
+        gr.Markdown("### Model Metrics Visualization")
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                metrics_task = gr.Dropdown(
+                    choices=["Regression", "Classification", "Ranking"],
+                    value=None,
+                    label="Task Type",
+                )
+                metrics_year_range = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Year Range",
+                    interactive=False,
+                )
+                metrics_model = gr.Dropdown(
+                    choices=[],
+                    value=[],
+                    label="Model",
+                    interactive=False,
+                    multiselect=True,
+                )
+                metrics_config_pl = gr.CheckboxGroup(
+                    choices=[],
+                    value=[],
+                    label="Configuration / Prediction Length",
+                    interactive=False,
+                )
+                metrics_datasets = gr.Dropdown(
+                    choices=[],
+                    value=[],
+                    label="Dataset",
+                    multiselect=True,
+                    interactive=False,
+                )
+
+            with gr.Column(scale=4):
+                with gr.Row():
+                    metrics_table = gr.HTML(
+                        value="",
+                        label="Metrics Table",
+                        elem_classes="metrics-table-container",
+                    )
+
+                with gr.Accordion("Plot", open=False, elem_classes="metrics-accordion", visible=False) as metrics_plot_accordion:
+                    with gr.Row(elem_classes="metrics-plot-panel"):
+                        with gr.Column(scale=1, min_width=210, elem_classes="metrics-plot-controls"):
+                            metrics_metric_selector = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Metric",
+                                interactive=False,
+                                visible=True,
+                            )
+
+                            metrics_dataset_radio = gr.Radio(
+                                choices=[],
+                                value=None,
+                                label="Dataset",
+                                interactive=False,
+                                visible=True,
+                            )
+
+                        with gr.Column(scale=5, elem_classes="metrics-plot-card"):
+                            metrics_plot = gr.Plot(
+                                value=None,
+                                label="",
+                                visible=True,
+                                elem_classes="metrics-plot-box",
+                            )
+
+        # ── wiring ──────────────────────────────────────────────────────────
+        metrics_task.change(
+            fn=on_metrics_task_change,
+            inputs=[metrics_task],
+            outputs=[
+                metrics_year_range, metrics_model, metrics_config_pl,
+                metrics_datasets, metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+            ],
+        )
+
+        metrics_year_range.change(
+            fn=on_metrics_year_range_change,
+            inputs=[metrics_task, metrics_year_range],
+            outputs=[
+                metrics_model, metrics_config_pl, metrics_datasets,
+                metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+            ],
+        )
+
+        metrics_model.change(
+            fn=on_metrics_model_change,
+            inputs=[metrics_task, metrics_year_range, metrics_model],
+            outputs=[
+                metrics_config_pl, metrics_datasets, metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+            ],
+        )
+
+        metrics_config_pl.change(
+            fn=on_metrics_config_pl_change,
+            inputs=[metrics_task, metrics_year_range, metrics_model, metrics_config_pl],
+            outputs=[
+                metrics_datasets, metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+            ],
+        )
+
+        metrics_datasets.change(
+            fn=on_metrics_datasets_change,
+            inputs=[
+                metrics_task,
+                metrics_year_range,
+                metrics_model,
+                metrics_config_pl,
+                metrics_datasets,
+                metrics_metric_selector,
+                metrics_dataset_radio,
+            ],
+            outputs=[
+                metrics_table,
+                metrics_metric_selector,
+                metrics_plot,
+                metrics_dataset_radio,
+                metrics_plot_accordion,
+            ],
+        )
+
+        metrics_metric_selector.change(
+            fn=update_metrics_plot,
+            inputs=[
+                metrics_task, metrics_year_range, metrics_model,
+                metrics_config_pl, metrics_datasets,
+                metrics_metric_selector, metrics_dataset_radio,
+            ],
+            outputs=[metrics_plot],
+        )
+
+        metrics_dataset_radio.change(
+            fn=update_metrics_plot,
+            inputs=[
+                metrics_task, metrics_year_range, metrics_model,
+                metrics_config_pl, metrics_datasets,
+                metrics_metric_selector, metrics_dataset_radio,
+            ],
+            outputs=[metrics_plot],
+        )
+
+CSS_PATH = os.path.join(PROJECT_ROOT, "Gradio", "style.css")
+
+with open(CSS_PATH, "r", encoding="utf-8") as f:
+    custom_css = f.read()
+
+demo.queue().launch(
+    server_port=7860,
+    theme=theme,
+    css=custom_css,
+)

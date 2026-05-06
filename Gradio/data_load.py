@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import gradio as gr
 import pandas as pd
@@ -356,37 +355,41 @@ def update_existing_button(universe: str):
         variant="stop",
     )
 
+def update_datasets(market):
+    if market == "EU":
+        datasets = ["sx5e", "sxxp"]
+    else:
+        datasets = ["sp500", "nasdaq100", "dji"]
+    return gr.update(choices=datasets, value=datasets[0] if datasets else None)
 
-# -------------------------------------------------
-# USE EXISTING DATASET
-# -------------------------------------------------
-# def use_existing_dataset(universe: str):
-#     if not universe:
-#         return (
-#             "❌ Select a dataset",
-#             gr.update(choices=[], value=None),
-#             pd.DataFrame(),
-#             update_existing_button(universe),
-#         )
-#
-#     if not dataset_exists(universe):
-#         return (
-#             f"❌ The dataset '{universe}' does not exist",
-#             gr.update(choices=[], value=None),
-#             pd.DataFrame(),
-#             update_existing_button(universe),
-#         )
-#
-#     options = get_preview_options(universe)
-#     default_preview = options[0] if options else None
-#     preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
-#
-#     return (
-#         f"✅ Dataset '{universe}' already present, preview loaded",
-#         gr.update(choices=options, value=default_preview),
-#         preview_df,
-#         update_existing_button(universe),
-#     )
+
+def on_dataset_change(dataset_value):
+    btn_update = update_existing_button(dataset_value)
+    return (
+        btn_update,
+        "",
+        gr.update(choices=[], value=None),
+        pd.DataFrame(),
+        "",
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+        0,
+    )
+
+
+def on_market_change(market_value):
+    new_dataset_update = update_datasets(market_value)
+    return (
+        new_dataset_update,
+        "",
+        gr.update(choices=[], value=None),
+        pd.DataFrame(),
+        "",
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+        0,
+    )
+
 def use_existing_dataset(universe: str):
     if not universe:
         return (
@@ -444,7 +447,7 @@ def use_existing_dataset(universe: str):
 # -------------------------------------------------
 def _mock_create_dataset_files(universe: str) -> None:
     """
-     Creates fake files compatible with the UI preview.
+    Creates fake files compatible with the UI preview.
     This does not replace the actual logic in Evaluation/main.py:
     it is intended solely for demonstration purposes without using paid APIs.
     """

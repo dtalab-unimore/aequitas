@@ -11,11 +11,11 @@
 
 /* Hero */
 .hero {
-    background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #3b82f6 100%);
     color: white;
     border-radius: 22px;
     padding: 28px 32px;
     margin-bottom: 18px;
+    text-align: center;
     box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
 }
 
@@ -140,4 +140,174 @@ button:hover {
     font-weight: 500 !important;
     line-height: 1 !important;
     white-space: nowrap !important;
+}
+
+#test-result-box textarea {
+    font-family: "JetBrains Mono", "Fira Code", monospace !important;
+    font-size: 15px !important;
+    line-height: 1.7 !important;
+}
+
+.metrics-plot-col {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* centra il plot */
+.metrics-plot-col > div {
+    width: 100%;
+    max-width: 900px;
+}
+
+/* Metrics plot */
+.metrics-accordion {
+    border: 1px solid #c7d2fe !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    box-shadow: 0 10px 28px rgba(49, 46, 129, 0.10) !important;
+    overflow: hidden;
+    margin-top: 16px;
+}
+
+.metrics-accordion summary {
+    padding: 14px 18px !important;
+    font-weight: 800 !important;
+    color: #312e81 !important;
+    background: linear-gradient(90deg, #eef2ff, #ffffff) !important;
+    border-bottom: 1px solid #c7d2fe !important;
+}
+
+.metrics-plot-panel {
+    padding: 18px !important;
+    background: #f8fafc !important;
+    border-radius: 0 0 16px 16px !important;
+}
+
+.metrics-plot-controls {
+    background: #ffffff !important;
+    border: 1px solid #dbe4ff !important;
+    border-radius: 14px !important;
+    padding: 14px !important;
+    box-shadow: 0 4px 14px rgba(49, 46, 129, 0.06) !important;
+    height: fit-content;
+}
+
+.metrics-plot-card {
+    background: #ffffff !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    padding: 16px !important;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+}
+
+.metrics-plot-box {
+    border: 1px solid #e0e7ff !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+}
+
+.metrics-plot-card .js-plotly-plot,
+.metrics-plot-card .plot-container,
+.metrics-plot-card .svg-container {
+    border-radius: 12px !important;
+}
+/* Metrics table */
+.metrics-outer {
+    width: 100%;
+    max-height: 360px;
+    overflow-x: auto;
+    overflow-y: auto;
+    border-radius: 14px;
+    border: 1px solid #c7d2fe;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+.mpt {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.mpt thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.mpt thead tr:first-child th {
+    background: #312e81 !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    padding: 11px 14px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.mpt thead tr:first-child th[rowspan] {
+    background: #1e1b4b !important;
+    color: #e0e7ff !important;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 11px;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+.mpt th.msub {
+    background: #eef2ff !important;
+    color: #312e81 !important;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 7px 12px;
+    text-align: center;
+    border-bottom: 2px solid #a5b4fc;
+    white-space: nowrap;
+}
+
+.mpt tbody tr {
+    border-bottom: 1px solid #eef2ff;
+    text-align: center !important;
+}
+
+.mpt tbody tr:nth-child(even) {
+    background: #fafafa !important;
+}
+
+.mpt tbody tr:hover {
+    background: #ecfdf5 !important;
+}
+
+.mpt td {
+    padding: 8px 14px;
+    text-align: center;
+    white-space: nowrap;
+    color: #334155;
+}
+
+.mpt .model-cell {
+    font-weight: 800;
+    color: #312e81 !important;
+    background: #eef2ff !important;
+    border-right: 2px solid #c7d2fe;
+    min-width: 90px;
+    vertical-align: middle;
+}
+
+.mpt .config-cell {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 11.5px;
+    color: #475569 !important;
+    background: #f8fafc !important;
+}
+
+.mpt .missing {
+    color: #94a3b8 !important;
 }

@@ -133,32 +133,61 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
 def on_universe_change(universe: str):
     tasks = get_available_tasks(universe)
 
-    return gr.update(choices=tasks, value=None, interactive=bool(tasks))  # test_task
+    return (
+        gr.update(choices=tasks, value=None, interactive=bool(tasks)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value=""),
+        gr.update(visible=False),
+    )
+
 
 def on_task_change(universe: str, task_type: str):
     models = get_available_models(universe, task_type)
 
-    return gr.update(choices=models, value=None, interactive=bool(models)) # test_model
-
+    return (
+        gr.update(choices=models, value=None, interactive=bool(models)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value=""),
+        gr.update(visible=False),
+    )
 
 
 def on_model_change(universe: str, task_type: str, model_name: str):
     configs = get_available_configs(universe, task_type, model_name)
 
-    return gr.update(choices=configs, value=None, interactive=bool(configs))# test_config
+    return (
+        gr.update(choices=configs, value=None, interactive=bool(configs)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value=""),
+        gr.update(visible=False),
+    )
 
 
 def on_config_change(universe: str, task_type: str, model_name: str, config_name: str):
     sl_values = get_available_sl(universe, task_type, model_name, config_name)
 
-    return gr.update(choices=sl_values, value=None, interactive=bool(sl_values)) # sl
+    return (
+        gr.update(choices=sl_values, value=None, interactive=bool(sl_values)),
+        gr.update(choices=[], value=None, interactive=False),
+        gr.update(value=""),
+        gr.update(visible=False),
+    )
 
 
 def on_sl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
     pl_values = get_available_pl(universe, task_type, model_name, config_name, sl_value)
 
-    return gr.update(choices=pl_values, value=None, interactive=bool(pl_values)) # pl
-
+    return (
+        gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),
+        gr.update(value=""),
+        gr.update(visible=False),
+    )
 
 
 def on_pl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
@@ -320,4 +349,4 @@ def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, p
             yield gr.update(value=current_logs()), result_text
             break
 
-        time.sleep(0.15)
+        time.sleep(0.10)
