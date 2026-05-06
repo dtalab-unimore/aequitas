@@ -11,6 +11,7 @@ from torch import optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 
+from utils.save_results import save_results
 from .data_loader import CustomDataset
 from .trainer.trainer import train_epoch, bce_loss, eval_model
 from .model.Thgnn import StockHeteGAT
@@ -180,25 +181,19 @@ if __name__=='__main__':
     _, preds, labels = eval_model(args=args, model=model, dataset_eval=test_loader, loss_fcn=bce_loss)
 
     test_metrics = calcultate_matrics(preds, labels)
-    test_metrics = {k: float(v) for k, v in test_metrics.items()}
-
     preds = [np.expand_dims(p, axis=1) for p in preds]
     labels = [np.expand_dims(label, axis=1) for label in labels]
 
-    results = {
-        'metrics': test_metrics,
-        'preds': preds,
-        'labels': labels,
-        'pred_date': test_dataset.pred_dates,
-        'last_date': test_dataset.last_seq_dates,
-        'tickers': [tickers]*len(preds)
-    }
-
-    with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-        pickle.dump(results, f)
-
-    with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(test_metrics, f, indent=4)
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        test_metrics,
+        preds,
+        labels,
+        test_dataset.pred_dates,
+        test_dataset.last_seq_dates,
+        [tickers] * len(preds),
+        metrics_path
+    )
 
     print(f"Test Metrics: {test_metrics}")
 

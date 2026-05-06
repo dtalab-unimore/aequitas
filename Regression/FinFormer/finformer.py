@@ -1,16 +1,19 @@
+import copy
 import json
-import os
-import pickle
 
 import numpy as np
+import pandas as pd
+import torch
+import math
 from sklearn.metrics import r2_score
-from torch.utils.tensorboard import SummaryWriter
+from torch import nn
 from tqdm import tqdm
 
-from utils import *
-from model import *
-from loader import *
+from Regression.FinFormer.model import Finformer
+from Regression.FinFormer.utils import edgeIndexTransform, pprint
 from audtorch.metrics.functional import concordance_cc
+
+from utils.save_results import save_results
 
 
 def metric_fn_2(preds):
@@ -20,23 +23,6 @@ def metric_fn_2(preds):
     rank_ic = preds['label'].corr(preds['score'], method='spearman')
 
     return ic, rank_ic
-
-
-def trainer(args, train_loader, valid_loader, test_loader, model_config, adj_matrix, ticker_list, metrics_path, device):
-    d_feat = model_config['d_feat']
-    hidden_size = model_config['hidden_size']
-    num_layers = model_config['num_layers']
-    temporal_dropout = model_config['temporal_dropout']
-    snum_head = model_config['snum_head']
-    model = Finformer_Model(d_feat=d_feat,
-                            hidden_size=hidden_size,
-                            num_layers=num_layers,
-                            temporal_dropout=temporal_dropout,
-                            snum_head=snum_head,
-                            device=device)
-
-    model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path)
-
 
 
 class Finformer_Model:
@@ -90,7 +76,7 @@ class Finformer_Model:
             optimizer.step()
             loss_record.append(loss)
 
-    def tester(self, test_loader, adj_matrix, ticker_list, prefix='Test'):
+    def tester(self, test_loader, adj_matrix, ticker_list):
         self.finformer.eval()
         losses = []
         preds = []
@@ -129,7 +115,7 @@ class Finformer_Model:
 
         return np.mean(losses), ic, rank_ic, predictions, labels, tickers
 
-    def fit(self, args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path):
+    def fit(self, args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path):
 
         optimizer = torch.optim.Adam(self.finformer.parameters(), lr=args.lr)
         stop_round = 0
@@ -138,15 +124,13 @@ class Finformer_Model:
         best_epoch = -1
         best_param = 0
 
-        best_results = {}
-
         for epoch in tqdm(range(args.n_epochs)):
             pprint('Running Epoch:', epoch)
             pprint('training...')
             self.trainer(train_loader, optimizer, adj_matrix, ticker_list)
 
-            valid_loss, valid_score, valid_rank_ic, val_preds, val_labels, _ = self.tester(valid_loader, adj_matrix, ticker_list, prefix='Valid')
-            test_loss, test_score, test_rank_ic, preds, labels, tickers = self.tester(test_loader, adj_matrix, ticker_list, prefix='Test')
+            valid_loss, valid_score, valid_rank_ic, val_preds, val_labels, _ = self.tester(valid_loader, adj_matrix, ticker_list)
+            test_loss, test_score, test_rank_ic, preds, labels, tickers = self.tester(test_loader, adj_matrix, ticker_list)
 
             pprint('valid_loss {:.6f}, test_loss {:.6f}'.format(valid_loss, test_loss))
             pprint('valid_score {:.6f}, test_score {:.6f}'.format(valid_score, test_score))
@@ -162,29 +146,26 @@ class Finformer_Model:
                 val_metrics = self.get_metrics(val_preds, val_labels)
                 val_metrics = {k: float(v) for k, v in val_metrics.items()}
 
+                with open(f'{metrics_path}/val_metrics_sl1_pl{args.pred_len}.json', 'w') as f:
+                    json.dump(val_metrics, f, indent=4)
+
                 test_metrics = self.get_metrics(preds, labels)
-                test_metrics = {k: float(v) for k, v in test_metrics.items()}
 
                 preds = [np.expand_dims(i, axis=1) for i in preds]
                 labels = [np.expand_dims(i, axis=1) for i in labels]
 
-                best_results = {
-                    'metrics' : test_metrics,
-                    'preds': preds,
-                    'labels': labels,
-                    'pred_date': test_loader.dataset.valid_dates[args.pred_len:],
-                    'last_date': test_loader.dataset.valid_dates[:-args.pred_len],
-                    'tickers': tickers,
-                }
+                metrics, results_pkl, metrics_json = save_results(
+                    args,
+                    test_metrics,
+                    preds,
+                    labels,
+                    test_loader.dataset.valid_dates[args.pred_len:],
+                    test_loader.dataset.valid_dates[:-args.pred_len],
+                    tickers,
+                    metrics_path
+                )
 
-                with open(f'{metrics_path}/results_sl1_pl{args.pred_len}.pkl', 'wb') as f:
-                    pickle.dump(best_results, f)
-
-                with open(f'{metrics_path}/metrics_sl1_pl{args.pred_len}.json', 'w') as f:
-                    json.dump(test_metrics, f, indent=4)
-
-                with open(f'{metrics_path}/val_metrics_sl1_pl{args.pred_len}.json', 'w') as f:
-                    json.dump(val_metrics, f, indent=4)
+                print('Test Metrics:\n', metrics)
 
             else:
                 stop_round += 1
@@ -193,8 +174,7 @@ class Finformer_Model:
                     break
 
         pprint('best score:', best_score, '@', best_epoch)
-        # self.finformer.load_state_dict(best_param)
-        # torch.save(best_param, save_path + "/Stock_reg.ckpt")
+        torch.save(best_param, f'{model_save_path}/model.pth')
 
 
 

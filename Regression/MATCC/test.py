@@ -8,7 +8,8 @@ import torch
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import _log, load_configuration
 from utils.save_results import save_results
-from .load_dataset import RobustZScoreNormalization, CSVDataset
+from utils.z_score import RobustZScoreNormalization
+from .load_dataset import CSVDataset
 from .model.MATCC import MATCC
 from .train import select_valid_ticker, _init_data_loader, valid_epoch
 

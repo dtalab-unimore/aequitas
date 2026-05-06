@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
 import argparse
+import os
 
 # torch
 import torch.nn as nn
 
 # torchlight
-import torchlight
-from torchlight import str2bool
-from torchlight import DictAction
+from Ranking.RTGCN.torchlight import torchlight
+from Ranking.RTGCN.torchlight.torchlight import str2bool, DictAction
+
 
 class IO():
     """
@@ -57,13 +58,12 @@ class IO():
             self.dev = "cpu"
 
     def load_model(self):
-        self.model = self.io.load_model(self.arg.model,
-                                        **(self.arg.model_args))
+        self.model = self.io.load_model(self.arg.model, **(self.arg.model_args))
 
     def load_weights(self):
         if self.arg.weights:
-            self.model = self.io.load_weights(self.model, self.arg.weights,
-                                              self.arg.ignore_weights)
+            path = f'{os.getcwd()}/Ranking/RTGCN/model_params/{self.arg.universe}/{self.arg.model_name}/sl_{self.arg.seq_len}/pl_{self.arg.pred_len}/model.pth'
+            self.model = self.io.load_weights(self.model, path, self.arg.ignore_weights)
 
     def gpu(self):
         # move modules to gpu
@@ -77,7 +77,9 @@ class IO():
         if self.arg.use_gpu and len(self.gpus) > 1:
             self.model = nn.DataParallel(self.model, device_ids=self.gpus)
 
-    def start(self):
+    def start(self, model_save_path, metrics_path):
+        self.io.print_log('Metrics Path: {}'.format(metrics_path))
+        self.io.print_log('Model Save Path: {}'.format(model_save_path))
         self.io.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
 
     @staticmethod
@@ -91,15 +93,15 @@ class IO():
         parser.add_argument('-c', '--config', default=None, help='path to the configuration file')
 
         # processor
-        parser.add_argument('--use_gpu', type=str2bool, default=True, help='use GPUs or not')
+        parser.add_argument('--use_gpu', type=bool, default=True, help='use GPUs or not')
         parser.add_argument('--device', type=int, default=0, nargs='+', help='the indexes of GPUs for training or testing')
 
         # visulize and debug
-        parser.add_argument('--print_log', type=str2bool, default=True, help='print logging or not')
-        parser.add_argument('--save_log', type=str2bool, default=True, help='save logging or not')
+        parser.add_argument('--print_log', type=bool, default=True, help='print logging or not')
+        parser.add_argument('--save_log', type=bool, default=True, help='save logging or not')
 
         # model
-        parser.add_argument('--model', default=None, help='the model will be used')
+        # parser.add_argument('--model', default=None, help='the model will be used')
         parser.add_argument('--model_args', action=DictAction, default=dict(), help='the arguments of model')
         parser.add_argument('--weights', default=None, help='the weights for network initialization')
         parser.add_argument('--ignore_weights', type=str, default=[], nargs='+', help='the name of weights which will be ignored in the initialization')

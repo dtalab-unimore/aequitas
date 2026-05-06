@@ -1,32 +1,11 @@
 import datetime
+
+import numpy as np
+import pandas as pd
+import torch
 from torch.utils.data import Sampler
 import scipy.sparse as sp
 from torch_geometric.utils import to_undirected
-from loader import *
-
-
-def build_config_from_args(args):
-    data_config = {
-        'START_TIME': args.start_date.replace("-", ""),
-        'END_TIME': args.end_date.replace("-", ""),
-        'FIT_START': args.start_date.replace("-", ""),
-        'FIT_END': args.end_train_date.replace("-", ""),
-        'VALID_START': args.start_valid_date.replace("-", ""),
-        'VALID_END': args.end_valid_date.replace("-", ""),
-        'TEST_START': args.start_test_date.replace("-", ""),
-        'TEST_END': args.end_date.replace("-", ""),
-    }
-
-    model_config = {
-        'd_feat': args.d_feat,
-        'hidden_size': args.hidden_size,
-        'num_layers': args.num_layers,
-        'temporal_dropout': args.temporal_dropout,
-        'snum_head': args.snum_head
-    }
-
-    return data_config, model_config
-
 
 
 class DailyBatchSampler(Sampler):

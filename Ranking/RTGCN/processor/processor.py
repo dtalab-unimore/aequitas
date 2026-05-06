@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
 import argparse
+import random
+from collections import OrderedDict
 
+import numpy as np
 # torch
 import torch
 
+from Ranking.RTGCN.feeder.feeder import Feeder
 # torchlight
-import torchlight
-from torchlight import str2bool
-from torchlight import import_class
 
-from processor.io import IO
+from Ranking.RTGCN.processor.io import IO
+from Ranking.RTGCN.torchlight import torchlight
+from Ranking.RTGCN.torchlight.torchlight import import_class, str2bool
 
 
 class Processor(IO):
@@ -21,6 +24,7 @@ class Processor(IO):
     def __init__(self, argv=None):
 
         self.load_arg(argv)
+        self.set_seed()
         self.init_environment()
         self.load_data()
         self.load_model()
@@ -39,8 +43,16 @@ class Processor(IO):
     def load_optimizer(self):
         pass
 
+    def set_seed(self):
+        torch.manual_seed(self.arg.seed)
+        torch.cuda.manual_seed_all(self.arg.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(self.arg.seed)
+        random.seed(self.arg.seed)
+
     def load_data(self):
-        Feeder = import_class(self.arg.feeder)
+        # Feeder = import_class(self.arg.feeder)
         self.data_loader = dict()
         self.data_loader['train'] = torch.utils.data.DataLoader(
             dataset=Feeder(self.arg, flag='train'),
@@ -92,15 +104,16 @@ class Processor(IO):
         self.epoch_info['mean loss'] = 0
         self.show_epoch_info()
 
-    def test(self):
+    def test(self, metrics_path, flag):
         for _ in range(100):
             self.iter_info['loss'] = 1
             self.show_iter_info()
         self.epoch_info['mean loss'] = 1
         self.epoch_info['MAE'] = 0
         self.show_epoch_info()
+        return {}, [], [], None
 
-    def start(self):
+    def start(self, model_save_path, metrics_path):
         self.io.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
         self.best_performance = {'mean_loss':99999, 'mrr':0, 'top1':0, 'top5':0, 'top10':0}
         # training phase
@@ -112,22 +125,33 @@ class Processor(IO):
                 self.io.print_log('Training epoch: {}'.format(epoch))
                 self.train()
 
-        self.io.print_log('Model:   {}.'.format(self.arg.model))
+        self.save_model(self.model, model_save_path, 'model.pth')
 
         # evaluation
         self.io.print_log('Evaluation Start:')
-        self.test()
+        _, _, _, _ = self.test(metrics_path, flag='valid')
+        metrics, preds, labels, dataset = self.test(metrics_path, flag='test')
+
+        return metrics, preds, labels, dataset
+
+    def save_model(self, model, model_save_path, name):
+        model_path = '{}/{}'.format(model_save_path, name)
+        state_dict = model.state_dict()
+        weights = OrderedDict([[''.join(k.split('module.')),
+                                v.cpu()] for k, v in state_dict.items()])
+        torch.save(weights, model_path)
+        self.io.print_log('The model has been saved as {}.'.format(model_path))
 
     @staticmethod
     def get_parser(add_help=False):
         parser = argparse.ArgumentParser(add_help=add_help, description='Base Processor')
 
         # data
-        parser.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-        parser.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
+        parser.add_argument('--data_path', type=str, default='./Evaluation/data', help='Path to the dataset')
+        parser.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
         parser.add_argument('--model_name', type=str, default='RT-GCN', help='Name of the model to use')
         parser.add_argument('--config', default=None, help='path to the configuration file')
-        parser.add_argument('--work_dir', default='./work_dir/tmp', help='the work folder for storing results')
+        parser.add_argument('--work_dir', default='./Ranking/RTGCN/work_dir/tmp', help='the work folder for storing results')
 
         parser.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
         parser.add_argument('--seq_len', type=int, default=4, help='Lookback length for the model')
@@ -140,22 +164,21 @@ class Processor(IO):
 
         # processor
         parser.add_argument('--phase', default='train', help='must be train or test')
-        parser.add_argument('--save_result', type=str2bool, default=False, help='if ture, the output of the model will be stored')
+        parser.add_argument('--save_result', type=bool, default=False, help='if ture, the output of the model will be stored')
         parser.add_argument('--start_epoch', type=int, default=0, help='start training from which epoch')
         parser.add_argument('--num_epoch', type=int, default=100, help='stop training in which epoch')
-        parser.add_argument('--use_gpu', type=str2bool, default=True, help='use GPUs or not')
+        parser.add_argument('--use_gpu', type=bool, default=True, help='use GPUs or not')
         parser.add_argument('--device', type=int, default=0, nargs='+', help='the indexes of GPUs for training or testing')
 
         # visulize and debug
         parser.add_argument('--log_interval', type=int, default=10, help='the interval for printing messages (#iteration)')
         parser.add_argument('--save_interval', type=int, default=20, help='the interval for storing models (#iteration)')
         parser.add_argument('--eval_interval', type=int, default=1, help='the interval for evaluating models (#iteration)')
-        parser.add_argument('--save_log', type=str2bool, default=True, help='save logging or not')
-        parser.add_argument('--print_log', type=str2bool, default=True, help='print logging or not')
-        parser.add_argument('--pavi_log', type=str2bool, default=False, help='logging on pavi or not')
+        parser.add_argument('--save_log', type=bool, default=True, help='save logging or not')
+        parser.add_argument('--print_log', type=bool, default=True, help='print logging or not')
+        parser.add_argument('--pavi_log', type=bool, default=False, help='logging on pavi or not')
 
         # feeder
-        parser.add_argument('--feeder', default='feeder.feeder.Feeder', help='data loader will be used')
         parser.add_argument('--num_worker', type=int, default=1, help='the number of worker per gpu for data loader')
         parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
         parser.add_argument('--test_batch_size', type=int, default=64, help='test batch size')
@@ -163,7 +186,6 @@ class Processor(IO):
         parser.add_argument('--in_channels', type=int, default=4, help='the number of input image channels')
 
         # model
-        parser.add_argument('--model', default='net.rt_gcn.Model', help='the model will be used')
         parser.add_argument('--weights', default=None, help='the weights for network initialization')
         parser.add_argument('--ignore_weights', type=str, default=[], nargs='+', help='the name of weights which will be ignored in the initialization')
         parser.add_argument('--dropout', type=float, default=0.5, help='the dropout rate for the model')

@@ -1,3 +1,4 @@
+import json
 import os
 from argparse import ArgumentParser
 from itertools import chain
@@ -7,10 +8,14 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from load_dataset import RobustZScoreNormalization, CustomDataset
-from utils import build_config_from_args
-from finformer import trainer
+from .load_dataset import CustomDataset
+from .finformer import Finformer_Model
 from utils.filter_constituents import filter_constituents_by_date
+from utils.load_configuation import create_saving_path
+from utils.z_score import RobustZScoreNormalization
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 
 def select_valid_ticker(df, start_date, end_date):
@@ -40,19 +45,19 @@ if __name__ == '__main__':
     args = ArgumentParser()
 
     # Dataset parameters
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data')
-    args.add_argument('--universe', type=str, default='sp500')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data')
+    args.add_argument('--universe', type=str, default='sx5e')
     args.add_argument('--model_name', type=str, default='FinFormer')
 
     # Prediction parameters
     args.add_argument('--seq_len', type=int, default=None)
     args.add_argument('--pred_len', type=int, default=5)
-    args.add_argument('--start_date', type=str, default='2015-10-01')
-    args.add_argument('--end_train_date', type=str, default='2018-12-31')
-    args.add_argument('--start_valid_date', type=str, default='2019-10-01')
-    args.add_argument('--end_valid_date', type=str, default='2019-12-31')
-    args.add_argument('--start_test_date', type=str, default='2020-10-01')
-    args.add_argument('--end_date', type=str, default='2020-12-31')
+    args.add_argument('--start_date', type=str, default='2019-01-01')
+    args.add_argument('--end_train_date', type=str, default='2021-12-31')
+    args.add_argument('--start_valid_date', type=str, default='2022-01-01')
+    args.add_argument('--end_valid_date', type=str, default='2022-12-31')
+    args.add_argument('--start_test_date', type=str, default='2023-01-01')
+    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--d_feat', type=int, default=6)
@@ -65,13 +70,14 @@ if __name__ == '__main__':
     args.add_argument('--lr', type=float, default=0.0002)
 
     args = args.parse_args()
-    data_config, model_config = build_config_from_args(args)
     torch.cuda.manual_seed(args.seed)
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-    metrics_path = f"./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-    os.makedirs(metrics_path, exist_ok=True)
+    model_save_path, metrics_path =  create_saving_path(args, task_type='Regression', test_model='FinFormer', project_root=PROJECT_ROOT)
+
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
     df_alpha = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha360.csv')
     tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
@@ -124,7 +130,14 @@ if __name__ == '__main__':
     adj_matrix, ticker_list = matrix['adj_matrix'][:11, :, :], matrix['tickers']
     adj_matrix = preprocess_matrix(adj_matrix)
 
-    trainer(args, train_loader, valid_loader, test_loader, model_config, adj_matrix, ticker_list, metrics_path, device)
+    model = Finformer_Model(d_feat=args.d_feat,
+                            hidden_size=args.hidden_size,
+                            num_layers=args.num_layers,
+                            temporal_dropout=args.temporal_dropout,
+                            snum_head=args.snum_head,
+                            device=device)
+
+    model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
 
     print(f"Training completed. Metrics saved to {metrics_path}")
 

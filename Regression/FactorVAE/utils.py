@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import random
 from dataclasses import dataclass, field
 from module import *

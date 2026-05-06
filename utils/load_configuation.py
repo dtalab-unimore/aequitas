@@ -8,6 +8,7 @@ def _log(log_fn, msg):
         log_fn(msg)
 
 def create_saving_path(args, task_type, test_model, project_root):
+    args.seq_len = getattr(args, "seq_len", 1)
     model_save_path = f"model_params/{args.universe}/{args.model_name}/sl_{args.seq_len}/pl_{args.pred_len}"
     metrics_path = f"results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}_y{args.end_date.split('-')[0]}"
 

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import cal_cos_similarity
+from .utils import cal_cos_similarity
 
 class MLP(nn.Module):
 
