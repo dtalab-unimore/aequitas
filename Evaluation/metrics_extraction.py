@@ -4,8 +4,68 @@ import re
 import logging
 import pandas as pd
 from typing import Optional, List, Dict, Any
+import subprocess
+import sys
+from pathlib import Path
+
+from paths import (
+    EVALUATION_RESULT_DIR,
+    EVALUATION_RESULT_QUINTILE_DIR,
+    DEFAULT_RESULTS_ROOT,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+THIS_DIR = Path(__file__).resolve().parent
+EVALUATION_SCRIPT = THIS_DIR / "evaluation.py"
+QUINTILE_SCRIPT = THIS_DIR / "quintile_analysis.py"
+
+
+# ----------------------------
+# functions for lunch evaluation.py and quintile_analysis.py
+# ----------------------------
+
+def run_evaluation_before_extract(args):
+    cmd = [
+        sys.executable,
+        str(EVALUATION_SCRIPT),
+        "--universe", args.universe,
+        "--model", args.model,
+        "--type", args.type,
+        "--initial_year", str(args.initial_year),
+        "--end_year", str(args.end_year),
+        "--seed", str(args.seed),
+        "--sl", str(args.sl),
+        "--pl", str(args.pl),
+        "--top_k", str(args.top_k),
+        "--short_k", str(args.short_k),
+        "--results_root", args.results_root,
+    ]
+
+    logging.info("Running evaluation.py before extraction...")
+    logging.info("Command: " + " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
+def run_quintile_before_extract(args):
+    cmd = [
+        sys.executable,
+        str(QUINTILE_SCRIPT),
+        "--universe", args.universe,
+        "--model", args.model,
+        "--type", args.type,
+        "--initial_year", str(args.initial_year),
+        "--end_year", str(args.end_year),
+        "--seed", str(args.seed),
+        "--sl", str(args.sl),
+        "--pl", str(args.pl),
+        "--results_root", args.results_root,
+    ]
+
+    logging.info("Running quintile analysis before extraction...")
+    logging.info("Command: " + " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
 
 # ----------------------------
 # Helper
@@ -22,97 +82,134 @@ def _parse_percent_or_none(raw: Optional[str]) -> Optional[float]:
     except Exception:
         return None
 
+
 def _safe_read_csv(path: str) -> pd.DataFrame:
     return pd.read_csv(path)
+
 
 # ----------------------------
 # EOY returns aggregation
 # ----------------------------
-FILENAME_EOY_RE = re.compile(r"eoy_returns_sl(?P<sl>\d+)_pl(?P<pl>\d+)_seed(?P<seed>\d+)\.csv")
 
-def extract_eoy_returns(base_dir: str = "evaluation_result",
-                        top_k: int = 10,
-                        short_k: int = 0,
-                        output_prefix: str = "aggregated_eoy_returns") -> pd.DataFrame:
+FILENAME_EOY_RE = re.compile(
+    r"eoy_returns_sl(?P<sl>\d+)_pl(?P<pl>\d+)_seed(?P<seed>\d+)\.csv"
+)
+
+
+def extract_eoy_returns(
+        base_dir: str = "evaluation_result",
+        top_k: int = 10,
+        short_k: int = 0,
+        output_prefix: str = "aggregated_eoy_returns"
+) -> pd.DataFrame:
     rows: List[Dict[str, Any]] = []
     topk_shortx = f"top{top_k}_short{short_k}"
 
-    for universe in os.listdir(base_dir):
-        universe_path = os.path.join(base_dir, universe)
-        if not os.path.isdir(universe_path):
-            continue
-
-        ts_path = os.path.join(universe_path, topk_shortx)
-        if not os.path.isdir(ts_path):
-            continue
-
-        for task_type in os.listdir(ts_path):
-            task_type_path = os.path.join(ts_path, task_type)
-            if not os.path.isdir(task_type_path):
+    for root, _, files in os.walk(base_dir):
+        for fname in files:
+            match = FILENAME_EOY_RE.match(fname)
+            if not match:
                 continue
 
-            for model in os.listdir(task_type_path):
-                model_path = os.path.join(task_type_path, model)
-                if not os.path.isdir(model_path):
+            fpath = os.path.join(root, fname)
+            parts = os.path.normpath(fpath).split(os.sep)
+
+            try:
+                idx = parts.index(os.path.basename(base_dir))
+
+                universe = parts[idx + 1]
+                top_short = parts[idx + 2]
+                task_type = parts[idx + 3]
+                model = parts[idx + 4]
+
+                config = parts[idx + 5] if len(parts) > idx + 5 else None
+                seed_folder = parts[idx + 6] if len(parts) > idx + 6 else None
+                period = parts[idx + 7] if len(parts) > idx + 7 else None
+
+                if top_short != topk_shortx:
                     continue
 
-                for fname in os.listdir(model_path):
-                    match = FILENAME_EOY_RE.match(fname)
-                    if not match:
-                        continue
+            except Exception:
+                logging.warning(f"Skipping path not compliant: {fpath}")
+                continue
 
-                    sl = int(match.group("sl"))
-                    pl = int(match.group("pl"))
-                    seed = int(match.group("seed"))
+            sl = int(match.group("sl"))
+            pl = int(match.group("pl"))
+            seed = int(match.group("seed"))
 
-                    fpath = os.path.join(model_path, fname)
-                    try:
-                        df = _safe_read_csv(fpath)
-                    except Exception as e:
-                        logging.warning(f"Read error {fpath}: {e}")
-                        continue
+            try:
+                df = _safe_read_csv(fpath)
+            except Exception as e:
+                logging.warning(f"Read error {fpath}: {e}")
+                continue
 
-                    if "date" not in df.columns or len(df.columns) < 2:
-                        logging.warning(f"Unexpected CSV format: {fpath}")
-                        continue
+            if df.shape[1] < 2:
+                logging.warning(f"Unexpected CSV format: {fpath}")
+                continue
 
-                    df["year"] = pd.to_datetime(df["date"]).dt.year
-                    value_col = df.columns[1]
+            date_col = df.columns[0]
+            value_col = df.columns[1]
 
-                    for _, r in df.iterrows():
-                        rows.append({
-                            "universe": universe,
-                            "model": model,
-                            "task_type": task_type,
-                            "topk": top_k,
-                            "shortx": short_k,
-                            "sl": sl,
-                            "pl": pl,
-                            "seed": seed,
-                            "year": int(r["anno"]),
-                            "value": r[value_col]
-                        })
+            try:
+                df["year"] = pd.to_datetime(df[date_col]).dt.year
+            except Exception as e:
+                logging.warning(f"Cannot parse year in {fpath}: {e}")
+                continue
+
+            for _, r in df.iterrows():
+                rows.append({
+                    "universe": universe,
+                    "model": model,
+                    "config": config,
+                    "task_type": task_type,
+                    "topk": top_k,
+                    "shortk": short_k,
+                    "sl": sl,
+                    "pl": pl,
+                    "seed": seed,
+                    "period": period,
+                    "year": int(r["year"]),
+                    "value": pd.to_numeric(r[value_col], errors="coerce"),
+                })
 
     df_all = pd.DataFrame(rows)
+
     if df_all.empty:
         logging.info("No EOY data found.")
         return df_all
 
+    group_cols = [
+        "universe",
+        "model",
+        "config",
+        "task_type",
+        "topk",
+        "shortk",
+        "sl",
+        "pl",
+        "period",
+        "year",
+    ]
+
     df_agg = (
         df_all
-        .groupby([
-            "universe", "model", "type",
-            "topk", "shortx", "sl", "pl", "year"
-        ], as_index=False)
-        .agg(valore=("value", "mean"))
+        .groupby(group_cols, as_index=False)
+        .agg(value=("value", "mean"))
     )
 
     df_final = (
         df_agg
         .pivot_table(
             index=[
-                "universe", "model", "type"
-                "topk", "shortx", "sl", "pl"
+                "universe",
+                "model",
+                "config",
+                "task_type",
+                "topk",
+                "shortk",
+                "sl",
+                "pl",
+                "period",
             ],
             columns="year",
             values="value"
@@ -120,10 +217,15 @@ def extract_eoy_returns(base_dir: str = "evaluation_result",
         .reset_index()
     )
 
+    df_final.columns.name = None
+
     out_csv = f"{output_prefix}_{top_k}_{short_k}.csv"
     df_final.to_csv(out_csv, index=False)
-    logging.info(f"Created file: {out_csv} with ({len(df_final)} rows)")
+
+    logging.info(f"Created file: {out_csv} with {len(df_final)} rows")
+
     return df_final
+
 
 # ----------------------------
 # Metrics extraction
@@ -138,6 +240,7 @@ TARGET_METRICS = [
     "Avg. Drawdown"
 ]
 METRICS_FILENAME_RE = re.compile(r"metrics_sl(\d+)_pl(\d+)_seed(\d+)\.csv")
+
 
 def extract_metrics(root_dir: str = "evaluation_result",
                     mean_output: str = "summary_metrics_mean_over_seeds.csv") -> pd.DataFrame:
@@ -155,12 +258,19 @@ def extract_metrics(root_dir: str = "evaluation_result",
             parts = os.path.normpath(file_path).split(os.sep)
             try:
                 idx = parts.index(os.path.basename(root_dir))
+
                 univers = parts[idx + 1]
                 top_short = parts[idx + 2]
                 task_type = parts[idx + 3]
                 model = parts[idx + 4]
+
+                config = parts[idx + 5] if len(parts) > idx + 5 else None
+                seed_folder = parts[idx + 6] if len(parts) > idx + 6 else None
+                period = parts[idx + 7] if len(parts) > idx + 7 else None
+
                 m = re.match(r"top(\d+)_short(\d+)", top_short)
                 topk, shortk = m.groups() if m else (None, None)
+
             except Exception:
                 logging.warning(f"Skipping path not compliant: {file_path}")
                 continue
@@ -179,12 +289,14 @@ def extract_metrics(root_dir: str = "evaluation_result",
             row = {
                 "universe": univers,
                 "model": model,
+                "config": config,
                 "task_type": task_type,
                 "topk": topk,
                 "shortk": shortk,
                 "seed": int(seed),
                 "sl": int(sl),
                 "pl": int(pl),
+                "period": period,
                 **metrics_dict
             }
             rows.append(row)
@@ -203,15 +315,16 @@ def extract_metrics(root_dir: str = "evaluation_result",
                 pass
     final_df[int_cols] = final_df[int_cols].astype(int)
 
-    # mean over seeds
     GROUP_COLS = [
         "universe",
         "model",
+        "config",
         "task_type",
         "topk",
         "shortk",
         "sl",
-        "pl"
+        "pl",
+        "period",
     ]
     metric_cols = TARGET_METRICS
     final_df[metric_cols] = final_df[metric_cols].apply(pd.to_numeric, errors="coerce")
@@ -224,11 +337,13 @@ def extract_metrics(root_dir: str = "evaluation_result",
     logging.info(f"Created file {mean_output} with {len(grouped_df)} rows")
     return final_df
 
+
 # ----------------------------
 # Quintile metrics extraction
 # ----------------------------
 TARGET_METRICS_QUINT = ["CAGR﹪"]
 QUINT_FILENAME_RE = re.compile(r"metrics_q(\d+)_sl(\d+)_pl(\d+)_seed(\d+)\.csv")
+
 
 def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
                              mean_output: str = "summary_metrics_quintile_mean_over_seeds.csv") -> pd.DataFrame:
@@ -245,9 +360,15 @@ def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
             parts = os.path.normpath(file_path).split(os.sep)
             try:
                 idx = parts.index(os.path.basename(root_dir))
+
                 universe = parts[idx + 1]
                 task_type = parts[idx + 2]
                 model = parts[idx + 3]
+
+                config = parts[idx + 4] if len(parts) > idx + 4 else None
+                seed_folder = parts[idx + 5] if len(parts) > idx + 5 else None
+                period = parts[idx + 6] if len(parts) > idx + 6 else None
+
             except Exception:
                 logging.warning(f"Skipping path not compliant: {file_path}")
                 continue
@@ -266,13 +387,16 @@ def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
             row = {
                 "universe": universe,
                 "model": model,
+                "config": config,
                 "task_type": task_type,
                 "sl": int(sl),
                 "pl": int(pl),
                 "seed": int(seed),
+                "period": period,
                 "quintile": int(quintile),
                 **metrics_dict
             }
+
             rows.append(row)
 
     final_df = pd.DataFrame(rows)
@@ -280,7 +404,15 @@ def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
         logging.info("No quintile files found.")
         return final_df
 
-    GROUP_COLS = ["universe", "model", "task_type", "sl", "pl"]
+    GROUP_COLS = [
+        "universe",
+        "model",
+        "config",
+        "task_type",
+        "sl",
+        "pl",
+        "period",
+    ]
     final_df[TARGET_METRICS_QUINT] = final_df[TARGET_METRICS_QUINT].apply(pd.to_numeric, errors="coerce")
     mean_df = final_df.groupby(GROUP_COLS + ["quintile"], as_index=False)[TARGET_METRICS_QUINT].mean()
 
@@ -296,36 +428,92 @@ def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
     logging.info(f"Created file {mean_output} with {len(pivot_df)} rows")
     return final_df
 
+
 # ----------------------------
 # CLI
 # ----------------------------
+
+def add_eval_args(parser):
+    parser.add_argument("--universe", type=str, required=True)
+    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument(
+        "--type",
+        type=str,
+        required=True,
+        choices=["Regression", "Classification", "Ranking"],
+    )
+    parser.add_argument("--initial_year", type=int, required=True)
+    parser.add_argument("--end_year", type=int, required=True)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--sl", type=int, default=5)
+    parser.add_argument("--pl", type=int, default=1)
+    parser.add_argument(
+        "--results_root",
+        type=str,
+        default=str(DEFAULT_RESULTS_ROOT),
+    )
+    parser.add_argument(
+        "--skip_run",
+        action="store_true",
+        help="Skip evaluation/quintile run and only extract existing files.",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(prog="metrics_extraction")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_eoy = sub.add_parser("eoy", help="Aggregate eoy returns")
-    p_eoy.add_argument("--base_dir", default="evaluation_result")
+    p_eoy = sub.add_parser("eoy", help="Run evaluation and aggregate EOY returns")
+    add_eval_args(p_eoy)
+    p_eoy.add_argument("--base_dir", default=str(EVALUATION_RESULT_DIR))
     p_eoy.add_argument("--top_k", type=int, required=True)
     p_eoy.add_argument("--short_k", type=int, required=True)
     p_eoy.add_argument("--output_prefix", default="aggregated_eoy_returns")
 
-    p_metrics = sub.add_parser("metrics", help="Extract standard metrics")
+    p_metrics = sub.add_parser("metrics", help="Run evaluation and extract standard metrics")
+    add_eval_args(p_metrics)
     p_metrics.add_argument("--root_dir", default="evaluation_result")
-    p_metrics.add_argument("--mean_output", default="summary_metrics_mean_over_seeds.csv")
+    p_metrics.add_argument("--top_k", type=int, required=True)
+    p_metrics.add_argument("--short_k", type=int, required=True)
+    p_metrics.add_argument("--mean_output", default=f"{str(EVALUATION_RESULT_DIR)}_summary_metrics_mean_over_seeds.csv")
 
-    p_quint = sub.add_parser("quintile", help="Extract quintile metrics")
+    p_quint = sub.add_parser("quintile", help="Run quintile analysis and extract quintile metrics")
+    add_eval_args(p_quint)
     p_quint.add_argument("--root_dir", default="evaluation_result_quintile")
-    p_quint.add_argument("--mean_output", default="summary_metrics_quintile_mean_over_seeds.csv")
+    p_quint.add_argument("--mean_output",
+                         default=f"{str(EVALUATION_RESULT_QUINTILE_DIR)}_summary_metrics_quintile_mean_over_seeds.csv")
 
     args = parser.parse_args()
 
     if args.cmd == "eoy":
-        extract_eoy_returns(args.base_dir, args.top_k, args.short_k, args.output_prefix)
+        if not args.skip_run:
+            run_evaluation_before_extract(args)
+
+        extract_eoy_returns(
+            base_dir=args.base_dir,
+            top_k=args.top_k,
+            short_k=args.short_k,
+            output_prefix=args.output_prefix,
+        )
+
     elif args.cmd == "metrics":
-        extract_metrics(args.root_dir, args.mean_output)
+        if not args.skip_run:
+            run_evaluation_before_extract(args)
+
+        extract_metrics(
+            root_dir=args.root_dir,
+            mean_output=args.mean_output,
+        )
+
     elif args.cmd == "quintile":
-        extract_metrics_quintile(args.root_dir, args.mean_output)
+        if not args.skip_run:
+            run_quintile_before_extract(args)
+
+        extract_metrics_quintile(
+            root_dir=args.root_dir,
+            mean_output=args.mean_output,
+        )
+
 
 if __name__ == "__main__":
     main()
-

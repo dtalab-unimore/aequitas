@@ -1,8 +1,5 @@
-import json
-import os
-
 import pandas as pd
-
+from paths import get_config_path
 from .eodhd import download_multi
 from .storage import load_config, read_stock_dataset
 
@@ -49,7 +46,7 @@ def evaluate_benchmarks(benchmarks: list[str], start_date: str, end_date: str, a
 
 
 def download_asset_prices(pf_history: list[dict], price_path: str = None) -> dict[str, pd.DataFrame]:
-    userdata = load_config('config.json')
+    userdata = load_config(str(get_config_path("config.json")))
     asset_prices = {}
 
     # Try to load cached prices if path provided
@@ -82,49 +79,3 @@ def download_asset_prices(pf_history: list[dict], price_path: str = None) -> dic
         asset_prices.update(missing_prices)
 
     return asset_prices
-
-
-def load_best_results(base_dir, model, universe):
-    best_path = os.path.join(base_dir, model, "best_results.json")
-    print(f"Best path: {best_path}")
-
-    with open(best_path, 'r') as f:
-        best_results = json.load(f)
-
-    if model not in best_results:
-        raise ValueError(f"Model {model} not found in best_results.json")
-
-    if universe not in best_results[model]:
-        raise ValueError(f"Universe {universe} not found for model {model} in best_results.json")
-
-    return best_results
-
-
-def extract_yearly_config(best_config, args):
-    for seed_str, years in best_config.items():
-        seed = int(seed_str)
-
-        if args.seed is not None and seed != args.seed:
-            continue
-
-        year_to_config = {}
-
-        for year_str, sl_pl in years.items():
-            year = int(str(year_str).lstrip("y"))
-
-            if year < args.initial_year:
-                continue
-
-            key = f"sl{args.sl}_pl{args.pl}"
-            if key not in sl_pl:
-                continue
-
-            year_to_config[year] = sl_pl[key]['config']
-
-        year_to_config = dict(sorted(year_to_config.items()))
-
-        if not year_to_config:
-            print(f"[SKIP] No valid configurations found for seed {seed}")
-            continue
-
-        yield seed, year_to_config
