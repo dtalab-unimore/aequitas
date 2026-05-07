@@ -135,7 +135,7 @@ if __name__ == '__main__':
     args.add_argument('--universe', type=str, default='sx5e', help='Universe', required=True)
     args.add_argument('--model', type=str, default='MASTER', help='Model name', required=True)
     args.add_argument("--initial_year", type=int, default=2021, required=True)
-    args.add_argument('--seed', type=int, default=0, help='Random seed')
+    args.add_argument('--seed', type=int, default=42, help='Random seed')
     args.add_argument('--type', type=str, default='Regression', choices=['Regression', 'Classification', 'Ranking'], help='Prediction type')
     args.add_argument('--sl', type=int, default=5, help='sequence length')
     args.add_argument('--pl', type=int, default=1, help='pred length')

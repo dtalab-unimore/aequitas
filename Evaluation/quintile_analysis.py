@@ -81,7 +81,7 @@ if __name__ == '__main__':
     args = ArgumentParser()
     args.add_argument('--universe', type=str, default='sx5e', help='Universe')
     args.add_argument('--model', type=str, default='MASTER', help='Model name')
-    args.add_argument('--seed', type=int, default=0, help='Random seed')
+    args.add_argument('--seed', type=int, default=42, help='Random seed')
     args.add_argument('--type', type=str, default='Regression', choices=['Regression', 'Classification', 'Ranking'],
                       help='Type (Regression/Classification/Ranking')
     args.add_argument('--sl', type=int, default=5, help='sequence length')

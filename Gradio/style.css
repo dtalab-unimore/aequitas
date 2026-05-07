@@ -48,7 +48,6 @@ button:hover {
     width: 188px !important;
     min-width: 188px !important;
     max-width: 188px !important;
-
     display: flex !important;
     justify-content: flex-end !important;
     align-items: center !important;
@@ -58,7 +57,6 @@ button:hover {
     width: 188px !important;
     min-width: 188px !important;
     max-width: 188px !important;
-
     display: grid !important;
     grid-template-columns: 36px 92px 36px !important;
     column-gap: 12px !important;
