@@ -162,12 +162,16 @@ def build_tab():
             fn=update_end_year_choices,
             inputs=[start_test],
             outputs=[end_test],
+            show_progress="hidden",
+            queue=False,
         )
 
         end_test.change(
             fn=lambda start, end: gr.update(interactive=(start is not None and end is not None)),
             inputs=[start_test, end_test],
             outputs=test_button,
+            show_progress="hidden",
+            queue=False,
         )
 
         test_button.click(

@@ -212,19 +212,13 @@ if __name__ == '__main__':
     parser.add_argument('--initial_year', type=int, default=2021, required=True)
     parser.add_argument('--end_year', type=int, default=2024, required=True)
     parser.add_argument('--seed', type=int, default=42, help='Random seed. Use -1 to evaluate all seeds.')
-    parser.add_argument('--type', type=str, default='Regression', choices=['Regression', 'Classification', 'Ranking'],
-                        help='Prediction type')
+    parser.add_argument('--type', type=str, default='Regression', choices=['Regression', 'Classification', 'Ranking'], help='Prediction type')
     parser.add_argument('--sl', type=int, default=5, help='sequence length')
     parser.add_argument('--pl', type=int, default=1, help='pred length')
     parser.add_argument('--top_k', type=int, default=10, help='top_k')
     parser.add_argument('--short_k', type=int, default=0, help='short_k')
 
-    parser.add_argument(
-        '--results_root',
-        type=str,
-        default='/hdd10t/n284480/FINBENCH_DEMO',
-        help='Root directory containing <type>/<model>/results/...'
-    )
+    parser.add_argument('--results_root', type=str, default='/hdd10t/n284480/FINBENCH_DEMO',help='Root directory containing <type>/<model>/results/...')
 
     args = parser.parse_args()
 
