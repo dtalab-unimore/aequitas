@@ -96,6 +96,8 @@ def build_tab():
                 metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_year_range.change(
@@ -106,6 +108,8 @@ def build_tab():
                 metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_model.change(
@@ -115,6 +119,8 @@ def build_tab():
                 metrics_config_pl, metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_config_pl.change(
@@ -124,6 +130,8 @@ def build_tab():
                 metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_datasets.change(
@@ -137,6 +145,8 @@ def build_tab():
                 metrics_table, metrics_metric_selector, metrics_plot,
                 metrics_dataset_radio, metrics_plot_accordion,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_metric_selector.change(
@@ -147,6 +157,8 @@ def build_tab():
                 metrics_metric_selector, metrics_dataset_radio,
             ],
             outputs=[metrics_plot],
+            show_progress="hidden",
+            queue=False,
         )
 
         metrics_dataset_radio.change(
@@ -157,4 +169,6 @@ def build_tab():
                 metrics_metric_selector, metrics_dataset_radio,
             ],
             outputs=[metrics_plot],
+            show_progress="hidden",
+            queue=False,
         )

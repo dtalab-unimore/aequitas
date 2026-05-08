@@ -436,27 +436,14 @@ def extract_metrics_quintile(root_dir: str = "evaluation_result_quintile",
 def add_eval_args(parser):
     parser.add_argument("--universe", type=str, required=True)
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument(
-        "--type",
-        type=str,
-        required=True,
-        choices=["Regression", "Classification", "Ranking"],
-    )
+    parser.add_argument("--type", type=str,required=True, choices=["Regression", "Classification", "Ranking"],)
     parser.add_argument("--initial_year", type=int, required=True)
     parser.add_argument("--end_year", type=int, required=True)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sl", type=int, default=5)
     parser.add_argument("--pl", type=int, default=1)
-    parser.add_argument(
-        "--results_root",
-        type=str,
-        default=str(DEFAULT_RESULTS_ROOT),
-    )
-    parser.add_argument(
-        "--skip_run",
-        action="store_true",
-        help="Skip evaluation/quintile run and only extract existing files.",
-    )
+    parser.add_argument("--results_root", type=str, default=str(DEFAULT_RESULTS_ROOT), )
+    parser.add_argument("--skip_run", action="store_true", help="Skip evaluation/quintile run and only extract existing files.",)
 
 
 def main():

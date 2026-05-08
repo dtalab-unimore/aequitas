@@ -309,3 +309,10 @@ button:hover {
 .mpt .missing {
     color: #94a3b8 !important;
 }
+
+#execution-log textarea {
+    max-height: 240px !important;
+    overflow-y: auto !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+

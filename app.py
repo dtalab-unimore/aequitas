@@ -53,7 +53,7 @@ with open(CSS_PATH, "r", encoding="utf-8") as f:
     custom_css = f.read()
 
 demo.queue().launch(
-    server_port=7860,
+    server_port=7862,
     theme=theme,
     css=custom_css,
 )
