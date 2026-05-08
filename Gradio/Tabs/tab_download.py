@@ -8,7 +8,7 @@ from Gradio.data_load import (
     next_preview_page,
     prev_preview_page,
     on_dataset_change,
-    on_market_change,
+    on_market_change, get_models, get_files,
 )
 
 
@@ -30,6 +30,32 @@ def build_tab():
                 )
             with gr.Column(scale=2):
                 gr.Markdown("")
+
+        gr.Markdown("---")
+
+        with gr.Row():
+            with gr.Column(scale=3):
+                universes = gr.Dropdown(
+                    choices=['sp500', "dji", "nasdaq100", "sxxp", "sx5e"],
+                    label="Select the dataset",
+                    value=None
+                )
+
+                models = gr.Dropdown(
+                    choices=get_models(),
+                    label="Available Models",
+                    value=None
+                )
+
+                btn_check_files = gr.Button(
+                    "Check Files",
+                    variant="primary",
+                    min_width=140
+                )
+
+                textbox_files = gr.Textbox(
+
+                )
 
         gr.Markdown("---")
 
@@ -150,4 +176,10 @@ def build_tab():
                 preview, preview_page_label, btn_prev_preview,
                 btn_next_preview, preview_page_state,
             ],
+        )
+
+        btn_check_files.click(
+            fn=get_files,
+            inputs=[universes, models],
+            outputs=[]
         )

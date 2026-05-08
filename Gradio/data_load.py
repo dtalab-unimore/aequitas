@@ -792,3 +792,17 @@ def _run_real_pipeline(universe: str, progress) -> None:
     for pct, desc, fn in steps:
         progress(pct, desc=desc)
         fn()
+
+def get_models():
+    all_models = []
+
+    with open("./Gradio/configs/model_to_data.json", "r") as f:
+        configs = json.load(f)
+
+    for key in configs.keys():
+        all_models.extend(configs[key].keys())
+
+    return all_models
+
+def get_files():
+    pass
