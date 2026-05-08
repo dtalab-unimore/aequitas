@@ -12,15 +12,7 @@ from Gradio.metrics_view import (
 
 def build_tab():
     with gr.Tab("Metrics"):
-        #gr.Markdown("### Model Metrics Visualization")
-
-        gr.HTML(
-            """
-            <div class="tab-title">
-                <h2>Model Metrics Visualization</h2>
-            </div>
-            """
-        )
+        gr.Markdown("### Model Metrics Visualization")
 
         with gr.Row():
             with gr.Column(scale=1):
