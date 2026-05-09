@@ -34,7 +34,7 @@ def build_tab():
         gr.Markdown("---")
 
         with gr.Row():
-            with gr.Column(scale=3):
+            with gr.Column():
                 universes = gr.Dropdown(
                     choices=['sp500', "dji", "nasdaq100", "sxxp", "sx5e"],
                     label="Select the dataset",
@@ -53,8 +53,13 @@ def build_tab():
                     min_width=140
                 )
 
-                textbox_files = gr.Textbox(
-
+            with gr.Column():
+                files = gr.Textbox(
+                    label="Data Description",
+                    interactive=False,
+                    lines=10,
+                    max_lines=10,
+                    elem_id="files",
                 )
 
         gr.Markdown("---")
@@ -181,5 +186,5 @@ def build_tab():
         btn_check_files.click(
             fn=get_files,
             inputs=[universes, models],
-            outputs=[]
+            outputs=[files]
         )

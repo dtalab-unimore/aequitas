@@ -26,8 +26,20 @@ def dataset_exists(universe: str) -> bool:
 def _ensure_dir(path: str) -> None:
      os.makedirs(path, exist_ok=True)
 
-PREVIEW_PAGE_SIZE = 10
+def read_configs():
+    with open("./Gradio/configs/model_to_data.json", "r") as f:
+        configs = json.load(f)
+    return configs
 
+PREVIEW_PAGE_SIZE = 10
+CONFIGS = read_configs()
+UNIVERSE_TO_NATION = {
+    "nasdaq100": "us",
+    "sp500": "us",
+    "dji": "us",
+    "sxxp": "eu",
+    "sx5e": "eu"
+}
 
 def _build_file_map(universe: str) -> dict:
     out_dir = os.path.join("./Evaluation/data", universe)
@@ -794,15 +806,57 @@ def _run_real_pipeline(universe: str, progress) -> None:
         fn()
 
 def get_models():
-    all_models = []
+    return list(CONFIGS.keys())
 
-    with open("./Gradio/configs/model_to_data.json", "r") as f:
-        configs = json.load(f)
+def _build_file_lookup(universe: str) -> dict:
+    file_map = _build_file_map(universe)
 
-    for key in configs.keys():
-        all_models.extend(configs[key].keys())
+    return {
+        os.path.basename(os.path.normpath(path)): {
+            "label": label,
+            "path": path,
+        }
+        for label, path in file_map.items()
+    }
 
-    return all_models
+def get_nation_from_universe(universe: str) -> str:
+    try:
+        return UNIVERSE_TO_NATION[universe]
+    except KeyError:
+        raise ValueError(f"Unknown universe: {universe}")
 
-def get_files():
-    pass
+def get_files(universe, models):
+    raw_files = CONFIGS[models]
+
+    nation = get_nation_from_universe(universe).lower()
+    lookup = _build_file_lookup(universe)
+
+    lines = [
+        f"🌍 Universe: {universe}",
+        f"🏳️ Nation: {nation.upper()}",
+        "",
+        "📁 File check:",
+        ""
+    ]
+
+    for file_template in raw_files:
+        filename = file_template.format(
+            universe=universe,
+            nation=nation
+        )
+
+        item = lookup.get(filename)
+
+        if item is None:
+            lines.append(f"❓ {filename} — not configured in file map")
+            continue
+
+        label = item["label"]
+        path = item["path"]
+
+        if os.path.exists(path):
+            lines.append(f"✅ {label} ")
+        else:
+            lines.append(f"❌ {label} ")
+
+    return "\n".join(lines)
