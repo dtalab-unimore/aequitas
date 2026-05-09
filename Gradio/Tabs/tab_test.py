@@ -9,7 +9,7 @@ from Gradio.test_models import (
     on_sl_change,
     on_pl_change,
     run_test_with_logs,
-    TEST_YEARS,
+    TEST_YEARS, get_tickers,
 )
 
 
@@ -119,6 +119,12 @@ def build_tab():
         # Hidden outputs, shown after TEST click
         # ─────────────────────────────────────────────────────────────
         with gr.Column(visible=False) as test_output_section:
+            tickers_info = gr.HTML(
+                value="",
+                visible=False,
+                elem_id="tickers-info",
+            )
+
             test_logs = gr.Textbox(
                 label="Test Progress",
                 value="",
@@ -254,7 +260,14 @@ def build_tab():
             queue=False,
         )
 
-        show_outputs_evt = test_button.click(
+        show_tickers = test_button.click(
+            fn=get_tickers,
+            inputs=[test_universe, start_test],
+            outputs=[tickers_info],
+            show_progress="hidden",
+        )
+
+        show_outputs_evt = show_tickers.then(
             fn=lambda: (
                 gr.update(visible=True),
                 gr.update(value=""),

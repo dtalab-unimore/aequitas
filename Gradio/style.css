@@ -332,3 +332,73 @@ button:hover {
     overflow: auto !important;
 }
 
+#tickers-info {
+    margin-top: 14px;
+}
+
+.ticker-card {
+    background: #ffffff;
+    border: 1px solid #c7d2fe;
+    border-radius: 18px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08);
+}
+
+.ticker-title {
+    font-size: 1rem;
+    font-weight: 850;
+    color: #312e81;
+    margin-bottom: 4px;
+}
+
+.ticker-subtitle {
+    color: #475569;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    margin-bottom: 10px;
+}
+
+.ticker-count {
+    display: inline-block;
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.ticker-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 8px;
+}
+
+.ticker-chip {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ticker-more {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.ticker-warning {
+    color: #92400e;
+    background: #fffbeb;
+    border-color: #fde68a;
+}

@@ -6,7 +6,10 @@ import queue
 import threading
 import time
 import gradio as gr
+import pandas as pd
+
 from Gradio.test_model_dispatcher import dispatch_test
+from utils.filter_constituents import filter_constituents_by_date
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -294,6 +297,63 @@ def update_end_year_choices(start_year):
         choices=valid_end_years,
         value=None,
         interactive=bool(valid_end_years),
+    )
+
+
+def get_tickers(universe: str, start_test_year: str):
+    if not universe or not start_test_year:
+        return gr.update(
+            visible=True,
+            value="""
+            <div class="ticker-card ticker-warning">
+                Please select both universe and start year before running the test.
+            </div>
+            """
+        )
+
+    start_test_date = f"{int(start_test_year)}-01-01"
+
+    constituents = pd.read_csv(
+        f"./Evaluation/data/constituents/eodhd/{universe}.csv"
+    )
+
+    tickers = filter_constituents_by_date(constituents, start_test_date)
+    ticker_list = tickers["EODHD"].tolist()
+
+    preview_tickers = ticker_list[:40]
+    remaining = max(0, len(ticker_list) - len(preview_tickers))
+
+    chips = "".join(
+        f'<span class="ticker-chip">{ticker}</span>'
+        for ticker in preview_tickers
+    )
+
+    more_text = (
+        f'<span class="ticker-more">+{remaining} more</span>'
+        if remaining > 0
+        else ""
+    )
+
+    html = f"""
+    <div class="ticker-card">
+        <div class="ticker-title">Selected preprocessed tickers</div>
+        <div class="ticker-subtitle">
+            The test will be run on the tickers already preprocessed for
+            <b>{universe}</b>, filtered from <b>{start_test_date}</b>.
+        </div>
+        <div class="ticker-count">
+            {len(ticker_list)} tickers selected
+        </div>
+        <div class="ticker-list">
+            {chips}
+            {more_text}
+        </div>
+    </div>
+    """
+
+    return gr.update(
+        visible=True,
+        value=html,
     )
 
 
