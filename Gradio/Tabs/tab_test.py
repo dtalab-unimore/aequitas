@@ -6,160 +6,235 @@ from Gradio.test_models import (
     on_task_change,
     on_model_change,
     on_config_change,
-    update_end_year_choices,
     on_sl_change,
     on_pl_change,
     run_test_with_logs,
+    TEST_YEARS,
 )
 
 
 def build_tab():
     with gr.Tab("Test Model"):
-        with gr.Column():
-            gr.Markdown("### 1️⃣ Select configuration to test")
+        gr.Markdown("## Test Model")
+        gr.Markdown(
+            "Select the model configuration, choose the test period, and run the evaluation."
+        )
 
-            universe_options = get_universe_options()
+        universe_options = get_universe_options()
 
-            with gr.Row():
-                with gr.Column():
-                    test_universe = gr.Dropdown(
-                        choices=universe_options,
-                        value=None,
-                        label="Universe",
-                    )
-                    test_task = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Task Type",
-                        interactive=False,
-                    )
-                    test_model = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Model",
-                        interactive=False,
-                    )
-                    test_config = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Configuration",
-                        interactive=False,
-                    )
-                    with gr.Row():
-                        sl = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="Sequence length",
-                            interactive=False,
-                        )
-                        pl = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="Prediction length",
-                            interactive=False,
-                        )
+        # ─────────────────────────────────────────────────────────────
+        # Configuration area: 3 columns
+        # ─────────────────────────────────────────────────────────────
+        with gr.Row(equal_height=True):
 
-                with gr.Column():
-                    config_info = gr.Code(
-                        label="Configuration Parameters",
-                        language="json",
-                        lines=31,
-                        max_lines=31,
-                        value=None,
-                        interactive=False,
-                    )
+            # Column 1
+            with gr.Column(scale=1, min_width=280):
+                test_universe = gr.Dropdown(
+                    choices=universe_options,
+                    value=None,
+                    label="Universe",
+                )
 
-            gr.Markdown("---")
+                test_model = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Model",
+                    interactive=False,
+                )
 
-            with gr.Column(visible=False, variant="panel") as test_dates_section:
-                gr.Markdown("### 2️⃣ Choose dates to test")
+                sl = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Sequence length",
+                    interactive=False,
+                )
 
-                with gr.Row():
-                    with gr.Column():
-                        start_test = gr.Dropdown(
-                            choices=[2020, 2021, 2022, 2023, 2024],
-                            value=None,
-                            label="Start Year",
-                        )
-                        end_test = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="End Year",
-                            interactive=False,
-                        )
+                start_test = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Start Year",
+                    interactive=False,
+                )
 
-                    with gr.Column():
-                        test_logs = gr.Textbox(
-                            label="Test Progress",
-                            value="",
-                            lines=6,
-                            max_lines=6,
-                            interactive=False,
-                            autoscroll=True,
-                            elem_classes="test-logs-box",
-                        )
+            # Column 2
+            with gr.Column(scale=1, min_width=280):
+                test_task = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Task Type",
+                    interactive=False,
+                )
 
-                with gr.Row():
-                    with gr.Column(scale=5):
-                        gr.Markdown("")
-                    with gr.Column(scale=1):
-                        test_button = gr.Button(
-                            "TEST",
-                            variant="primary",
-                            min_width=50,
-                            interactive=False,
-                        )
-                    with gr.Column(scale=5):
-                        gr.Markdown("")
+                test_config = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Configuration",
+                    interactive=False,
+                )
 
-                with gr.Row():
-                    test_result = gr.Code(
-                        label="Test Result",
-                        language="json",
-                        value=None,
-                        interactive=False,
-                        elem_id="test-result-code",
-                    )
+                pl = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="Prediction length",
+                    interactive=False,
+                )
 
-        # ── wiring ─────────────────────────────────────────────────────────
+                end_test = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="End Year",
+                    interactive=False,
+                )
+
+            # Column 3
+            with gr.Column(scale=2, min_width=420):
+                config_info = gr.Code(
+                    label="Configuration Parameters",
+                    language="json",
+                    value=None,
+                    interactive=False,
+                    elem_id="config-code-box",
+                )
+
+        # ─────────────────────────────────────────────────────────────
+        # Centered TEST button
+        # ─────────────────────────────────────────────────────────────
+        with gr.Row():
+            with gr.Column(scale=2):
+                gr.HTML("")
+
+            with gr.Column(scale=1, min_width=180):
+                test_button = gr.Button(
+                    "TEST",
+                    variant="primary",
+                    min_width=120,
+                    interactive=False,
+                    elem_id="test-button",
+                )
+
+            with gr.Column(scale=2):
+                gr.HTML("")
+
+        # ─────────────────────────────────────────────────────────────
+        # Hidden outputs, shown after TEST click
+        # ─────────────────────────────────────────────────────────────
+        with gr.Column(visible=False) as test_output_section:
+            test_logs = gr.Textbox(
+                label="Test Progress",
+                value="",
+                lines=7,
+                max_lines=7,
+                interactive=False,
+                autoscroll=True,
+                elem_classes="test-logs-box",
+            )
+
+            test_result = gr.Code(
+                label="Test Result",
+                language="json",
+                value=None,
+                interactive=False,
+                elem_id="test-result-code",
+            )
+
+        # ── wiring ─────────────────────────────────────────────────────
+
         test_universe.input(
             fn=on_universe_change,
             inputs=[test_universe],
-            outputs=[test_task, test_model, test_config, sl, pl, config_info, test_dates_section],
+            outputs=[
+                test_task,
+                test_model,
+                test_config,
+                sl,
+                pl,
+                start_test,
+                end_test,
+                config_info,
+                test_button,
+            ],
         )
 
         test_task.input(
             fn=on_task_change,
             inputs=[test_universe, test_task],
-            outputs=[test_model, test_config, sl, pl, config_info, test_dates_section],
+            outputs=[
+                test_model,
+                test_config,
+                sl,
+                pl,
+                start_test,
+                end_test,
+                config_info,
+                test_button,
+            ],
         )
 
         test_model.input(
             fn=on_model_change,
             inputs=[test_universe, test_task, test_model],
-            outputs=[test_config, sl, pl, config_info, test_dates_section],
+            outputs=[
+                test_config,
+                sl,
+                pl,
+                start_test,
+                end_test,
+                config_info,
+                test_button,
+            ],
         )
 
         test_config.input(
             fn=on_config_change,
             inputs=[test_universe, test_task, test_model, test_config],
-            outputs=[sl, pl, config_info, test_dates_section],
+            outputs=[
+                sl,
+                pl,
+                start_test,
+                end_test,
+                config_info,
+                test_button,
+            ],
         )
 
         sl.input(
             fn=on_sl_change,
             inputs=[test_universe, test_task, test_model, test_config, sl],
-            outputs=[pl, config_info, test_dates_section],
+            outputs=[
+                pl,
+                start_test,
+                end_test,
+                config_info,
+                test_button,
+            ],
         )
 
         pl.input(
             fn=on_pl_change,
-            inputs=[test_universe, test_task, test_model, test_config, sl, pl],
-            outputs=[config_info, test_dates_section],
+            inputs=[
+                test_universe,
+                test_task,
+                test_model,
+                test_config,
+                sl,
+                pl,
+            ],
+            outputs=[
+                config_info,
+                start_test,
+                end_test,
+                test_button,
+            ],
         )
 
         start_test.change(
-            fn=update_end_year_choices,
+            fn=lambda start: gr.update(
+                choices=[] if start in [None, ""] else [
+                    year for year in TEST_YEARS if year >= int(start)
+                ],
+                value=None,
+                interactive=start not in [None, ""],
+            ),
             inputs=[start_test],
             outputs=[end_test],
             show_progress="hidden",
@@ -167,15 +242,48 @@ def build_tab():
         )
 
         end_test.change(
-            fn=lambda start, end: gr.update(interactive=(start is not None and end is not None)),
+            fn=lambda start, end: gr.update(
+                interactive=(
+                    start not in [None, ""]
+                    and end not in [None, ""]
+                )
+            ),
             inputs=[start_test, end_test],
-            outputs=test_button,
+            outputs=[test_button],
             show_progress="hidden",
             queue=False,
         )
 
-        test_button.click(
+        show_outputs_evt = test_button.click(
+            fn=lambda: (
+                gr.update(visible=True),
+                gr.update(value=""),
+                gr.update(value=None),
+            ),
+            inputs=[],
+            outputs=[
+                test_output_section,
+                test_logs,
+                test_result,
+            ],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        show_outputs_evt.then(
             fn=run_test_with_logs,
-            inputs=[test_universe, test_task, test_model, test_config, sl, pl, start_test, end_test],
-            outputs=[test_logs, test_result],
+            inputs=[
+                test_universe,
+                test_task,
+                test_model,
+                test_config,
+                sl,
+                pl,
+                start_test,
+                end_test,
+            ],
+            outputs=[
+                test_logs,
+                test_result,
+            ],
         )

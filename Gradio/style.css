@@ -316,3 +316,19 @@ button:hover {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+#config-code-box{
+    height: 420px !important;
+    max-height: 420px !important;
+    overflow: hidden !important;
+}
+
+/* Gradio Code editor internals */
+#config-code-box .cm-editor, .cm-editor {
+    height: 360px !important;
+    max-height: 360px !important;
+}
+
+#config-code-box .cm-scroller,.cm-scroller {
+    overflow: auto !important;
+}
+

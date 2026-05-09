@@ -12,6 +12,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
 ALL_TASKS = ["Classification", "Regression", "Ranking"]
+TEST_YEARS = [2020, 2021, 2022, 2023, 2024]
 
 def get_universe_options():
     universes = set()
@@ -134,13 +135,15 @@ def on_universe_change(universe: str):
     tasks = get_available_tasks(universe)
 
     return (
-        gr.update(choices=tasks, value=None, interactive=bool(tasks)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value=""),
-        gr.update(visible=False),
+        gr.update(choices=tasks, value=None, interactive=bool(tasks)),  # task
+        gr.update(choices=[], value=None, interactive=False),           # model
+        gr.update(choices=[], value=None, interactive=False),           # config
+        gr.update(choices=[], value=None, interactive=False),           # sl
+        gr.update(choices=[], value=None, interactive=False),           # pl
+        gr.update(choices=[], value=None, interactive=False),           # start year
+        gr.update(choices=[], value=None, interactive=False),           # end year
+        gr.update(value=""),                                           # config info
+        gr.update(interactive=False),                                  # test button
     )
 
 
@@ -148,24 +151,27 @@ def on_task_change(universe: str, task_type: str):
     models = get_available_models(universe, task_type)
 
     return (
-        gr.update(choices=models, value=None, interactive=bool(models)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value=""),
-        gr.update(visible=False),
+        gr.update(choices=models, value=None, interactive=bool(models)),  # model
+        gr.update(choices=[], value=None, interactive=False),             # config
+        gr.update(choices=[], value=None, interactive=False),             # sl
+        gr.update(choices=[], value=None, interactive=False),             # pl
+        gr.update(choices=[], value=None, interactive=False),             # start year
+        gr.update(choices=[], value=None, interactive=False),             # end year
+        gr.update(value=""),                                             # config info
+        gr.update(interactive=False),                                    # test button
     )
-
 
 def on_model_change(universe: str, task_type: str, model_name: str):
     configs = get_available_configs(universe, task_type, model_name)
 
     return (
-        gr.update(choices=configs, value=None, interactive=bool(configs)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value=""),
-        gr.update(visible=False),
+        gr.update(choices=configs, value=None, interactive=bool(configs)),  # config
+        gr.update(choices=[], value=None, interactive=False),               # sl
+        gr.update(choices=[], value=None, interactive=False),               # pl
+        gr.update(choices=[], value=None, interactive=False),               # start year
+        gr.update(choices=[], value=None, interactive=False),               # end year
+        gr.update(value=""),                                               # config info
+        gr.update(interactive=False),                                      # test button
     )
 
 
@@ -173,20 +179,23 @@ def on_config_change(universe: str, task_type: str, model_name: str, config_name
     sl_values = get_available_sl(universe, task_type, model_name, config_name)
 
     return (
-        gr.update(choices=sl_values, value=None, interactive=bool(sl_values)),
-        gr.update(choices=[], value=None, interactive=False),
-        gr.update(value=""),
-        gr.update(visible=False),
+        gr.update(choices=sl_values, value=None, interactive=bool(sl_values)),  # sl
+        gr.update(choices=[], value=None, interactive=False),                   # pl
+        gr.update(choices=[], value=None, interactive=False),                   # start year
+        gr.update(choices=[], value=None, interactive=False),                   # end year
+        gr.update(value=""),                                                   # config info
+        gr.update(interactive=False),                                          # test button
     )
-
 
 def on_sl_change(universe: str, task_type: str, model_name: str, config_name: str, sl_value):
     pl_values = get_available_pl(universe, task_type, model_name, config_name, sl_value)
 
     return (
-        gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),
-        gr.update(value=""),
-        gr.update(visible=False),
+        gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),  # pl
+        gr.update(choices=[], value=None, interactive=False),                   # start year
+        gr.update(choices=[], value=None, interactive=False),                   # end year
+        gr.update(value=""),                                                   # config info
+        gr.update(interactive=False),                                          # test button
     )
 
 
@@ -202,13 +211,17 @@ def on_pl_change(universe: str, task_type: str, model_name: str, config_name: st
 
     if not params:
         return (
-            gr.update(value=config_text, visible=True), # config_info
-            gr.update(visible=False),                   # test_dates_section
+            gr.update(value=config_text, visible=True),          # config info
+            gr.update(choices=[], value=None, interactive=False), # start year
+            gr.update(choices=[], value=None, interactive=False), # end year
+            gr.update(interactive=False),                        # test button
         )
 
     return (
-        gr.update(value=config_text, visible=True), # config_info
-        gr.update(visible=True),                    # test_dates_section
+        gr.update(value=config_text, visible=True),              # config info
+        gr.update(choices=TEST_YEARS, value=None, interactive=True),  # start year
+        gr.update(choices=[], value=None, interactive=False),    # end year
+        gr.update(interactive=False),                            # test button
     )
 
 def extract_numeric_suffix(folder_name: str, prefix: str):
