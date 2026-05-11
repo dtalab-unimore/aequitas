@@ -443,11 +443,12 @@ def on_metrics_task_change(task_type):
         gr.update(choices=year_ranges, value=None, interactive=bool(year_ranges)),
         gr.update(choices=[], value=[], interactive=False),
         gr.update(choices=[], value=[], interactive=False),
-        gr.update(choices=[], value=[], interactive=False),
+        #gr.update(choices=[], value=[], interactive=False),
         "",
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(value=None, visible=True),
-        gr.update(choices=[], value=None, interactive=False, visible=True),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(value=None, visible=False),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(visible=False),
     )
 
 
@@ -457,11 +458,12 @@ def on_metrics_year_range_change(task_type, year_range):
     return (
         gr.update(choices=models, value=[], interactive=bool(models)),
         gr.update(choices=[], value=[], interactive=False),
-        gr.update(choices=[], value=[], interactive=False),
+        #gr.update(choices=[], value=[], interactive=False),
         "",
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(value=None, visible=True),
-        gr.update(choices=[], value=None, interactive=False, visible=True),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(value=None, visible=False),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(visible=False),
     )
 
 
@@ -470,11 +472,12 @@ def on_metrics_model_change(task_type, year_range, model_names):
 
     return (
         gr.update(choices=config_pl_options, value=[], interactive=bool(config_pl_options)),
-        gr.update(choices=[], value=[], interactive=False),
+        #gr.update(choices=[], value=[], interactive=False),
         "",
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(value=None, visible=True),
-        gr.update(choices=[], value=None, interactive=False, visible=True),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(value=None, visible=False),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(visible=False),
     )
 
 
@@ -484,9 +487,10 @@ def on_metrics_config_pl_change(task_type, year_range, model_names, config_pl_op
     return (
         gr.update(choices=datasets, value=[], interactive=bool(datasets)),
         "",
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(value=None, visible=True),
-        gr.update(choices=[], value=None, interactive=False, visible=True),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(value=None, visible=False),
+        gr.update(choices=[], value=None, interactive=False, visible=False),
+        gr.update(visible=False),
     )
 
 def on_metrics_datasets_change(
@@ -498,8 +502,6 @@ def on_metrics_datasets_change(
     current_metric,
     current_plot_dataset,
 ):
-    if not task_type or not year_range or not model_names or not config_pl_options or not datasets:
-        return reset_metrics_outputs("")
 
     df, metric_cols = build_metrics_df(
         task_type=task_type,
@@ -508,13 +510,13 @@ def on_metrics_datasets_change(
         datasets=datasets,
     )
 
-    if df is None or not metric_cols:
-        return reset_metrics_outputs("<p>No metrics found.</p>")
+    # if df is None or not metric_cols:
+    #     return reset_metrics_outputs("<p>No metrics found.</p>")
 
     valid_datasets = [d for d in datasets if d in set(df["dataset"])]
 
-    if not valid_datasets:
-        return reset_metrics_outputs("<p>No valid datasets found.</p>")
+    # if not valid_datasets:
+    #     return reset_metrics_outputs("<p>No valid datasets found.</p>")
 
     selected_metric = current_metric if current_metric in metric_cols else metric_cols[0]
     plot_dataset = (
@@ -633,69 +635,6 @@ def build_metrics_df(task_type, year_range, config_pl_options, datasets):
     metric_cols = [c for c in metric_candidates if c in df.columns and df[c].notna().any()]
     df = df.sort_values(["model", "config", "pl", "sl", "dataset"])
     return df, metric_cols
-
-
-def view_selected_metrics(task_type, year_range, model_names, config_pl_options, datasets):
-    if not task_type or not year_range or not model_names or not config_pl_options or not datasets:
-        return reset_metrics_outputs("<p>Select all parameters.</p>")
-
-    df, metric_cols = build_metrics_df(
-        task_type=task_type,
-        year_range=year_range,
-        config_pl_options=config_pl_options,
-        datasets=datasets,
-    )
-
-    if df is None:
-        return reset_metrics_outputs("<p>No metrics found.</p>")
-
-    if not metric_cols:
-        return reset_metrics_outputs("<p>No valid metric columns found.</p>")
-
-    row_keys = ["model", "config", "sl", "pl"]
-
-    valid_datasets = [d for d in datasets if d in set(df["dataset"])]
-    if not valid_datasets:
-        return reset_metrics_outputs("<p>No valid datasets found.</p>")
-
-    default_metric = metric_cols[0]
-    default_dataset = valid_datasets[0]
-
-    table_html = build_metrics_html_table(
-        df=df,
-        datasets=valid_datasets,
-        metric_cols=metric_cols,
-        row_keys=row_keys,
-    )
-
-    fig = build_metrics_plot(
-        df=df,
-        datasets=valid_datasets,
-        row_keys=row_keys,
-        selected_metric=default_metric,
-        plot_dataset=default_dataset,
-    )
-
-    return (
-        table_html,
-        gr.update(
-            choices=metric_cols,
-            value=default_metric,
-            interactive=True,
-            visible=True,
-        ),
-        gr.update(
-            value=fig,
-            visible=True,
-        ),
-        gr.update(
-            choices=valid_datasets,
-            value=default_dataset,
-            interactive=True,
-            visible=True,
-        ),
-        gr.update(visible=True),
-    )
 
 def update_metrics_plot(
     task_type,

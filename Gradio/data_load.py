@@ -57,6 +57,8 @@ def _build_file_map(universe: str) -> dict:
         "EU Market Info":          os.path.join(data_dir, "eu_market.csv"),
         "CNNPred Market Features": os.path.join(data_dir, "cnnpred_market.csv"),
         "News Relations":          os.path.join(data_dir, "news"),
+        # NPZ
+        "Sector and Industry relations": os.path.join(out_dir, f"{universe}_sector_industry_matrix.npz"),
     }
 
 

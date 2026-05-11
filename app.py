@@ -1,5 +1,13 @@
 import os
 import sys
+
+from pathlib import Path
+
+GRADIO_TMP_DIR = Path("./.gradio_tmp").resolve()
+GRADIO_TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+os.environ["GRADIO_TEMP_DIR"] = str(GRADIO_TMP_DIR)
+
 import gradio as gr
 from Gradio.Tabs.tab_download import build_tab as build_download_tab
 from Gradio.Tabs.tab_test import build_tab as build_test_tab
@@ -53,7 +61,7 @@ with open(CSS_PATH, "r", encoding="utf-8") as f:
     custom_css = f.read()
 
 demo.queue().launch(
-    server_port=7862,
+    server_port=7860,
     theme=theme,
     css=custom_css,
 )

@@ -317,21 +317,24 @@ button:hover {
 }
 
 #config-code-box{
-    height: 420px !important;
-    max-height: 420px !important;
+    height: 470px !important;
+    max-height: 470px !important;
     overflow: hidden !important;
 }
 
 /* Gradio Code editor internals */
-#config-code-box .cm-editor, .cm-editor {
-    height: 360px !important;
-    max-height: 360px !important;
+#config-code-box .cm-editor {
+    height: 440px !important;
+    max-height: 440px !important;
 }
 
-#config-code-box .cm-scroller,.cm-scroller {
+#config-code-box .cm-scroller {
     overflow: auto !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.82rem !important;
+    line-height: 1.5 !important;
+    background: transparent !important;
 }
-
 #tickers-info {
     margin-top: 14px;
 }
@@ -402,3 +405,278 @@ button:hover {
     background: #fffbeb;
     border-color: #fde68a;
 }
+/* Wrapper della card */
+.tickers-card-wrap {
+    position: relative !important;
+}
+
+#tickers-info {
+    width: 100% !important;
+    margin-top: 14px;
+}
+
+/* Download button: posizione + stile identico a .ticker-count */
+#download-tickers-button {
+    position: absolute !important;
+    left: 205px !important;
+    top: 100px !important;
+    z-index: 20 !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    background: #eef2ff !important;
+    color: #4f46e5 !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 999px !important;
+
+    padding: 4px 10px !important;
+    margin: 0 !important;
+
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    line-height: normal !important;
+    text-decoration: none !important;
+
+    box-shadow: none !important;
+    cursor: pointer !important;
+    transform: none !important;
+}
+
+/* Se Gradio crea elementi interni, forziamo anche quelli */
+#download-tickers-button button,
+#download-tickers-button a,
+#download-tickers-button span,
+#download-tickers-button div {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    background: transparent !important;
+    color: #4f46e5 !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    line-height: normal !important;
+    text-decoration: none !important;
+
+    box-shadow: none !important;
+}
+
+/* Hover identico al badge */
+#download-tickers-button:hover,
+#download-tickers-button:hover button,
+#download-tickers-button:hover a,
+#download-tickers-button:hover span,
+#download-tickers-button:hover div {
+    background: #e0e7ff !important;
+    color: #4338ca !important;
+    border-color: #a5b4fc !important;
+    transform: none !important;
+}
+/* Output section */
+/* altezza unica per logs e result */
+:root {
+    --test-box-height: 260px;
+}
+
+.test-output-section {
+    margin-top: 18px !important;
+}
+
+.test-results-row {
+    gap: 18px !important;
+    margin-top: 18px !important;
+    align-items: stretch !important;
+}
+
+/* Card */
+.test-output-card {
+    background: #ffffff !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    padding: 14px !important;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Pulisce wrapper interni Gradio */
+.test-output-card,
+.test-output-card > div,
+.test-output-card .form,
+.test-output-card .block,
+.test-output-card .wrap,
+.test-output-card .container {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Header pill */
+.test-output-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    width: fit-content;
+
+    background: #eef2ff;
+    color: #111827;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+
+    padding: 5px 11px;
+    margin-bottom: 12px;
+
+    font-size: 0.82rem;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.test-output-icon {
+    font-size: 0.78rem;
+    font-weight: 900;
+    opacity: 0.85;
+}
+
+/* ----------------------------- */
+/* LOGS */
+/* ----------------------------- */
+
+#test-logs-box,
+#test-logs-box > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+#test-logs-box textarea {
+    height: var(--test-box-height) !important;
+    min-height: var(--test-box-height) !important;
+    max-height: var(--test-box-height) !important;
+
+    border: 1px solid #e0e7ff !important;
+    border-radius: 14px !important;
+    background: #fbfdff !important;
+
+    padding: 14px !important;
+
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.82rem !important;
+    line-height: 1.5 !important;
+    color: #0f172a !important;
+
+    overflow-y: auto !important;
+    resize: none !important;
+
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* ----------------------------- */
+/* RESULT */
+/* ----------------------------- */
+
+#test-result-code {
+    height: var(--test-box-height) !important;
+    min-height: var(--test-box-height) !important;
+    max-height: var(--test-box-height) !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* wrapper interni del Code: stessa altezza */
+#test-result-code > div,
+#test-result-code .wrap,
+#test-result-code .container,
+#test-result-code .code_wrap {
+    height: var(--test-box-height) !important;
+    min-height: var(--test-box-height) !important;
+    max-height: var(--test-box-height) !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* CodeMirror quando il risultato è pronto */
+#test-result-code .cm-editor {
+    height: var(--test-box-height) !important;
+    min-height: var(--test-box-height) !important;
+    max-height: var(--test-box-height) !important;
+
+    border: 1px solid #e0e7ff !important;
+    border-radius: 14px !important;
+    background: #fbfdff !important;
+
+    overflow: hidden !important;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+#test-result-code .cm-scroller {
+    overflow: auto !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.82rem !important;
+    line-height: 1.5 !important;
+    background: transparent !important;
+}
+
+#test-result-code .cm-gutters {
+    background: #fbfdff !important;
+    border-right: 1px solid #e0e7ff !important;
+}
+
+#test-result-code .cm-activeLine,
+#test-result-code .cm-activeLineGutter {
+    background: transparent !important;
+}
+
+/* Placeholder/loading del Code quando il test sta girando */
+#test-result-code:not(:has(.cm-editor)) {
+    border: 1px solid #e0e7ff !important;
+    border-radius: 14px !important;
+    background: #fbfdff !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* centra anche eventuali div interni del placeholder */
+#test-result-code:not(:has(.cm-editor)) > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+    .test-results-row {
+        flex-direction: column !important;
+    }
+
+    :root {
+        --test-box-height: 240px;
+    }
+}
+

@@ -924,7 +924,7 @@ def run_evaluation(
 # -------------------------------------------------
 def build_tab():
     with gr.Tab("Evaluation"):
-        gr.Markdown("### Evaluation")
+        gr.Markdown("## Evaluation")
 
         eval_mode = gr.Radio(
             choices=EVAL_MODES,

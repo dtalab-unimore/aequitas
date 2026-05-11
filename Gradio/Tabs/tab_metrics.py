@@ -9,7 +9,6 @@ from Gradio.metrics_view import (
     on_metrics_datasets_change,
 )
 
-
 def build_tab():
     with gr.Tab("Metrics"):
         gr.Markdown("### Model Metrics Visualization")
@@ -47,6 +46,11 @@ def build_tab():
                     multiselect=True,
                     interactive=False,
                 )
+                view_metrics = gr.Button(
+                    value="View Metrics",
+                    variant="primary",
+                    #interactive=False,
+                )
 
             with gr.Column(scale=4):
                 with gr.Row():
@@ -56,85 +60,82 @@ def build_tab():
                         elem_classes="metrics-table-container",
                     )
 
-                with gr.Accordion(
-                    "Plot",
-                    open=False,
-                    elem_classes="metrics-accordion",
-                    visible=False,
-                ) as metrics_plot_accordion:
-                    with gr.Row(elem_classes="metrics-plot-panel"):
-                        with gr.Column(scale=1, min_width=210, elem_classes="metrics-plot-controls"):
-                            metrics_metric_selector = gr.Dropdown(
-                                choices=[],
-                                value=None,
-                                label="Metric",
-                                interactive=False,
-                                visible=True,
-                            )
-                            metrics_dataset_radio = gr.Radio(
-                                choices=[],
-                                value=None,
-                                label="Dataset",
-                                interactive=False,
-                                visible=True,
-                            )
+                with gr.Row(elem_classes="metrics-plot-panel", visible=False) as metrics_plot_panel:
 
-                        with gr.Column(scale=5, elem_classes="metrics-plot-card"):
-                            metrics_plot = gr.Plot(
-                                value=None,
-                                label="",
-                                visible=True,
-                                elem_classes="metrics-plot-box",
-                            )
+                    with gr.Column(scale=1, min_width=210, elem_classes="metrics-plot-controls"):
+                        metrics_metric_selector = gr.Dropdown(
+                            choices=[],
+                            value=None,
+                            label="Metric",
+                            interactive=False,
+                            #visible=False,
+                        )
+                        metrics_dataset_radio = gr.Radio(
+                            choices=[],
+                            value=None,
+                            label="Dataset",
+                            interactive=False,
+                            #visible=False,
+                        )
+
+                    with gr.Column(scale=5, elem_classes="metrics-plot-card"):
+                        metrics_plot = gr.Plot(
+                            value=None,
+                            label="",
+                            #visible=False,
+                            elem_classes="metrics-plot-box",
+                        )
 
         # ── wiring ──────────────────────────────────────────────────────────
-        metrics_task.change(
+        metrics_task.input(
             fn=on_metrics_task_change,
             inputs=[metrics_task],
             outputs=[
                 metrics_year_range, metrics_model, metrics_config_pl,
-                metrics_datasets, metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                #metrics_datasets,
+                metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_year_range.change(
+        metrics_year_range.input(
             fn=on_metrics_year_range_change,
             inputs=[metrics_task, metrics_year_range],
             outputs=[
-                metrics_model, metrics_config_pl, metrics_datasets,
+                metrics_model, metrics_config_pl, #metrics_datasets,
                 metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_model.change(
+        metrics_model.input(
             fn=on_metrics_model_change,
             inputs=[metrics_task, metrics_year_range, metrics_model],
             outputs=[
-                metrics_config_pl, metrics_datasets, metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_config_pl,# metrics_datasets,
+                 metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_config_pl.change(
+        metrics_config_pl.input(
             fn=on_metrics_config_pl_change,
             inputs=[metrics_task, metrics_year_range, metrics_model, metrics_config_pl],
             outputs=[
                 metrics_datasets, metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_datasets.change(
+        view_metrics.click(
             fn=on_metrics_datasets_change,
             inputs=[
                 metrics_task, metrics_year_range, metrics_model,
@@ -143,13 +144,13 @@ def build_tab():
             ],
             outputs=[
                 metrics_table, metrics_metric_selector, metrics_plot,
-                metrics_dataset_radio, metrics_plot_accordion,
+                metrics_dataset_radio,  metrics_plot_panel,
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_metric_selector.change(
+        metrics_metric_selector.input(
             fn=update_metrics_plot,
             inputs=[
                 metrics_task, metrics_year_range, metrics_model,
@@ -161,7 +162,7 @@ def build_tab():
             queue=False,
         )
 
-        metrics_dataset_radio.change(
+        metrics_dataset_radio.input(
             fn=update_metrics_plot,
             inputs=[
                 metrics_task, metrics_year_range, metrics_model,
