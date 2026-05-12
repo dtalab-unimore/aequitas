@@ -5,10 +5,14 @@ import shlex
 import subprocess
 from pathlib import Path
 from functools import partial
-
 import pandas as pd
 import gradio as gr
 
+import numpy as np
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # -------------------------------------------------
 # Evaluation config
@@ -53,6 +57,73 @@ TOP_SHORT_PAIRS_BY_UNIVERSE = {
     "sp500": [(10, 0), (10, 10)],
 }
 
+# Helper grafici
+def format_length_value(value):
+    try:
+        value = float(value)
+        if value.is_integer():
+            return str(int(value))
+        return str(value)
+    except Exception:
+        return str(value)
+
+
+def make_length_label(sl, pl):
+    return f"SL={format_length_value(sl)} | PL={format_length_value(pl)}"
+
+
+def collect_unique_legend_items(axes):
+    handles = []
+    labels = []
+
+    for ax in axes.flatten():
+        ax_handles, ax_labels = ax.get_legend_handles_labels()
+
+        for handle, label in zip(ax_handles, ax_labels):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
+
+    return handles, labels
+
+
+def style_evaluation_axis(ax):
+    ax.set_facecolor("#fbfdff")
+
+    ax.grid(
+        True,
+        axis="y",
+        color="#e0e7ff",
+        linewidth=0.8,
+        alpha=0.75,
+    )
+
+    ax.grid(
+        False,
+        axis="x",
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.spines["left"].set_color("#cbd5e1")
+    ax.spines["bottom"].set_color("#cbd5e1")
+
+    ax.tick_params(
+        axis="both",
+        labelsize=8,
+        colors="#334155",
+    )
+
+    ax.axhline(
+        0,
+        color="#94a3b8",
+        linewidth=0.9,
+        alpha=0.8,
+        zorder=1,
+    )
+
+
 # -------------------------------------------------
 # A list of the only PKLs that are actually available
 # -------------------------------------------------
@@ -61,7 +132,7 @@ def scan_available_pkls():
     Read only exsisted i .pkl with structure:
 
     /FINBENCH_DEMO/
-        <type>/<model>/results/<universe>/<configuration>/42/
+        <type>/<model>/results/<universe>/<configuration>/SEED/
         y<start_year>_y<end_year>/
         results_sl<sl>_pl<pl>.pkl
     """
@@ -71,14 +142,14 @@ def scan_available_pkls():
     if not FINBENCH_RESULTS_ROOT.exists():
         return records
 
-    pattern = FINBENCH_RESULTS_ROOT.glob("*/*/results/*/*/42/y*_y*/results_sl*_pl*.pkl")
+    pattern = FINBENCH_RESULTS_ROOT.glob(f"*/*/results/*/*/{SEED}/y*_y*/results_sl*_pl*.pkl")
 
     for pkl_path in pattern:
         try:
             rel = pkl_path.relative_to(FINBENCH_RESULTS_ROOT)
             parts = rel.parts
 
-            # <type>/<model>/results/<universe>/<configuration>/42/<year_dir>/<file.pkl>
+            # <type>/<model>/results/<universe>/<configuration>/SEED/<year_dir>/<file.pkl>
             if len(parts) != 8:
                 continue
 
@@ -135,17 +206,40 @@ def scan_available_pkls():
 
     return records
 
+MULTISELECT_FIELDS = {
+    "model",
+    "configuration",
+    "length_pair",
+}
+
+
+def as_list(value):
+    if value is None or value == "":
+        return []
+
+    if isinstance(value, (list, tuple, set)):
+        return [
+            v for v in value
+            if v is not None and v != ""
+        ]
+
+    return [value]
+
 
 def filter_records(records, **filters):
     filtered = records
 
     for key, value in filters.items():
-        if value is None or value == "":
+        values = as_list(value)
+
+        if not values:
             continue
+
+        allowed = {str(v) for v in values}
 
         filtered = [
             r for r in filtered
-            if str(r[key]) == str(value)
+            if str(r[key]) in allowed
         ]
 
     return filtered
@@ -166,6 +260,85 @@ def value_if_valid(value, choices):
 
     return None
 
+
+def values_if_valid(values, choices):
+    selected = as_list(values)
+
+    by_string = {
+        str(choice): choice
+        for choice in choices
+    }
+
+    return [
+        by_string[str(value)]
+        for value in selected
+        if str(value) in by_string
+    ]
+
+
+def is_not_empty(value):
+    return len(as_list(value)) > 0
+
+def format_length_pair(sequence_length, prediction_length):
+    return f"SL={int(sequence_length)} | PL={int(prediction_length)}"
+
+
+def parse_length_pair(value):
+    """
+    Parse strings like:
+    SL=8 | PL=10
+    """
+    if value is None or value == "":
+        return None
+
+    match = re.search(
+        r"SL\s*=\s*(?P<sl>\d+)\s*\|\s*PL\s*=\s*(?P<pl>\d+)",
+        str(value),
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return int(match.group("sl")), int(match.group("pl"))
+
+
+def unique_length_pair_choices(records):
+    pairs = sorted(
+        {
+            (
+                int(r["sequence_length"]),
+                int(r["prediction_length"]),
+            )
+            for r in records
+        }
+    )
+
+    return [
+        format_length_pair(sl, pl)
+        for sl, pl in pairs
+    ]
+
+
+def filter_records_by_length_pairs(records, length_pairs):
+    selected_pairs = set()
+
+    for value in as_list(length_pairs):
+        parsed = parse_length_pair(value)
+
+        if parsed is not None:
+            selected_pairs.add(parsed)
+
+    if not selected_pairs:
+        return records
+
+    return [
+        r for r in records
+        if (
+            int(r["sequence_length"]),
+            int(r["prediction_length"]),
+        ) in selected_pairs
+    ]
 
 def selected_combination_exists(
     task_type,
@@ -207,22 +380,26 @@ FIELD_ORDER = [
     "configuration",
     "year_start",
     "year_end",
-    "sequence_length",
-    "prediction_length",
+    "length_pair",
     "top_k",
     "short_k",
 ]
 
+def empty_value_for_field(field):
+    if field in MULTISELECT_FIELDS:
+        return []
+    return None
+
 
 def reset_downstream_values(changed_field, values):
     """
-    When a field changes, all subsequent fields are reset to zero.
+    When a field changes, all subsequent fields are reset.
     This prevents old or invalid combinations.
     """
 
     if changed_field == "eval_mode":
         for field in FIELD_ORDER:
-            values[field] = None
+            values[field] = empty_value_for_field(field)
         return values
 
     if changed_field not in FIELD_ORDER:
@@ -231,10 +408,9 @@ def reset_downstream_values(changed_field, values):
     changed_idx = FIELD_ORDER.index(changed_field)
 
     for field in FIELD_ORDER[changed_idx + 1:]:
-        values[field] = None
+        values[field] = empty_value_for_field(field)
 
     return values
-
 
 def get_top_short_choices(universe, selected_top_k=None):
     pairs = TOP_SHORT_PAIRS_BY_UNIVERSE.get(str(universe).lower(), [])
@@ -254,10 +430,18 @@ def get_top_short_choices(universe, selected_top_k=None):
 
     return top_k_choices, short_k_choices
 
+def selected_top_short_pairs_for_universe(universe, top_k, short_k):
+    selected_pairs = {
+        (int(top), int(short))
+        for top in as_list(top_k)
+        for short in as_list(short_k)
+    }
 
-def is_not_empty(value):
-    return value is not None and value != ""
+    available_pairs = set(
+        TOP_SHORT_PAIRS_BY_UNIVERSE.get(str(universe).lower(), [])
+    )
 
+    return sorted(selected_pairs & available_pairs)
 
 def update_eval_form(
     eval_mode,
@@ -267,8 +451,7 @@ def update_eval_form(
     configuration,
     year_start,
     year_end,
-    sequence_length,
-    prediction_length,
+    length_pair,
     top_k,
     short_k,
     changed_field,
@@ -282,8 +465,7 @@ def update_eval_form(
         "configuration": configuration,
         "year_start": year_start,
         "year_end": year_end,
-        "sequence_length": sequence_length,
-        "prediction_length": prediction_length,
+        "length_pair": length_pair,
         "top_k": top_k,
         "short_k": short_k,
     }
@@ -297,27 +479,29 @@ def update_eval_form(
         return [
             gr.update(visible=False),
 
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
+            gr.update(choices=[], value=None, interactive=False),  # task_type
+            gr.update(choices=[], value=[], interactive=False),    # model
+            gr.update(choices=[], value=None, interactive=False),  # universe
+            gr.update(choices=[], value=[], interactive=False),    # configuration
+            gr.update(choices=[], value=None, interactive=False),  # year_start
+            gr.update(choices=[], value=None, interactive=False),  # year_end
+            gr.update(choices=[], value=[], interactive=False),    # length_pair
 
             gr.update(visible=False),
-            gr.update(choices=[], value=None, interactive=False),
-            gr.update(choices=[], value=None, interactive=False),
+            gr.update(choices=[], value=None, interactive=False),  # top_k
+            gr.update(choices=[], value=None, interactive=False),  # short_k
 
             gr.update(interactive=False),
         ]
 
     # 1. Task type
     task_type_choices = unique_values(records, "task_type")
-    values["task_type"] = value_if_valid(values["task_type"], task_type_choices)
+    values["task_type"] = value_if_valid(
+        values["task_type"],
+        task_type_choices,
+    )
 
-    # 2. Model
+    # 2. Models
     model_records = filter_records(
         records,
         task_type=values["task_type"],
@@ -329,7 +513,10 @@ def update_eval_form(
         else []
     )
 
-    values["model"] = value_if_valid(values["model"], model_choices)
+    values["model"] = values_if_valid(
+        values["model"],
+        model_choices,
+    )
 
     # 3. Universe
     universe_records = filter_records(
@@ -344,7 +531,10 @@ def update_eval_form(
         else []
     )
 
-    values["universe"] = value_if_valid(values["universe"], universe_choices)
+    values["universe"] = value_if_valid(
+        values["universe"],
+        universe_choices,
+    )
 
     # 4. Configuration
     configuration_records = filter_records(
@@ -360,7 +550,7 @@ def update_eval_form(
         else []
     )
 
-    values["configuration"] = value_if_valid(
+    values["configuration"] = values_if_valid(
         values["configuration"],
         configuration_choices,
     )
@@ -406,8 +596,8 @@ def update_eval_form(
         year_end_choices,
     )
 
-    # 7. Sequence length
-    sequence_length_records = filter_records(
+    # 7. Sequence / prediction length combinations
+    length_pair_records = filter_records(
         records,
         task_type=values["task_type"],
         model=values["model"],
@@ -417,51 +607,31 @@ def update_eval_form(
         year_end=values["year_end"],
     )
 
-    sequence_length_choices = (
-        unique_values(sequence_length_records, "sequence_length")
+    length_pair_choices = (
+        unique_length_pair_choices(length_pair_records)
         if is_not_empty(values["year_end"])
         else []
     )
 
-    values["sequence_length"] = value_if_valid(
-        values["sequence_length"],
-        sequence_length_choices,
+    values["length_pair"] = values_if_valid(
+        values["length_pair"],
+        length_pair_choices,
     )
 
-    # 8. Prediction length
-    prediction_length_records = filter_records(
-        records,
-        task_type=values["task_type"],
-        model=values["model"],
-        universe=values["universe"],
-        configuration=values["configuration"],
-        year_start=values["year_start"],
-        year_end=values["year_end"],
-        sequence_length=values["sequence_length"],
-    )
-
-    prediction_length_choices = (
-        unique_values(prediction_length_records, "prediction_length")
-        if is_not_empty(values["sequence_length"])
-        else []
-    )
-
-    values["prediction_length"] = value_if_valid(
-        values["prediction_length"],
-        prediction_length_choices,
-    )
-
-    # 9. Top K e Short K
+    # 8. Top K / Short K
     top_k_choices = []
     short_k_choices = []
 
-    if top_short_visible and is_not_empty(values["prediction_length"]):
+    if top_short_visible and is_not_empty(values["length_pair"]):
         top_k_choices, short_k_choices = get_top_short_choices(
             values["universe"],
             values["top_k"],
         )
 
-        values["top_k"] = value_if_valid(values["top_k"], top_k_choices)
+        values["top_k"] = value_if_valid(
+            values["top_k"],
+            top_k_choices,
+        )
 
         if is_not_empty(values["top_k"]):
             _, short_k_choices = get_top_short_choices(
@@ -489,8 +659,7 @@ def update_eval_form(
             "configuration",
             "year_start",
             "year_end",
-            "sequence_length",
-            "prediction_length",
+            "length_pair",
         ]
     )
 
@@ -537,41 +706,34 @@ def update_eval_form(
             interactive=is_not_empty(values["year_start"]) and bool(year_end_choices),
         ),
         gr.update(
-            choices=sequence_length_choices,
-            value=values["sequence_length"],
-            interactive=is_not_empty(values["year_end"]) and bool(sequence_length_choices),
-        ),
-        gr.update(
-            choices=prediction_length_choices,
-            value=values["prediction_length"],
-            interactive=is_not_empty(values["sequence_length"]) and bool(prediction_length_choices),
+            choices=length_pair_choices,
+            value=values["length_pair"],
+            interactive=is_not_empty(values["year_end"]) and bool(length_pair_choices),
         ),
 
-        # Questa è la riga intera Top K / Short K
         gr.update(visible=top_short_visible),
 
         gr.update(
             choices=top_k_choices,
             value=values["top_k"],
             interactive=(
-                    top_short_visible
-                    and is_not_empty(values["prediction_length"])
-                    and bool(top_k_choices)
+                top_short_visible
+                and is_not_empty(values["length_pair"])
+                and bool(top_k_choices)
             ),
         ),
         gr.update(
             choices=short_k_choices,
             value=values["short_k"],
             interactive=(
-                    top_short_visible
-                    and is_not_empty(values["top_k"])
-                    and bool(short_k_choices)
+                top_short_visible
+                and is_not_empty(values["top_k"])
+                and bool(short_k_choices)
             ),
         ),
 
         gr.update(interactive=complete),
     ]
-
 
 # -------------------------------------------------
 # Run script + read output CSV
@@ -750,37 +912,581 @@ def filter_output_dataframe(
 
     return filtered, applied, missing
 
+# -------------------------------------------------
+# Plot output dataframe
+# -------------------------------------------------
+def get_first_column(df, column_name):
+    """
+    Pandas returns a DataFrame instead of a Series if duplicate column names exist.
+    This helper always returns the first matching Series.
+    """
+    values = df.loc[:, column_name]
 
-def run_evaluation(
-    eval_mode,
+    if isinstance(values, pd.DataFrame):
+        return values.iloc[:, 0]
+
+    return values
+
+
+def find_plot_column(df, aliases):
+    return find_column(df, aliases)
+
+
+def sort_mixed(values):
+    def sort_key(value):
+        try:
+            return (0, float(value))
+        except Exception:
+            return (1, str(value))
+
+    return sorted(values, key=sort_key)
+
+
+def safe_numeric_series(series):
+    return pd.to_numeric(series, errors="coerce")
+
+
+def build_plot_base_dataframe(df):
+    universe_col = find_plot_column(
+        df,
+        ["selected_universe", "universe"],
+    )
+
+    model_col = find_plot_column(
+        df,
+        ["selected_model", "model"],
+    )
+
+    config_col = find_plot_column(
+        df,
+        ["selected_configuration", "configuration", "config"],
+    )
+
+    task_type_col = find_plot_column(
+        df,
+        ["selected_task_type", "task_type", "type"],
+    )
+
+    sl_col = find_plot_column(
+        df,
+        ["selected_sequence_length", "sequence_length", "sl"],
+    )
+
+    pl_col = find_plot_column(
+        df,
+        ["selected_prediction_length", "prediction_length", "pl"],
+    )
+
+    if universe_col is None or model_col is None:
+        return None
+
+    plot_df = pd.DataFrame(
+        {
+            "universe": get_first_column(df, universe_col).astype(str),
+            "model": get_first_column(df, model_col).astype(str),
+        }
+    )
+
+    if config_col is not None:
+        plot_df["config"] = get_first_column(df, config_col).astype(str)
+    else:
+        plot_df["config"] = ""
+
+    if task_type_col is not None:
+        plot_df["task_type"] = get_first_column(df, task_type_col).astype(str)
+    else:
+        plot_df["task_type"] = ""
+
+    if sl_col is not None:
+        plot_df["sl"] = get_first_column(df, sl_col)
+    else:
+        plot_df["sl"] = ""
+
+    if pl_col is not None:
+        plot_df["pl"] = get_first_column(df, pl_col)
+    else:
+        plot_df["pl"] = ""
+
+    plot_df["length_label"] = [
+        make_length_label(sl, pl)
+        for sl, pl in zip(plot_df["sl"], plot_df["pl"])
+    ]
+
+    # If the same model has multiple configs, show config in the column title.
+    model_config_counts = (
+        plot_df[["model", "config"]]
+        .drop_duplicates()
+        .groupby("model")
+        .size()
+    )
+
+    show_config = (
+        "config" in plot_df.columns
+        and not model_config_counts.empty
+        and model_config_counts.max() > 1
+    )
+
+    if show_config:
+        plot_df["facet_model"] = plot_df["model"] + "\n" + plot_df["config"]
+    else:
+        plot_df["facet_model"] = plot_df["model"]
+
+    return plot_df
+
+
+def build_quintile_plot(df):
+    if df is None or df.empty:
+        return None
+
+    q_columns = []
+
+    for q in ["q1", "q2", "q3", "q4", "q5"]:
+        col = find_plot_column(df, [q])
+
+        if col is None:
+            return None
+
+        q_columns.append(col)
+
+    base = build_plot_base_dataframe(df)
+
+    if base is None:
+        return None
+
+    plot_df = base.copy()
+
+    for q_name, q_col in zip(["q1", "q2", "q3", "q4", "q5"], q_columns):
+        plot_df[q_name] = safe_numeric_series(get_first_column(df, q_col))
+
+    plot_df = plot_df.dropna(
+        subset=["q1", "q2", "q3", "q4", "q5"],
+        how="all",
+    )
+
+    if plot_df.empty:
+        return None
+
+    universes = sort_mixed(plot_df["universe"].dropna().unique())
+    models = sort_mixed(plot_df["facet_model"].dropna().unique())
+    length_labels = sort_mixed(plot_df["length_label"].dropna().unique())
+
+    n_rows = len(universes)
+    n_cols = len(models)
+
+    fig_width = max(4.4 * n_cols, 8.5)
+    fig_height = max(2.45 * n_rows + 1.4, 4.6)
+
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(fig_width, fig_height),
+        squeeze=False,
+        dpi=130,
+    )
+
+    fig.patch.set_facecolor("#ffffff")
+
+    x_labels = ["q1", "q2", "q3", "q4", "q5"]
+    x = np.arange(len(x_labels))
+
+    for row_idx, universe in enumerate(universes):
+        for col_idx, model_name in enumerate(models):
+            ax = axes[row_idx][col_idx]
+
+            subset = plot_df[
+                (plot_df["universe"] == universe)
+                & (plot_df["facet_model"] == model_name)
+            ]
+
+            if subset.empty:
+                ax.axis("off")
+                continue
+
+            for length_label in length_labels:
+                length_subset = subset[
+                    subset["length_label"].astype(str) == str(length_label)
+                ]
+
+                if length_subset.empty:
+                    continue
+
+                values = (
+                    length_subset[["q1", "q2", "q3", "q4", "q5"]]
+                    .mean(axis=0, numeric_only=True)
+                    .values
+                )
+
+                ax.plot(
+                    x,
+                    values,
+                    marker="o",
+                    linewidth=1.8,
+                    markersize=4.2,
+                    label=str(length_label),
+                    zorder=3,
+                )
+
+            style_evaluation_axis(ax)
+
+            if row_idx == 0:
+                ax.set_title(
+                    str(model_name),
+                    fontsize=11,
+                    fontweight="bold",
+                    color="#1e1b4b",
+                    pad=8,
+                )
+
+            if col_idx == 0:
+                ax.set_ylabel(
+                    str(universe),
+                    fontsize=10,
+                    fontweight="bold",
+                    color="#1e1b4b",
+                    labelpad=10,
+                )
+
+            if row_idx == n_rows - 1:
+                ax.set_xticks(x)
+                ax.set_xticklabels(x_labels)
+            else:
+                ax.set_xticks(x)
+                ax.set_xticklabels([])
+
+    handles, labels = collect_unique_legend_items(axes)
+
+    if handles:
+        legend = fig.legend(
+            handles,
+            labels,
+            loc="lower center",
+            ncol=min(len(labels), 4),
+            frameon=True,
+            fontsize=8.5,
+            bbox_to_anchor=(0.5, 0.015),
+        )
+
+        legend.get_frame().set_facecolor("#ffffff")
+        legend.get_frame().set_edgecolor("#c7d2fe")
+        legend.get_frame().set_linewidth(0.9)
+
+    fig.suptitle(
+        "Quintile analysis",
+        fontsize=14,
+        fontweight="bold",
+        color="#111827",
+        y=0.985,
+    )
+
+    fig.tight_layout(rect=[0.02, 0.08, 0.98, 0.94])
+
+    return fig
+
+
+def build_eoy_plot(df):
+    if df is None or df.empty:
+        return None
+
+    year_columns = [
+        col for col in df.columns
+        if re.match(r"^\d{4}$", str(col))
+    ]
+
+    if not year_columns:
+        return None
+
+    year_columns = sorted(year_columns, key=lambda x: int(str(x)))
+
+    base = build_plot_base_dataframe(df)
+
+    if base is None:
+        return None
+
+    plot_df = base.copy()
+
+    for year_col in year_columns:
+        plot_df[str(year_col)] = safe_numeric_series(
+            get_first_column(df, year_col)
+        )
+
+    plot_df = plot_df.dropna(
+        subset=[str(col) for col in year_columns],
+        how="all",
+    )
+
+    if plot_df.empty:
+        return None
+
+    # Benchmark rows, if present.
+    benchmark_mask = pd.Series(False, index=plot_df.index)
+
+    for col in ["model", "config", "task_type"]:
+        benchmark_mask = benchmark_mask | (
+            plot_df[col]
+            .astype(str)
+            .str.lower()
+            .str.contains("benchmark|bench|market", regex=True, na=False)
+        )
+
+    benchmark_df = plot_df[benchmark_mask].copy()
+    strategy_df = plot_df[~benchmark_mask].copy()
+
+    if strategy_df.empty:
+        strategy_df = plot_df.copy()
+        benchmark_df = pd.DataFrame()
+
+    long_strategy = strategy_df.melt(
+        id_vars=[
+            "universe",
+            "model",
+            "config",
+            "task_type",
+            "sl",
+            "pl",
+            "length_label",
+            "facet_model",
+        ],
+        value_vars=[str(col) for col in year_columns],
+        var_name="year",
+        value_name="return",
+    )
+
+    long_strategy["return"] = safe_numeric_series(long_strategy["return"])
+    long_strategy = long_strategy.dropna(subset=["return"])
+
+    if long_strategy.empty:
+        return None
+
+    if not benchmark_df.empty:
+        long_benchmark = benchmark_df.melt(
+            id_vars=[
+                "universe",
+                "model",
+                "config",
+                "task_type",
+                "sl",
+                "pl",
+                "length_label",
+                "facet_model",
+            ],
+            value_vars=[str(col) for col in year_columns],
+            var_name="year",
+            value_name="return",
+        )
+
+        long_benchmark["return"] = safe_numeric_series(long_benchmark["return"])
+        long_benchmark = long_benchmark.dropna(subset=["return"])
+    else:
+        long_benchmark = pd.DataFrame()
+
+    universes = sort_mixed(long_strategy["universe"].dropna().unique())
+    models = sort_mixed(long_strategy["facet_model"].dropna().unique())
+    horizons = sort_mixed(long_strategy["length_label"].dropna().unique())
+    years = [str(col) for col in year_columns]
+
+    n_rows = len(universes)
+    n_cols = len(models)
+
+    fig_width = max(4.0 * n_cols, 8.0)
+    fig_height = max(2.2 * n_rows + 1.0, 4.0)
+
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(fig_width, fig_height),
+        squeeze=False,
+    )
+
+    x = np.arange(len(years))
+    n_horizons = max(len(horizons), 1)
+    bar_width = min(0.75 / n_horizons, 0.22)
+
+    for row_idx, universe in enumerate(universes):
+        for col_idx, model_name in enumerate(models):
+            ax = axes[row_idx][col_idx]
+
+            subset = long_strategy[
+                (long_strategy["universe"] == universe)
+                & (long_strategy["facet_model"] == model_name)
+            ]
+
+            if subset.empty:
+                ax.axis("off")
+                continue
+
+            for horizon_idx, horizon in enumerate(horizons):
+                horizon_subset = subset[
+                    subset["length_label"].astype(str) == str(horizon)
+                ]
+
+                if horizon_subset.empty:
+                    continue
+
+                values_by_year = (
+                    horizon_subset
+                    .groupby("year")["return"]
+                    .mean()
+                    .reindex(years)
+                )
+
+                offset = (
+                    horizon_idx - (n_horizons - 1) / 2
+                ) * bar_width
+
+                ax.bar(
+                    x + offset,
+                    values_by_year.values,
+                    width=bar_width,
+                    label=str(horizon),
+                )
+
+            if not long_benchmark.empty:
+                bench_subset = long_benchmark[
+                    long_benchmark["universe"] == universe
+                ]
+
+                if not bench_subset.empty:
+                    benchmark_by_year = (
+                        bench_subset
+                        .groupby("year")["return"]
+                        .mean()
+                        .reindex(years)
+                    )
+
+                    ax.plot(
+                        x,
+                        benchmark_by_year.values,
+                        marker="o",
+                        linewidth=1.2,
+                        markersize=3,
+                        label="Benchmark",
+                    )
+
+            style_evaluation_axis(ax)
+
+            if row_idx == 0:
+                ax.set_title(str(model_name), fontsize=11)
+
+            if col_idx == 0:
+                ax.set_ylabel(str(universe), fontsize=10)
+
+            if row_idx == n_rows - 1:
+                ax.set_xticks(x)
+                ax.set_xticklabels(years, rotation=0)
+            else:
+                ax.set_xticks(x)
+                ax.set_xticklabels([])
+
+            ax.tick_params(axis="both", labelsize=8)
+            ax.grid(True, axis="y", alpha=0.25)
+
+    handles = []
+    labels = []
+
+    for ax in axes.flatten():
+        h, l = ax.get_legend_handles_labels()
+
+        for handle, label in zip(h, l):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
+
+    handles, labels = collect_unique_legend_items(axes)
+
+    if handles:
+        legend = fig.legend(
+            handles,
+            labels,
+            loc="lower center",
+            ncol=min(len(labels), 4),
+            frameon=True,
+            fontsize=8.5,
+            bbox_to_anchor=(0.5, 0.015),
+        )
+
+        legend.get_frame().set_facecolor("#ffffff")
+        legend.get_frame().set_edgecolor("#c7d2fe")
+        legend.get_frame().set_linewidth(0.9)
+
+    fig.suptitle(
+        "End-of-Year returns",
+        fontsize=13,
+        fontweight="bold",
+        y=0.99,
+    )
+
+    fig.tight_layout(rect=[0, 0.07, 1, 0.95])
+
+    return fig
+
+
+def build_evaluation_plot(df, eval_mode):
+    if eval_mode == "QUINTILE":
+        return build_quintile_plot(df)
+
+    if eval_mode == "EOY":
+        return build_eoy_plot(df)
+
+    return None
+
+def empty_plot():
+    return gr.update(value=None, visible=False)
+
+
+def matplotlib_plot_update(fig):
+    if fig is None:
+        return gr.update(value=None, visible=False)
+
+    return gr.update(value=fig, visible=True)
+
+
+def show_evaluation_loading():
+    return (
+        gr.update(visible=True),        # table_loading
+        gr.update(visible=True),        # plot_loading
+        gr.update(interactive=False),   # run_btn
+    )
+
+
+def hide_evaluation_loading():
+    return (
+        gr.update(visible=False),       # table_loading
+        gr.update(visible=False),       # plot_loading
+        gr.update(interactive=True),    # run_btn
+    )
+
+def selected_records_for_form(
     task_type,
     model,
     universe,
     configuration,
     year_start,
     year_end,
-    sequence_length,
-    prediction_length,
-    top_k,
-    short_k,
+    length_pair,
 ):
-    exists, pkl_path = selected_combination_exists(
+    records = scan_available_pkls()
+
+    filtered = filter_records(
+        records,
         task_type=task_type,
         model=model,
         universe=universe,
         configuration=configuration,
         year_start=year_start,
         year_end=year_end,
-        sequence_length=sequence_length,
-        prediction_length=prediction_length,
     )
 
-    if not exists:
-        return (
-            "The combination you have selected does not match any available .pkl file.",
-            pd.DataFrame(),
-        )
+    return filter_records_by_length_pairs(
+        filtered,
+        length_pair,
+    )
 
+def build_eval_command(
+    eval_mode,
+    record,
+    top_k=None,
+    short_k=None,
+):
     cmd_name = EVAL_TO_CMD[eval_mode]
 
     cmd = [
@@ -788,21 +1494,21 @@ def run_evaluation(
         str(METRICS_EXTRACTION_SCRIPT),
         cmd_name,
         "--universe",
-        str(universe),
+        str(record["universe"]),
         "--model",
-        str(model),
+        str(record["model"]),
         "--type",
-        str(task_type),
+        str(record["task_type"]),
         "--initial_year",
-        str(int(year_start)),
+        str(int(record["year_start"])),
         "--end_year",
-        str(int(year_end)),
+        str(int(record["year_end"])),
         "--seed",
         str(SEED),
         "--sl",
-        str(int(sequence_length)),
+        str(int(record["sequence_length"])),
         "--pl",
-        str(int(prediction_length)),
+        str(int(record["prediction_length"])),
         "--results_root",
         str(FINBENCH_RESULTS_ROOT),
     ]
@@ -845,196 +1551,493 @@ def run_evaluation(
             ]
         )
 
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    return cmd
 
-    completed = subprocess.run(
-        cmd,
-        cwd=str(PROJECT_ROOT),
-        env=env,
-        capture_output=True,
-        text=True,
-    )
 
-    command_str = " ".join(shlex.quote(x) for x in cmd)
+def add_selection_context(
+    df,
+    record,
+    eval_mode,
+    top_k=None,
+    short_k=None,
+):
+    enriched = df.copy()
 
-    logs = [
-        f"Command executed:\n{command_str}",
-        f"\nPKL:\n{pkl_path}",
-    ]
+    context = {
+        "selected_task_type": record["task_type"],
+        "selected_model": record["model"],
+        "selected_universe": record["universe"],
+        "selected_configuration": record["configuration"],
+        "selected_year_start": record["year_start"],
+        "selected_year_end": record["year_end"],
+        "selected_sequence_length": record["sequence_length"],
+        "selected_prediction_length": record["prediction_length"],
+    }
 
-    if completed.stdout:
-        logs.append("\nSTDOUT:\n" + completed.stdout)
+    if eval_mode in ["EOY", "METRICS"]:
+        context["selected_top_k"] = top_k
+        context["selected_short_k"] = short_k
 
-    if completed.stderr:
-        logs.append("\nSTDERR:\n" + completed.stderr)
+    for col, value in reversed(list(context.items())):
+        enriched.insert(0, col, value)
 
-    if completed.returncode != 0:
-        logs.append(f"\nError: process terminated with code {completed.returncode}.")
-        return "\n".join(logs), pd.DataFrame()
+    return enriched
 
-    csv_path = output_csv_path(
-        eval_mode=eval_mode,
-        top_k=top_k,
-        short_k=short_k,
-    )
 
-    if not csv_path.exists():
-        logs.append(f"\nThe expected CSV file was not found:\n{csv_path}")
-        return "\n".join(logs), pd.DataFrame()
-
-    df = pd.read_csv(csv_path)
-
-    filtered_df, applied, missing = filter_output_dataframe(
-        df=df,
-        eval_mode=eval_mode,
+def run_evaluation(
+    eval_mode,
+    task_type,
+    model,
+    universe,
+    configuration,
+    year_start,
+    year_end,
+    length_pair,
+    top_k,
+    short_k,
+):
+    selected_records = selected_records_for_form(
         task_type=task_type,
         model=model,
         universe=universe,
         configuration=configuration,
         year_start=year_start,
         year_end=year_end,
-        sequence_length=sequence_length,
-        prediction_length=prediction_length,
-        top_k=top_k,
-        short_k=short_k,
+        length_pair=length_pair,
     )
 
-    logs.append(f"\nCSV file read:\n{csv_path}")
-    logs.append(f"\nTotal number of rows in the CSV file: {len(df)}")
-    logs.append(f"Lines shown: {len(filtered_df)}")
-
-    if applied:
-        logs.append(
-            "\nFilters applied:\n"
-            + "\n".join(f"- {x}" for x in applied)
+    if not selected_records:
+        return (
+            "The selected values do not match any available .pkl file.",
+            pd.DataFrame(),
+            empty_plot(),
         )
 
-    if missing:
-        logs.append(
-            "\nColumns not found in the CSV file, so not used for filtering:\n"
-            + "\n".join(f"- {x}" for x in missing)
+    jobs = []
+
+    for record in selected_records:
+        if eval_mode in ["EOY", "METRICS"]:
+            jobs.append(
+                {
+                    "record": record,
+                    "top_k": top_k,
+                    "short_k": short_k,
+                }
+            )
+        else:
+            jobs.append(
+                {
+                    "record": record,
+                    "top_k": None,
+                    "short_k": None,
+                }
+            )
+
+    if not jobs:
+        return (
+            "No valid Top K / Short K pair is available for the selected universes.",
+            pd.DataFrame(),
+            empty_plot(),
         )
 
-    return "\n".join(logs), filtered_df
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
 
+    logs = [
+        f"Selected .pkl combinations: {len(selected_records)}",
+        f"Evaluation jobs to process: {len(jobs)}",
+    ]
+
+    frames = []
+    command_cache = {}
+
+    for job_idx, job in enumerate(jobs, start=1):
+        record = job["record"]
+        job_top_k = job["top_k"]
+        job_short_k = job["short_k"]
+
+        cmd = build_eval_command(
+            eval_mode=eval_mode,
+            record=record,
+            top_k=job_top_k,
+            short_k=job_short_k,
+        )
+
+        command_key = tuple(cmd)
+
+        logs.append(
+            "\n"
+            + "=" * 80
+            + f"\nJob {job_idx}/{len(jobs)}"
+            + f"\nPKL:\n{record['pkl_path']}"
+        )
+
+        if command_key not in command_cache:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(PROJECT_ROOT),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            command_str = " ".join(shlex.quote(x) for x in cmd)
+
+            logs.append(f"\nCommand executed:\n{command_str}")
+
+            if completed.stdout:
+                logs.append("\nSTDOUT:\n" + completed.stdout)
+
+            if completed.stderr:
+                logs.append("\nSTDERR:\n" + completed.stderr)
+
+            if completed.returncode != 0:
+                logs.append(
+                    f"\nError: process terminated with code {completed.returncode}."
+                )
+                command_cache[command_key] = {
+                    "ok": False,
+                    "df": pd.DataFrame(),
+                    "csv_path": None,
+                }
+                continue
+
+            csv_path = output_csv_path(
+                eval_mode=eval_mode,
+                top_k=job_top_k,
+                short_k=job_short_k,
+            )
+
+            if not csv_path.exists():
+                logs.append(f"\nThe expected CSV file was not found:\n{csv_path}")
+                command_cache[command_key] = {
+                    "ok": False,
+                    "df": pd.DataFrame(),
+                    "csv_path": csv_path,
+                }
+                continue
+
+            df = pd.read_csv(csv_path)
+
+            command_cache[command_key] = {
+                "ok": True,
+                "df": df,
+                "csv_path": csv_path,
+            }
+
+        else:
+            logs.append("\nCommand already executed before; reusing generated CSV.")
+
+        cached = command_cache[command_key]
+
+        if not cached["ok"]:
+            continue
+
+        df = cached["df"]
+        csv_path = cached["csv_path"]
+
+        filtered_df, applied, missing = filter_output_dataframe(
+            df=df,
+            eval_mode=eval_mode,
+            task_type=record["task_type"],
+            model=record["model"],
+            universe=record["universe"],
+            configuration=record["configuration"],
+            year_start=record["year_start"],
+            year_end=record["year_end"],
+            sequence_length=record["sequence_length"],
+            prediction_length=record["prediction_length"],
+            top_k=job_top_k,
+            short_k=job_short_k,
+        )
+
+        logs.append(f"\nCSV file read:\n{csv_path}")
+        logs.append(f"Total number of rows in the CSV file: {len(df)}")
+        logs.append(f"Rows shown for this job: {len(filtered_df)}")
+
+        if applied:
+            logs.append(
+                "\nFilters applied:\n"
+                + "\n".join(f"- {x}" for x in applied)
+            )
+
+        if missing:
+            logs.append(
+                "\nColumns not found in the CSV file, so not used for filtering:\n"
+                + "\n".join(f"- {x}" for x in missing)
+            )
+
+        if not filtered_df.empty:
+            frames.append(
+                add_selection_context(
+                    df=filtered_df,
+                    record=record,
+                    eval_mode=eval_mode,
+                    top_k=job_top_k,
+                    short_k=job_short_k,
+                )
+            )
+
+    if frames:
+        output_df = pd.concat(frames, ignore_index=True)
+        output_df = output_df.drop_duplicates().reset_index(drop=True)
+    else:
+        output_df = pd.DataFrame()
+
+    logs.append("\n" + "=" * 80)
+    logs.append(f"Unique commands executed: {len(command_cache)}")
+    logs.append(f"Final rows shown: {len(output_df)}")
+
+    plt.close("all")
+
+    fig = build_evaluation_plot(output_df, eval_mode)
+    plot_update = matplotlib_plot_update(fig)
+
+    return "\n".join(logs), output_df, plot_update
 
 # -------------------------------------------------
 # Build tab
 # -------------------------------------------------
 def build_tab():
     with gr.Tab("Evaluation", elem_id="main-tabs"):
-        gr.Markdown("## Evaluation")
+        with gr.Column():
+            with gr.Row(elem_classes=["evaluation-mode-row"]):
+                with gr.Group(elem_classes=["evaluation-mode-card"]):
+                    gr.Markdown(
+                        """
+                        <div class="evaluation-mode-title-wrap">
+                            <div class="evaluation-section-title evaluation-mode-title">
+                                <span class="evaluation-section-dot"></span>
+                                Assessment type
+                            </div>
+                        </div>
+                        """
+                    )
 
-        eval_mode = gr.Radio(
-            choices=EVAL_MODES,
-            value=None,
-            label="Type of assessment",
-            interactive=True,
-        )
+                    eval_mode = gr.Radio(
+                        choices=EVAL_MODES,
+                        value=None,
+                        label=None,
+                        interactive=True,
+                        show_label=False,
+                        elem_classes=["evaluation-radio"],
+                    )
 
-        with gr.Group(visible=False) as params_group:
-            with gr.Row():
-                task_type = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Task type",
-                    interactive=False,
+            with gr.Group(
+                visible=False,
+                elem_classes=["evaluation-panel"],
+            ) as params_group:
+
+                gr.Markdown(
+                    """
+                    <div class="evaluation-section-title">
+                        <span class="evaluation-section-dot"></span>
+                        Result selection
+                    </div>
+                    """
                 )
 
-                model = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Model",
-                    interactive=False,
+                with gr.Row(elem_classes=["evaluation-form-row"]):
+                    task_type = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Task type",
+                        interactive=False,
+                    )
+
+                    model = gr.Dropdown(
+                        choices=[],
+                        value=[],
+                        label="Model",
+                        interactive=False,
+                        multiselect=True,
+                    )
+                with gr.Row(elem_classes=["evaluation-form-row"]):
+                    universe = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Universe",
+                        interactive=False,
+                    )
+
+                    configuration = gr.Dropdown(
+                        choices=[],
+                        value=[],
+                        label="Configuration",
+                        interactive=False,
+                        multiselect=True,
+                    )
+
+                gr.Markdown(
+                    """
+                    <div class="evaluation-section-title evaluation-section-spaced">
+                        <span class="evaluation-section-dot"></span>
+                        Evaluation window
+                    </div>
+                    """
                 )
 
-            with gr.Row():
-                universe = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Universe",
-                    interactive=False,
-                )
+                with gr.Row(elem_classes=["evaluation-form-row"]):
+                    year_start = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Year start",
+                        interactive=False,
+                    )
 
-                configuration = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Configuration",
-                    interactive=False,
-                )
+                    year_end = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Year end",
+                        interactive=False,
+                    )
+                    length_pair = gr.CheckboxGroup(
+                        choices=[],
+                        value=[],
+                        label="Sequence / prediction length",
+                        interactive=False,
+                        elem_classes=["evaluation-length-checkbox"],
+                    )
 
-            with gr.Row():
-                year_start = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Year start",
-                    interactive=False,
-                )
+                with gr.Group(
+                    visible=False,
+                    elem_classes=["evaluation-portfolio-card"],
+                ) as top_short_row:
+                    gr.Markdown(
+                        """
+                        <div class="evaluation-section-title">
+                            <span class="evaluation-section-dot"></span>
+                            Portfolio construction
+                        </div>
+                        """
+                    )
 
-                year_end = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Year end",
-                    interactive=False,
-                )
+                    with gr.Row(elem_classes=["evaluation-form-row", "evaluation-portfolio-compact-row"]):
+                        with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
+                            top_k = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Top K",
+                                interactive=False,
+                            )
 
-            with gr.Row():
-                sequence_length = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Sequence length",
-                    interactive=False,
-                )
+                        with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
+                            short_k = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Short K",
+                                interactive=False,
+                            )
 
-                prediction_length = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Prediction length",
-                    interactive=False,
-                )
+            with gr.Row(elem_classes=["evaluation-run-row"]):
+                with gr.Column(scale=1, min_width=0):
+                    gr.HTML("")
+                with gr.Column(scale=0, min_width=240, elem_classes=["evaluation-run-button-col"]):
+                    run_btn = gr.Button(
+                        "Run evaluation",
+                        variant="primary",
+                        interactive=False,
+                        elem_id="evaluation-run-button",
+                    )
+                with gr.Column(scale=1, min_width=0):
+                    gr.HTML("")
 
-            with gr.Row(visible=False) as top_short_row:
-                top_k = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Top K",
-                    interactive=False,
-                )
+            with gr.Row(elem_classes=["evaluation-output-row"]):
+                with gr.Column(
+                    scale=1,
+                    elem_classes=["evaluation-output-card", "evaluation-log-card"],
+                ):
+                    gr.Markdown(
+                        """
+                        <div class="evaluation-output-header">
+                            <span>Execution log</span>
+                        </div>
+                        """
+                    )
 
-                short_k = gr.Dropdown(
-                    choices=[],
-                    value=None,
-                    label="Short K",
-                    interactive=False,
-                )
-        with gr.Row():
-            with gr.Column(scale=2):
-                ""
-            with gr.Column(scale=1):
-                run_btn = gr.Button(
-                    "Run evaluation",
-                    variant="primary",
-                    interactive=False,
-                )
+                    with gr.Accordion(
+                        "Show command details",
+                        open=False,
+                        elem_classes=["evaluation-log-accordion"],
+                    ):
+                        log_box = gr.Textbox(
+                            label=None,
+                            interactive=False,
+                            lines=12,
+                            max_lines=12,
+                            show_label=False,
+                            elem_id="execution-log",
+                        )
 
-            with gr.Column(scale=2):
-                ""
-        with gr.Row():
-            with gr.Column(scale=1):
-                with gr.Accordion("Execution log", open=False):
-                    log_box = gr.Textbox(
+                with gr.Column(
+                        scale=4,
+                        elem_classes=[
+                            "evaluation-output-card",
+                            "evaluation-table-card",
+                            "evaluation-loading-host",
+                        ],
+                ):
+                    gr.Markdown(
+                        """
+                        <div class="evaluation-output-header">
+                            <span>Evaluation output</span>
+                        </div>
+                        """
+                    )
+
+                    table_loading = gr.HTML(
+                        """
+                        <div class="evaluation-loading-overlay">
+                            <div class="evaluation-loading-box">
+                                <div class="evaluation-loading-spinner"></div>
+                                <div class="evaluation-loading-text">Running evaluation...</div>
+                            </div>
+                        </div>
+                        """,
+                        visible=False,
+                    )
+
+                    output_table = gr.Dataframe(
                         label=None,
                         interactive=False,
-                        lines=10,
-                        max_lines=10,
-                        elem_id="execution-log",
+                        wrap=False,
+                        elem_id="evaluation-output-table",
                     )
-            with gr.Column(scale=4):
-                output_table = gr.Dataframe(
-                    label="Output",
-                    interactive=False,
-                    wrap=False,
+
+            with gr.Group(
+                    visible=True,
+                    elem_classes=[
+                        "evaluation-output-card",
+                        "evaluation-plot-card",
+                        "evaluation-loading-host",
+                    ],
+            ):
+                gr.Markdown(
+                    """
+                    <div class="evaluation-output-header">
+                        <span>Evaluation plot</span>
+                    </div>
+                    """
+                )
+
+                plot_loading = gr.HTML(
+                    """
+                    <div class="evaluation-loading-overlay">
+                        <div class="evaluation-loading-box">
+                            <div class="evaluation-loading-spinner"></div>
+                            <div class="evaluation-loading-text">Building plot...</div>
+                        </div>
+                    </div>
+                    """,
+                    visible=False,
+                )
+
+                plot_output = gr.Plot(
+                    label="",
+                    show_label=False,
+                    visible=False,
+                    container=False,
+                    elem_id="evaluation-plot",
                 )
 
         form_inputs = [
@@ -1045,8 +2048,7 @@ def build_tab():
             configuration,
             year_start,
             year_end,
-            sequence_length,
-            prediction_length,
+            length_pair,
             top_k,
             short_k,
         ]
@@ -1059,108 +2061,64 @@ def build_tab():
             configuration,
             year_start,
             year_end,
-            sequence_length,
-            prediction_length,
+            length_pair,
             top_short_row,
             top_k,
             short_k,
             run_btn,
         ]
 
-        eval_mode.change(
-            fn=partial(update_eval_form, changed_field="eval_mode"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
+        def bind_form_input(component, changed_field):
+            component.input(
+                fn=partial(update_eval_form, changed_field=changed_field),
+                inputs=form_inputs,
+                outputs=form_outputs,
+                show_progress="hidden",
+                queue=False,
+            )
 
-        )
+        bind_form_input(eval_mode, "eval_mode")
+        bind_form_input(task_type, "task_type")
+        bind_form_input(model, "model")
+        bind_form_input(universe, "universe")
+        bind_form_input(configuration, "configuration")
+        bind_form_input(year_start, "year_start")
+        bind_form_input(year_end, "year_end")
+        bind_form_input(length_pair, "length_pair")
+        bind_form_input(top_k, "top_k")
+        bind_form_input(short_k, "short_k")
 
-        task_type.change(
-            fn=partial(update_eval_form, changed_field="task_type"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        model.change(
-            fn=partial(update_eval_form, changed_field="model"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        universe.change(
-            fn=partial(update_eval_form, changed_field="universe"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        configuration.change(
-            fn=partial(update_eval_form, changed_field="configuration"),
-            inputs=form_inputs,
-            outputs=form_outputs,
+        run_event = run_btn.click(
+            fn=show_evaluation_loading,
+            inputs=[],
+            outputs=[
+                table_loading,
+                plot_loading,
+                run_btn,
+            ],
             show_progress="hidden",
             queue=False,
         )
 
-        year_start.change(
-            fn=partial(update_eval_form, changed_field="year_start"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        year_end.change(
-            fn=partial(update_eval_form, changed_field="year_end"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        sequence_length.change(
-            fn=partial(update_eval_form, changed_field="sequence_length"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        prediction_length.change(
-            fn=partial(update_eval_form, changed_field="prediction_length"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        top_k.change(
-            fn=partial(update_eval_form, changed_field="top_k"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        short_k.change(
-            fn=partial(update_eval_form, changed_field="short_k"),
-            inputs=form_inputs,
-            outputs=form_outputs,
-            show_progress="hidden",
-            queue=False,
-        )
-
-        run_btn.click(
+        run_event = run_event.then(
             fn=run_evaluation,
             inputs=form_inputs,
             outputs=[
                 log_box,
                 output_table,
+                plot_output,
             ],
+            show_progress="hidden",
+        )
+
+        run_event.then(
+            fn=hide_evaluation_loading,
+            inputs=[],
+            outputs=[
+                table_loading,
+                plot_loading,
+                run_btn,
+            ],
+            show_progress="hidden",
+            queue=False,
         )
