@@ -49,7 +49,7 @@ def build_tab():
                 view_metrics = gr.Button(
                     value="View Metrics",
                     variant="primary",
-                    #interactive=False,
+                    interactive=False,
                 )
 
             with gr.Column(scale=4):
@@ -68,14 +68,12 @@ def build_tab():
                             value=None,
                             label="Metric",
                             interactive=False,
-                            #visible=False,
                         )
                         metrics_dataset_radio = gr.Radio(
                             choices=[],
                             value=None,
                             label="Dataset",
                             interactive=False,
-                            #visible=False,
                         )
 
                     with gr.Column(scale=5, elem_classes="metrics-plot-card"):
@@ -86,39 +84,46 @@ def build_tab():
                             elem_classes="metrics-plot-box",
                         )
 
+        # ── helper────────────
+        def _toggle_view_btn(datasets):
+            return gr.update(interactive=bool(datasets))
+
         # ── wiring ──────────────────────────────────────────────────────────
-        metrics_task.input(
+        metrics_task.change(
             fn=on_metrics_task_change,
             inputs=[metrics_task],
             outputs=[
                 metrics_year_range, metrics_model, metrics_config_pl,
-                #metrics_datasets,
+                metrics_datasets,
                 metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
+                metrics_plot_panel,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_year_range.input(
+        metrics_year_range.change(
             fn=on_metrics_year_range_change,
             inputs=[metrics_task, metrics_year_range],
             outputs=[
-                metrics_model, metrics_config_pl, #metrics_datasets,
+                metrics_model, metrics_config_pl, metrics_datasets,
                 metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
+                metrics_plot_panel,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        metrics_model.input(
+        metrics_model.change(
             fn=on_metrics_model_change,
             inputs=[metrics_task, metrics_year_range, metrics_model],
             outputs=[
-                metrics_config_pl,# metrics_datasets,
-                 metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
+                metrics_config_pl, metrics_datasets,
+                metrics_table,
+                metrics_plot_panel,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
@@ -129,22 +134,31 @@ def build_tab():
             inputs=[metrics_task, metrics_year_range, metrics_model, metrics_config_pl],
             outputs=[
                 metrics_datasets, metrics_table,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio, metrics_plot_panel
+                metrics_plot_panel,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
         )
 
+        # ── enable/disable button─────────
+        metrics_datasets.change(
+            fn=_toggle_view_btn,
+            inputs=[metrics_datasets],
+            outputs=[view_metrics],
+            show_progress="hidden", queue=False,
+        )
+
         view_metrics.click(
             fn=on_metrics_datasets_change,
             inputs=[
-                metrics_task, metrics_year_range, metrics_model,
+                metrics_task, metrics_year_range,
                 metrics_config_pl, metrics_datasets,
                 metrics_metric_selector, metrics_dataset_radio,
             ],
             outputs=[
-                metrics_table, metrics_metric_selector, metrics_plot,
-                metrics_dataset_radio,  metrics_plot_panel,
+                metrics_table, metrics_plot_panel, metrics_metric_selector, metrics_plot,
+                metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,

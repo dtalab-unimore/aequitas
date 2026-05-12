@@ -41,15 +41,6 @@ def get_dataset_colors(dataset: str, n: int) -> list:
     return colors
 
 
-def reset_metrics_outputs(message=""):
-    return (
-        message,
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(value=None, visible=True),
-        gr.update(choices=[], value=None, interactive=False, visible=True),
-        gr.update(visible=False),
-    )
-
 def build_metrics_plot(df, datasets, row_keys, selected_metric, plot_dataset=None):
     if df is None or df.empty or selected_metric is None:
         return go.Figure()
@@ -443,12 +434,12 @@ def on_metrics_task_change(task_type):
         gr.update(choices=year_ranges, value=None, interactive=bool(year_ranges)),
         gr.update(choices=[], value=[], interactive=False),
         gr.update(choices=[], value=[], interactive=False),
-        #gr.update(choices=[], value=[], interactive=False),
+        gr.update(choices=[], value=[], interactive=False),
         "",
+        gr.update(visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
         gr.update(value=None, visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
-        gr.update(visible=False),
     )
 
 
@@ -458,12 +449,12 @@ def on_metrics_year_range_change(task_type, year_range):
     return (
         gr.update(choices=models, value=[], interactive=bool(models)),
         gr.update(choices=[], value=[], interactive=False),
-        #gr.update(choices=[], value=[], interactive=False),
+        gr.update(choices=[], value=[], interactive=False),
         "",
+        gr.update(visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
         gr.update(value=None, visible=False),
-        gr.update(choices=[], value=None, interactive=False, visible=False),
-        gr.update(visible=False),
+        gr.update(choices=[], value=None, interactive=False, visible=False)
     )
 
 
@@ -472,12 +463,13 @@ def on_metrics_model_change(task_type, year_range, model_names):
 
     return (
         gr.update(choices=config_pl_options, value=[], interactive=bool(config_pl_options)),
-        #gr.update(choices=[], value=[], interactive=False),
+        gr.update(choices=[], value=[], interactive=False),
         "",
+        gr.update(visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
         gr.update(value=None, visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
-        gr.update(visible=False),
+
     )
 
 
@@ -487,16 +479,15 @@ def on_metrics_config_pl_change(task_type, year_range, model_names, config_pl_op
     return (
         gr.update(choices=datasets, value=[], interactive=bool(datasets)),
         "",
+        gr.update(visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
         gr.update(value=None, visible=False),
         gr.update(choices=[], value=None, interactive=False, visible=False),
-        gr.update(visible=False),
     )
 
 def on_metrics_datasets_change(
     task_type,
     year_range,
-    model_names,
     config_pl_options,
     datasets,
     current_metric,
@@ -510,13 +501,7 @@ def on_metrics_datasets_change(
         datasets=datasets,
     )
 
-    # if df is None or not metric_cols:
-    #     return reset_metrics_outputs("<p>No metrics found.</p>")
-
     valid_datasets = [d for d in datasets if d in set(df["dataset"])]
-
-    # if not valid_datasets:
-    #     return reset_metrics_outputs("<p>No valid datasets found.</p>")
 
     selected_metric = current_metric if current_metric in metric_cols else metric_cols[0]
     plot_dataset = (
@@ -544,6 +529,7 @@ def on_metrics_datasets_change(
 
     return (
         table_html,
+        gr.update(visible=True),
         gr.update(
             choices=metric_cols,
             value=selected_metric,
@@ -557,7 +543,6 @@ def on_metrics_datasets_change(
             interactive=True,
             visible=True,
         ),
-        gr.update(visible=True),
     )
 
 def load_metrics_json(path: str):
