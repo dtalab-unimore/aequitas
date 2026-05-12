@@ -10,11 +10,13 @@ from Gradio.metrics_view import (
 )
 
 def build_tab():
-    with gr.Tab("Metrics"):
-        gr.Markdown("### Model Metrics Visualization")
+    with gr.Tab("Metrics", elem_id="main-tabs"):
 
-        with gr.Row():
-            with gr.Column(scale=1):
+        with gr.Row(equal_height=False):
+
+            # ── LEFT: filters ────────────────────────────────────────────────
+            with gr.Column(scale=1, elem_classes="metrics-controls-col"):
+
                 metrics_task = gr.Dropdown(
                     choices=["Regression", "Classification", "Ranking"],
                     value=None,
@@ -52,17 +54,21 @@ def build_tab():
                     interactive=False,
                 )
 
+            # ── RIGHT: results ───────────────────────────────────────────────
             with gr.Column(scale=4):
+
+                # table
                 with gr.Row():
-                    metrics_table = gr.HTML(
-                        value="",
-                        label="Metrics Table",
-                        elem_classes="metrics-table-container",
-                    )
+                    with gr.Column(elem_classes="metrics-table-wrap"):
+                        metrics_table = gr.HTML(
+                            value=_empty_state_html(),
+                            elem_classes="metrics-table-container",
+                        )
+                        
 
-                with gr.Row(elem_classes="metrics-plot-panel", visible=False) as metrics_plot_panel:
-
-                    with gr.Column(scale=1, min_width=210, elem_classes="metrics-plot-controls"):
+                # plot panel — always visible, starts empty
+                with gr.Row(elem_classes="metrics-plot-panel-wrap"):
+                    with gr.Column(scale=1, min_width=200, elem_classes="metrics-plot-controls"):
                         metrics_metric_selector = gr.Dropdown(
                             choices=[],
                             value=None,
@@ -80,12 +86,11 @@ def build_tab():
                         metrics_plot = gr.Plot(
                             value=None,
                             label="",
-                            #visible=False,
                             elem_classes="metrics-plot-box",
                         )
 
-        # ── helper────────────
-        def _toggle_view_btn(datasets):
+        # ── helper ──────────────────────────────────────────────────────────
+        def _toggle_btn(datasets):
             return gr.update(interactive=bool(datasets))
 
         # ── wiring ──────────────────────────────────────────────────────────
@@ -94,9 +99,7 @@ def build_tab():
             inputs=[metrics_task],
             outputs=[
                 metrics_year_range, metrics_model, metrics_config_pl,
-                metrics_datasets,
-                metrics_table,
-                metrics_plot_panel,
+                metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
@@ -109,8 +112,7 @@ def build_tab():
             outputs=[
                 metrics_model, metrics_config_pl, metrics_datasets,
                 metrics_table,
-                metrics_plot_panel,
-                metrics_metric_selector, metrics_plot, metrics_dataset_radio
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
@@ -120,9 +122,7 @@ def build_tab():
             fn=on_metrics_model_change,
             inputs=[metrics_task, metrics_year_range, metrics_model],
             outputs=[
-                metrics_config_pl, metrics_datasets,
-                metrics_table,
-                metrics_plot_panel,
+                metrics_config_pl, metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
@@ -134,19 +134,18 @@ def build_tab():
             inputs=[metrics_task, metrics_year_range, metrics_model, metrics_config_pl],
             outputs=[
                 metrics_datasets, metrics_table,
-                metrics_plot_panel,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
         )
 
-        # ── enable/disable button─────────
         metrics_datasets.change(
-            fn=_toggle_view_btn,
+            fn=_toggle_btn,
             inputs=[metrics_datasets],
             outputs=[view_metrics],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         )
 
         view_metrics.click(
@@ -157,8 +156,8 @@ def build_tab():
                 metrics_metric_selector, metrics_dataset_radio,
             ],
             outputs=[
-                metrics_table, metrics_plot_panel, metrics_metric_selector, metrics_plot,
-                metrics_dataset_radio,
+                metrics_table,
+                metrics_metric_selector, metrics_plot, metrics_dataset_radio,
             ],
             show_progress="hidden",
             queue=False,
@@ -187,3 +186,16 @@ def build_tab():
             show_progress="hidden",
             queue=False,
         )
+
+
+def _empty_state_html(message="Select filters and click <b>View Metrics</b> to load results."):
+    return f"""
+    <div class="metrics-empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
+      <span>{message}</span>
+    </div>
+    """

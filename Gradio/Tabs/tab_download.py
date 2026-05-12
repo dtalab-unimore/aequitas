@@ -13,7 +13,7 @@ from Gradio.data_load import (
 
 
 def build_tab():
-    with gr.Tab("Download Data"):
+    with gr.Tab("Download Data", elem_id="main-tabs"):
         with gr.Row():
             market = gr.Dropdown(["EU", "USA"], label="Market", value=None)
             dataset = gr.Dropdown(label="Dataset")

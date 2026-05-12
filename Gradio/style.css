@@ -5,25 +5,50 @@
 .main-shell {
     max-width: 1250px;
     margin: 0 auto;
-    padding-top: 10px;
+    padding-top: 8px;
     padding-bottom: 24px;
+    gap: 0 !important;
 }
 
-/* Hero */
+/* ── Hero ───────────────────────────────────────────────────── */
 .hero {
-    color: white;
-    border-radius: 22px;
-    padding: 28px 32px;
-    margin-bottom: 18px;
+    padding: 4px 10px 0px;
+    margin-bottom: 0px !important;
     text-align: center;
-    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #6366f1, #a78bfa, transparent);
+    border-radius: 2px;
 }
 
 .hero h1 {
-    margin: 0 0 8px 0;
-    font-size: 2.1rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    margin: 0 !important;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--c-text);
+    background: linear-gradient(120deg, #1e1b4b 0%, #6366f1 50%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.15;
 }
 
 .hero p {
@@ -31,7 +56,6 @@
     font-size: 1rem;
     opacity: 0.92;
 }
-
 
 /* Bottoni */
 button {
@@ -680,3 +704,133 @@ button:hover {
     }
 }
 
+/* ── palette ────────────────────────────────────────────────── */
+:root {
+    --c-bg:        #f8fafc;
+    --c-surface:   #ffffff;
+    --c-border:    #e2e8f0;
+    --c-border-2:  #cbd5e1;
+    --c-accent: rgba(114, 116, 215, 0.44);
+    --c-accent-lt: #eef2ff;
+    --c-text:      #0f172a;
+    --c-muted: #262c34;
+    --c-missing: #3a4048;
+    --radius:      10px;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-md:   0 4px 12px rgba(0,0,0,.08);
+}
+
+/* ── left control panel ─────────────────────────────────────── */
+.metrics-controls-col {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1rem !important;
+    box-shadow: var(--shadow-sm);
+}
+.metrics-controls-col label {
+    font-size: .72rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: .06em !important;
+    color: var(--c-muted) !important;
+}
+
+/* ── table wrapper ──────────────────────────────────────────── */
+.metrics-table-wrap {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+.metrics-outer  { width: 100%; }
+.metrics-scroll { overflow-x: auto; }
+
+table.mpt {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "DM Mono", "Fira Mono", monospace;
+    font-size: .8rem;
+}
+table.mpt thead tr:first-child th {
+    background: var(--c-accent);
+    color: #fff;
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: .65rem .9rem;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.2);
+}
+table.mpt thead tr:last-child th.msub {
+    background: var(--c-accent-lt);
+    color: var(--c-accent);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: .45rem .9rem;
+    border-bottom: 2px solid var(--c-border);
+    border-right: 1px solid var(--c-border);
+    white-space: nowrap;
+}
+table.mpt tbody tr { transition: background .12s; }
+table.mpt tbody tr:hover { background: var(--c-accent-lt); }
+table.mpt tbody tr:nth-child(even) { background: var(--c-bg); }
+table.mpt tbody tr:nth-child(even):hover { background: var(--c-accent-lt); }
+table.mpt td {
+    padding: .5rem .9rem;
+    border-bottom: 1px solid var(--c-border);
+    border-right: 1px solid var(--c-border);
+    color: var(--c-text);
+    white-space: nowrap;
+}
+table.mpt td.model-cell {
+    font-weight: 700;
+    color: var(--c-accent);
+    background: var(--c-accent-lt);
+    border-left: 3px solid var(--c-accent);
+}
+table.mpt td.config-cell {
+    font-weight: 600;
+    color: var(--c-text);
+}
+table.mpt td.missing {
+    color: var(--c-missing);
+    text-align: center;
+}
+
+/* ── plot panel ─────────────────────────────────────────────── */
+.metrics-plot-panel-wrap {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem;
+}
+.metrics-plot-controls label {
+    font-size: .72rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: .06em !important;
+    color: var(--c-muted) !important;
+}
+.metrics-plot-box > div { border: none !important; box-shadow: none !important; }
+
+/* ── empty state placeholder ─────────────────────────────────── */
+.metrics-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: 3.5rem 1rem;
+    color: var(--c-muted);
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: .9rem;
+}
+.metrics-empty svg { opacity: .35; }
