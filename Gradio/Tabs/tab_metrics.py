@@ -64,7 +64,13 @@ def build_tab():
                             value=_empty_state_html(),
                             elem_classes="metrics-table-container",
                         )
-                        
+                        with gr.Row(elem_classes="metrics-download-row"):
+                            metrics_download = gr.DownloadButton(
+                                label="Download CSV",
+                                value=None,
+                                visible=False,
+                                elem_id="download-metrics-button",
+                            )
 
                 # plot panel — always visible, starts empty
                 with gr.Row(elem_classes="metrics-plot-panel-wrap"):
@@ -101,6 +107,7 @@ def build_tab():
                 metrics_year_range, metrics_model, metrics_config_pl,
                 metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_download
             ],
             show_progress="hidden",
             queue=False,
@@ -113,6 +120,7 @@ def build_tab():
                 metrics_model, metrics_config_pl, metrics_datasets,
                 metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_download
             ],
             show_progress="hidden",
             queue=False,
@@ -124,6 +132,7 @@ def build_tab():
             outputs=[
                 metrics_config_pl, metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_download
             ],
             show_progress="hidden",
             queue=False,
@@ -135,6 +144,7 @@ def build_tab():
             outputs=[
                 metrics_datasets, metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_download
             ],
             show_progress="hidden",
             queue=False,
@@ -158,6 +168,7 @@ def build_tab():
             outputs=[
                 metrics_table,
                 metrics_metric_selector, metrics_plot, metrics_dataset_radio,
+                metrics_download
             ],
             show_progress="hidden",
             queue=False,

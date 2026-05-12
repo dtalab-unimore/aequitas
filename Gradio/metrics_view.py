@@ -4,6 +4,8 @@ import re
 import plotly.graph_objects as go
 import gradio as gr
 import pandas as pd
+import tempfile
+import uuid
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -31,6 +33,67 @@ def _empty_state_html(message="Select filters and click <b>View Metrics</b> to l
       <span>{message}</span>
     </div>
     """
+
+def _hide_metrics_download():
+    return gr.update(value=None, visible=False)
+
+
+def _safe_filename_part(value):
+    value = str(value or "metrics")
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+    return value.strip("_") or "metrics"
+
+
+def build_metrics_export_csv(df, datasets, metric_cols, row_keys, task_type, year_range):
+    datasets = [d for d in datasets if d in set(df["dataset"])]
+
+    rows = []
+
+    for keys, group in (
+        df.sort_values(row_keys)
+          .groupby(row_keys, dropna=False, sort=False)
+    ):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+
+        key_map = dict(zip(row_keys, keys))
+
+        row = {
+            "Model": key_map.get("model"),
+            "Config": key_map.get("config"),
+            "SL": key_map.get("sl"),
+            "PL": key_map.get("pl"),
+        }
+
+        for ds in datasets:
+            ds_row = group[group["dataset"] == ds]
+
+            for metric in metric_cols:
+                col_name = f"{str(ds).upper()} - {metric}"
+
+                if ds_row.empty:
+                    row[col_name] = ""
+                else:
+                    row[col_name] = fmt_metric(ds_row.iloc[0].get(metric))
+
+        rows.append(row)
+
+    export_df = pd.DataFrame(rows)
+
+    out_dir = os.path.join(tempfile.gettempdir(), "finbench_metrics_exports")
+    os.makedirs(out_dir, exist_ok=True)
+
+    filename = (
+        f"metrics_"
+        f"{_safe_filename_part(task_type)}_"
+        f"{_safe_filename_part(year_range)}_"
+        f"{uuid.uuid4().hex[:8]}.csv"
+    )
+
+    path = os.path.join(out_dir, filename)
+    export_df.to_csv(path, index=False, encoding="utf-8-sig")
+
+    return path
 
 
 # ── colour helpers ───────────────────────────────────────────────────────────
@@ -208,6 +271,7 @@ def on_metrics_task_change(task_type):
         gr.update(choices=[], value=[], interactive=False),  # config_pl
         gr.update(choices=[], value=[], interactive=False),  # datasets
         *_reset_results(),
+        _hide_metrics_download(),
     )
 
 
@@ -218,6 +282,7 @@ def on_metrics_year_range_change(task_type, year_range):
         gr.update(choices=[], value=[], interactive=False),  # config_pl
         gr.update(choices=[], value=[], interactive=False),  # datasets
         *_reset_results(),
+        _hide_metrics_download(),
     )
 
 
@@ -227,6 +292,7 @@ def on_metrics_model_change(task_type, year_range, model_names):
         gr.update(choices=opts, value=[], interactive=bool(opts)),  # config_pl
         gr.update(choices=[], value=[], interactive=False),  # datasets
         *_reset_results(),
+        _hide_metrics_download(),
     )
 
 
@@ -235,6 +301,7 @@ def on_metrics_config_pl_change(task_type, year_range, model_names, config_pl_op
     return (
         gr.update(choices=datasets, value=[], interactive=bool(datasets)),  # datasets
         *_reset_results(),
+        _hide_metrics_download(),
     )
 
 
@@ -244,7 +311,7 @@ def on_metrics_datasets_change(
         current_metric, current_plot_dataset,
 ):
     if not datasets:
-        return _reset_results()
+        return (*_reset_results(), _hide_metrics_download())
 
     df, metric_cols = build_metrics_df(task_type, year_range, config_pl_options, datasets)
 
@@ -254,6 +321,7 @@ def on_metrics_datasets_change(
             gr.update(choices=[], value=None, interactive=False),
             gr.update(value=None),
             gr.update(choices=[], value=None, interactive=False),
+            _hide_metrics_download(),
         )
 
     valid_ds = [d for d in datasets if d in set(df["dataset"])]
@@ -263,6 +331,7 @@ def on_metrics_datasets_change(
             gr.update(choices=[], value=None, interactive=False),
             gr.update(value=None),
             gr.update(choices=[], value=None, interactive=False),
+            _hide_metrics_download(),
         )
 
     selected_metric = current_metric if current_metric in metric_cols else metric_cols[0]
@@ -272,11 +341,21 @@ def on_metrics_datasets_change(
     table_html = build_metrics_html_table(df, valid_ds, metric_cols, row_keys)
     fig = build_metrics_plot(df, valid_ds, row_keys, selected_metric, plot_dataset)
 
+    export_path = build_metrics_export_csv(
+        df=df,
+        datasets=valid_ds,
+        metric_cols=metric_cols,
+        row_keys=row_keys,
+        task_type=task_type,
+        year_range=year_range,
+    )
+
     return (
         table_html,
         gr.update(choices=metric_cols, value=selected_metric, interactive=True),
         gr.update(value=fig),
         gr.update(choices=valid_ds, value=plot_dataset, interactive=True),
+        gr.update(value=export_path, visible=True),
     )
 
 
