@@ -34,6 +34,7 @@ def build_tab():
                     label="Model",
                     interactive=False,
                     multiselect=True,
+                    elem_classes=["dropdown-multiselect-compact"]
                 )
                 metrics_config_pl = gr.CheckboxGroup(
                     choices=[],
@@ -47,6 +48,7 @@ def build_tab():
                     label="Dataset",
                     multiselect=True,
                     interactive=False,
+                    elem_classes=["dropdown-multiselect-compact"]
                 )
                 view_metrics = gr.Button(
                     value="View Metrics",

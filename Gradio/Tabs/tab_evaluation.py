@@ -9,7 +9,7 @@ import pandas as pd
 import gradio as gr
 
 import numpy as np
-
+from html import escape
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -1442,9 +1442,10 @@ def matplotlib_plot_update(fig):
 
 def show_evaluation_loading():
     return (
-        gr.update(visible=True),        # table_loading
-        gr.update(visible=True),        # plot_loading
-        gr.update(interactive=False),   # run_btn
+        gr.update(visible=True),             # table_loading
+        gr.update(visible=True),             # plot_loading
+        gr.update(interactive=False),        # run_btn
+        gr.update(value=None, visible=False) # download_evaluation_button
     )
 
 
@@ -1583,6 +1584,132 @@ def add_selection_context(
 
     return enriched
 
+def humanize_column_name(name):
+    raw = str(name).strip()
+
+    if raw.startswith("selected_"):
+        raw = raw[len("selected_"):]
+
+    aliases = {
+        "task_type": "Task type",
+        "type": "Task type",
+
+        "model": "Model",
+        "selected_model": "Model",
+
+        "universe": "Universe",
+        "selected_universe": "Universe",
+
+        "configuration": "Configuration",
+        "config": "Configuration",
+
+        "year_start": "Year start",
+        "initial_year": "Year start",
+        "initialyear": "Year start",
+
+        "year_end": "Year end",
+        "end_year": "Year end",
+        "endyear": "Year end",
+        "final_year": "Year end",
+
+        "sequence_length": "Sequence length",
+        "sl": "Sequence length",
+
+        "prediction_length": "Prediction length",
+        "pl": "Prediction length",
+
+        "top_k": "Top K",
+        "topk": "Top K",
+
+        "short_k": "Short K",
+        "shortk": "Short K",
+
+        "period": "Period",
+
+        "q1": "Q1",
+        "q2": "Q2",
+        "q3": "Q3",
+        "q4": "Q4",
+        "q5": "Q5",
+    }
+
+    normalized = normalize_column_name(raw)
+
+    if normalized in aliases:
+        return aliases[normalized]
+
+    if re.match(r"^\d{4}$", raw):
+        return raw
+
+    return raw.replace("_", " ").strip().capitalize()
+
+
+def prettify_output_dataframe(df):
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    pretty_df = df.copy()
+
+    pretty_df.columns = [
+        humanize_column_name(col)
+        for col in pretty_df.columns
+    ]
+
+    # Keep the first occurrence of duplicated human-readable columns.
+    # Since selected_* columns are inserted first, this preserves the UI context
+    # and removes duplicated metadata coming from the generated CSV.
+    pretty_df = pretty_df.loc[
+        :,
+        ~pd.Index(pretty_df.columns).duplicated(keep="first")
+    ]
+
+    return pretty_df
+
+
+def empty_evaluation_table_html(message="No evaluation output yet."):
+    return f"""
+    <div class="metrics-table-wrap evaluation-metrics-table-wrap">
+        <div class="metrics-empty">
+            <div>{escape(message)}</div>
+        </div>
+    </div>
+    """
+
+
+def dataframe_to_metrics_html(df):
+    pretty_df = prettify_output_dataframe(df)
+
+    if pretty_df.empty:
+        return empty_evaluation_table_html("No rows to display for this selection.")
+
+    table_html = pretty_df.to_html(
+        index=False,
+        border=0,
+        classes="mpt",
+        escape=True,
+        na_rep="",
+    )
+
+    return f"""
+    <div class="metrics-table-wrap evaluation-metrics-table-wrap">
+        <div class="metrics-outer metrics-scroll">
+            {table_html}
+        </div>
+    </div>
+    """
+
+
+def write_evaluation_download_file(df, eval_mode):
+    pretty_df = prettify_output_dataframe(df)
+
+    if pretty_df.empty:
+        return None
+
+    output_path = EVALUATION_DIR / f"evaluation_output_{str(eval_mode).lower()}.csv"
+    pretty_df.to_csv(output_path, index=False)
+
+    return str(output_path)
+
 
 def run_evaluation(
     eval_mode,
@@ -1609,7 +1736,8 @@ def run_evaluation(
     if not selected_records:
         return (
             "The selected values do not match any available .pkl file.",
-            pd.DataFrame(),
+            empty_evaluation_table_html("The selected values do not match any available .pkl file."),
+            gr.update(value=None, visible=False),
             empty_plot(),
         )
 
@@ -1636,7 +1764,8 @@ def run_evaluation(
     if not jobs:
         return (
             "No valid Top K / Short K pair is available for the selected universes.",
-            pd.DataFrame(),
+            empty_evaluation_table_html("No valid Top K / Short K pair is available for the selected universes."),
+            gr.update(value=None, visible=False),
             empty_plot(),
         )
 
@@ -1793,7 +1922,15 @@ def run_evaluation(
     fig = build_evaluation_plot(output_df, eval_mode)
     plot_update = matplotlib_plot_update(fig)
 
-    return "\n".join(logs), output_df, plot_update
+    table_html = dataframe_to_metrics_html(output_df)
+    download_file = write_evaluation_download_file(output_df, eval_mode)
+
+    if download_file is None:
+        download_update = gr.update(value=None, visible=False)
+    else:
+        download_update = gr.update(value=download_file, visible=True)
+
+    return "\n".join(logs), table_html, download_update, plot_update
 
 # -------------------------------------------------
 # Build tab
@@ -1801,147 +1938,147 @@ def run_evaluation(
 def build_tab():
     with gr.Tab("Evaluation", elem_id="main-tabs"):
         with gr.Column():
+
+            # ── main two-column row ──────────────────────────────────────────
             with gr.Row(elem_classes=["evaluation-mode-row"]):
-                with gr.Group(elem_classes=["evaluation-mode-card"]):
-                    gr.Markdown(
-                        """
-                        <div class="evaluation-mode-title-wrap">
-                            <div class="evaluation-section-title evaluation-mode-title">
-                                <span class="evaluation-section-dot"></span>
-                                Assessment type
+
+                # LEFT – assessment type
+                with gr.Column(scale=1, elem_classes=["evaluation-mode-col"]):
+                    with gr.Group(elem_classes=["evaluation-mode-card"]):
+                        gr.Markdown(
+                            """
+                            <div class="evaluation-mode-title-wrap">
+                                <div class="evaluation-section-title evaluation-mode-title">
+                                    <span class="evaluation-section-dot"></span>
+                                    Assessment type
+                                </div>
                             </div>
-                        </div>
-                        """
-                    )
-
-                    eval_mode = gr.Radio(
-                        choices=EVAL_MODES,
-                        value=None,
-                        label=None,
-                        interactive=True,
-                        show_label=False,
-                        elem_classes=["evaluation-radio"],
-                    )
-
-            with gr.Group(
-                visible=False,
-                elem_classes=["evaluation-panel"],
-            ) as params_group:
-
-                gr.Markdown(
-                    """
-                    <div class="evaluation-section-title">
-                        <span class="evaluation-section-dot"></span>
-                        Result selection
-                    </div>
-                    """
-                )
-
-                with gr.Row(elem_classes=["evaluation-form-row"]):
-                    task_type = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Task type",
-                        interactive=False,
-                    )
-
-                    model = gr.Dropdown(
-                        choices=[],
-                        value=[],
-                        label="Model",
-                        interactive=False,
-                        multiselect=True,
-                    )
-                with gr.Row(elem_classes=["evaluation-form-row"]):
-                    universe = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Universe",
-                        interactive=False,
-                    )
-
-                    configuration = gr.Dropdown(
-                        choices=[],
-                        value=[],
-                        label="Configuration",
-                        interactive=False,
-                        multiselect=True,
-                    )
-
-                gr.Markdown(
-                    """
-                    <div class="evaluation-section-title evaluation-section-spaced">
-                        <span class="evaluation-section-dot"></span>
-                        Evaluation window
-                    </div>
-                    """
-                )
-
-                with gr.Row(elem_classes=["evaluation-form-row"]):
-                    year_start = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Year start",
-                        interactive=False,
-                    )
-
-                    year_end = gr.Dropdown(
-                        choices=[],
-                        value=None,
-                        label="Year end",
-                        interactive=False,
-                    )
-                    length_pair = gr.CheckboxGroup(
-                        choices=[],
-                        value=[],
-                        label="Sequence / prediction length",
-                        interactive=False,
-                        elem_classes=["evaluation-length-checkbox"],
-                    )
-
-                with gr.Group(
-                    visible=False,
-                    elem_classes=["evaluation-portfolio-card"],
-                ) as top_short_row:
-                    gr.Markdown(
-                        """
-                        <div class="evaluation-section-title">
-                            <span class="evaluation-section-dot"></span>
-                            Portfolio construction
-                        </div>
-                        """
-                    )
-
-                    with gr.Row(elem_classes=["evaluation-form-row", "evaluation-portfolio-compact-row"]):
-                        with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
-                            top_k = gr.Dropdown(
-                                choices=[],
-                                value=None,
-                                label="Top K",
-                                interactive=False,
-                            )
-
-                        with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
-                            short_k = gr.Dropdown(
-                                choices=[],
-                                value=None,
-                                label="Short K",
-                                interactive=False,
-                            )
-
-            with gr.Row(elem_classes=["evaluation-run-row"]):
-                with gr.Column(scale=1, min_width=0):
-                    gr.HTML("")
-                with gr.Column(scale=0, min_width=240, elem_classes=["evaluation-run-button-col"]):
+                            """
+                        )
+                        eval_mode = gr.Radio(
+                            choices=EVAL_MODES,
+                            value=None,
+                            label=None,
+                            interactive=True,
+                            show_label=False,
+                            container=False,
+                            elem_classes=["evaluation-radio"],
+                        )
                     run_btn = gr.Button(
                         "Run evaluation",
                         variant="primary",
                         interactive=False,
                         elem_id="evaluation-run-button",
                     )
-                with gr.Column(scale=1, min_width=0):
-                    gr.HTML("")
 
+                # RIGHT – params group
+                with gr.Column(scale=4, elem_classes=["evaluation-params-col"]):
+                    with gr.Group(
+                        visible=False,
+                        elem_classes=["evaluation-panel"],
+                    ) as params_group:
+
+                        # ── Result selection ─────────────────────────────────
+                        gr.Markdown(
+                            """
+                            <div class="evaluation-section-title">
+                                <span class="evaluation-section-dot"></span>
+                                Result selection
+                            </div>
+                            """
+                        )
+
+                        with gr.Row(elem_classes=["evaluation-form-row"]):
+                            task_type = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Task type",
+                                interactive=False,
+                            )
+                            model = gr.Dropdown(
+                                choices=[],
+                                value=[],
+                                label="Model",
+                                interactive=False,
+                                multiselect=True,
+                                elem_classes=["dropdown-multiselect-compact"],
+                            )
+                            universe = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Universe",
+                                interactive=False,
+                            )
+                            configuration = gr.Dropdown(
+                                choices=[],
+                                value=[],
+                                label="Configuration",
+                                interactive=False,
+                                multiselect=True,
+                                elem_classes=["dropdown-multiselect-compact"],
+                            )
+
+                        # ── Evaluation window ────────────────────────────────
+                        gr.Markdown(
+                            """
+                            <div class="evaluation-section-title evaluation-section-spaced">
+                                <span class="evaluation-section-dot"></span>
+                                Evaluation window
+                            </div>
+                            """
+                        )
+
+                        with gr.Row(elem_classes=["evaluation-form-row"]):
+                            year_start = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Year start",
+                                interactive=False,
+                            )
+                            year_end = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Year end",
+                                interactive=False,
+                            )
+                            length_pair = gr.CheckboxGroup(
+                                choices=[],
+                                value=[],
+                                label="Sequence / prediction length",
+                                interactive=False,
+                                elem_classes=["evaluation-length-checkbox"],
+                            )
+
+                        # ── Portfolio construction (conditional) ─────────────
+                        with gr.Group(
+                            visible=False,
+                            elem_classes=["evaluation-portfolio-card"],
+                        ) as top_short_row:
+                            gr.Markdown(
+                                """
+                                <div class="evaluation-section-title">
+                                    <span class="evaluation-section-dot"></span>
+                                    Portfolio construction
+                                </div>
+                                """
+                            )
+                            with gr.Row(elem_classes=["evaluation-form-row", "evaluation-portfolio-compact-row"]):
+                                with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
+                                    top_k = gr.Dropdown(
+                                        choices=[],
+                                        value=None,
+                                        label="Top K",
+                                        interactive=False,
+                                    )
+                                with gr.Column(scale=0, min_width=180, elem_classes=["evaluation-portfolio-small-col"]):
+                                    short_k = gr.Dropdown(
+                                        choices=[],
+                                        value=None,
+                                        label="Short K",
+                                        interactive=False,
+                                    )
+
+            # ── Output area ──────────────────────────────────────────────────
             with gr.Row(elem_classes=["evaluation-output-row"]):
                 with gr.Column(
                     scale=1,
@@ -1954,7 +2091,6 @@ def build_tab():
                         </div>
                         """
                     )
-
                     with gr.Accordion(
                         "Show command details",
                         open=False,
@@ -1970,12 +2106,12 @@ def build_tab():
                         )
 
                 with gr.Column(
-                        scale=4,
-                        elem_classes=[
-                            "evaluation-output-card",
-                            "evaluation-table-card",
-                            "evaluation-loading-host",
-                        ],
+                    scale=4,
+                    elem_classes=[
+                        "evaluation-output-card",
+                        "evaluation-table-card",
+                        "evaluation-loading-host",
+                    ],
                 ):
                     gr.Markdown(
                         """
@@ -1984,7 +2120,6 @@ def build_tab():
                         </div>
                         """
                     )
-
                     table_loading = gr.HTML(
                         """
                         <div class="evaluation-loading-overlay">
@@ -1996,21 +2131,26 @@ def build_tab():
                         """,
                         visible=False,
                     )
-
-                    output_table = gr.Dataframe(
-                        label=None,
-                        interactive=False,
-                        wrap=False,
+                    output_table = gr.HTML(
+                        value=empty_evaluation_table_html(),
                         elem_id="evaluation-output-table",
                     )
+                    with gr.Row(elem_classes=["metrics-download-row", "evaluation-download-row"]):
+                        download_evaluation_button = gr.DownloadButton(
+                            "Download CSV",
+                            value=None,
+                            visible=False,
+                            elem_id="download-evaluation-button",
+                        )
 
+            # ── Plot ─────────────────────────────────────────────────────────
             with gr.Group(
-                    visible=True,
-                    elem_classes=[
-                        "evaluation-output-card",
-                        "evaluation-plot-card",
-                        "evaluation-loading-host",
-                    ],
+                visible=True,
+                elem_classes=[
+                    "evaluation-output-card",
+                    "evaluation-plot-card",
+                    "evaluation-loading-host",
+                ],
             ):
                 gr.Markdown(
                     """
@@ -2019,7 +2159,6 @@ def build_tab():
                     </div>
                     """
                 )
-
                 plot_loading = gr.HTML(
                     """
                     <div class="evaluation-loading-overlay">
@@ -2031,7 +2170,6 @@ def build_tab():
                     """,
                     visible=False,
                 )
-
                 plot_output = gr.Plot(
                     label="",
                     show_label=False,
@@ -2095,6 +2233,7 @@ def build_tab():
                 table_loading,
                 plot_loading,
                 run_btn,
+                download_evaluation_button,
             ],
             show_progress="hidden",
             queue=False,
@@ -2106,6 +2245,7 @@ def build_tab():
             outputs=[
                 log_box,
                 output_table,
+                download_evaluation_button,
                 plot_output,
             ],
             show_progress="hidden",

@@ -925,11 +925,11 @@ table.mpt td.missing {
 
 /* Compact params panel */
 .evaluation-panel-compact {
-    padding: 14px !important;
+    padding: 10px !important;
 }
 
 .evaluation-params-grid {
-    gap: 14px !important;
+    gap: 10px !important;
     align-items: stretch !important;
 }
 
@@ -1010,7 +1010,7 @@ table.mpt td.missing {
     width: 100% !important;
     display: flex !important;
     justify-content: center !important;
-    align-items: center !important;
+    align-items: flex-start !important;
     margin: 4px 0 10px 0 !important;
 }
 
@@ -1019,7 +1019,7 @@ table.mpt td.missing {
     min-width: 0 !important;
     max-width: max-content !important;
 
-    padding: 12px 16px !important;
+    padding: 4px 4px !important;
 
     display: inline-flex !important;
     flex-direction: column !important;
@@ -1090,8 +1090,8 @@ table.mpt td.missing {
 .evaluation-radio label {
     text-transform: none !important;
     letter-spacing: normal !important;
-    font-size: 0.86rem !important;
-    font-weight: 750 !important;
+    font-size: 0.80rem !important;
+    font-weight: 740 !important;
     color: #1e293b !important;
 }
 
@@ -1124,7 +1124,7 @@ table.mpt td.missing {
 .evaluation-section-title {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 
     width: fit-content;
 
@@ -1285,7 +1285,7 @@ table.mpt td.missing {
 
 .evaluation-output-row {
     gap: 16px !important;
-    align-items: stretch !important;
+    align-items: flex-start !important;
     margin-top: 4px !important;
 }
 
@@ -1520,6 +1520,93 @@ table.mpt td.missing {
         transform: rotate(360deg);
     }
 }
+
+.dropdown-multiselect-compact .wrap {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+
+    overflow: hidden !important;
+    border-radius: 14px !important;
+}
+
+/* Container of selected chips */
+.dropdown-multiselect-compact .wrap > div {
+   height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+
+    align-items: center !important;
+    align-content: center !important;
+
+    gap: 6px !important;
+    padding: 6px 38px 6px 8px !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    white-space: nowrap !important;
+}
+
+/* Selected chips */
+.dropdown-multiselect-compact .wrap button {
+    flex: 0 0 auto !important;
+
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 4px 8px !important;
+
+    line-height: 1 !important;
+    white-space: nowrap !important;
+
+    border-radius: 8px !important;
+}
+
+/* Text inside chips */
+.dropdown-multiselect-compact .wrap button span,
+.dropdown-multiselect-compact .wrap span {
+    white-space: nowrap !important;
+    line-height: 1 !important;
+}
+
+/* Keep dropdown arrow / clear icon from being squeezed */
+.dropdown-multiselect-compact .wrap svg {
+    flex: 0 0 auto !important;
+}
+
+/* Horizontal scrollbar */
+.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar {
+    height: 5px;
+}
+
+.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar-thumb {
+    background: #c7d2fe;
+    border-radius: 999px;
+}
+
+.dropdown-multiselect-compact .wrap > div {
+    scrollbar-width: thin;
+    scrollbar-color: #c7d2fe transparent;
+}
+
 /* ── Evaluation sidebar ─────────────────────────────────────── */
 .evaluation-controls-col {
     background: var(--c-surface);
@@ -1540,4 +1627,89 @@ table.mpt td.missing {
 .evaluation-run-btn-full {
     width: 100% !important;
     margin-top: 1.25rem !important;
+}
+/* Evaluation table rendered with the same style as metrics table */
+.evaluation-metrics-table-wrap {
+    margin-top: 0 !important;
+    margin-bottom: 8px !important;
+}
+
+#evaluation-output-table {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+#evaluation-output-table > div {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Evaluation download button: same style as metrics download button */
+#download-evaluation-button {
+    width: fit-content !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    margin: 0 !important;
+
+    background: #eef2ff !important;
+    color: #4f46e5 !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 999px !important;
+
+    padding: 4px 10px !important;
+
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    line-height: normal !important;
+
+    box-shadow: none !important;
+    cursor: pointer !important;
+    transform: none !important;
+}
+
+#download-evaluation-button button,
+#download-evaluation-button a,
+#download-evaluation-button span {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    background: transparent !important;
+    color: #4f46e5 !important;
+    border: none !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    line-height: normal !important;
+    text-decoration: none !important;
+
+    box-shadow: none !important;
+}
+
+#download-evaluation-button:hover,
+#download-evaluation-button:hover button,
+#download-evaluation-button:hover a,
+#download-evaluation-button:hover span {
+    background: #e0e7ff !important;
+    color: #4338ca !important;
+    border-color: #a5b4fc !important;
+    transform: none !important;
 }
