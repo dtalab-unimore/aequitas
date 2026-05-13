@@ -1,6 +1,6 @@
 import pandas as pd
 
-from utils.validation import validate_prices_decorator
+from Evaluation.utils.validation import validate_prices_decorator
 
 from .utils import ref, mean, std, ema, sum_
 

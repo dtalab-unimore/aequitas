@@ -13,9 +13,9 @@
     "cnnpred_market.csv"
   ],
   "MATCC": [
+    "{universe}.csv",
     "{universe}_alpha158.csv",
-    "{nation}_market.csv",
-    "{universe}.csv"
+    "{nation}_market.csv"
   ],
   "MASTER": [
     "{universe}.csv",
@@ -25,7 +25,7 @@
   "HIST": [
     "{universe}.csv",
     "{universe}_alpha360.csv",
-    "{universe}_inc_matrix.csv",
+    "{universe}_inc_matrix.npz",
     "{universe}_market_cap.csv"
   ],
   "DiscoverPLF": [
@@ -44,6 +44,6 @@
   ],
   "STHAN-SR": [
     "{universe}.csv",
-    "{universe}_inc_matrix.csv"
+    "{universe}_inc_matrix.npz"
   ]
 }

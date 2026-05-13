@@ -67,13 +67,238 @@ button {
 button:hover {
     transform: translateY(-1px);
 }
+/* ── Download tab ───────────────────────────────────────────── */
+
+.download-shell {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 8px 4px 22px;
+    gap: 12px !important;
+}
+
+.download-top-row {
+    gap: 16px !important;
+    align-items: flex-start !important;
+    margin-bottom: 0 !important;
+}
+
+.download-preview-row {
+    margin-top: 12px !important;
+}
+
+/* Card base – coerente con evaluation-output-card */
+.download-card {
+    background: #ffffff !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
+    padding: 16px !important;
+    overflow: visible !important;
+}
+
+.download-card > div {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Controls card */
+.download-controls-card {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+.download-controls-card label {
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.055em !important;
+    color: #475569 !important;
+}
+
+.download-controls-card .wrap {
+    border-radius: 14px !important;
+}
+
+#download-missing-btn {
+    width: 100% !important;
+    height: 42px !important;
+    margin-top: 4px !important;
+    border-radius: 999px !important;
+    font-weight: 850 !important;
+    letter-spacing: 0.015em !important;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    border: 1px solid #6366f1 !important;
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.22) !important;
+    transition: all 0.2s ease !important;
+}
+
+#download-missing-btn:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 12px 26px rgba(79, 70, 229, 0.28) !important;
+}
+
+#download-missing-btn:disabled {
+    background: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+    color: #64748b !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* Status box */
+#download-status-box,
+#download-status-box > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+#download-status-box textarea {
+    background: #fbfdff !important;
+    border: 1px solid #e0e7ff !important;
+    border-radius: 12px !important;
+    padding: 10px 12px !important;
+    font-size: 0.83rem !important;
+    line-height: 1.5 !important;
+    color: #0f172a !important;
+    resize: none !important;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Files textbox */
+.download-files-card {
+    position: relative !important;
+}
+
+#files,
+#files > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+#files textarea {
+    background: #fbfdff !important;
+    border: 1px solid #e0e7ff !important;
+    border-radius: 14px !important;
+    padding: 13px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.80rem !important;
+    line-height: 1.6 !important;
+    color: #0f172a !important;
+    resize: none !important;
+    overflow-y: auto !important;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Selector card */
+.download-selector-card {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.download-selector-card label,
+#preview-selector label {
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.055em !important;
+    color: #475569 !important;
+}
+
+.download-selector-card .wrap {
+    border-radius: 14px !important;
+}
+
+/* Preview card */
+.download-preview-card {
+    position: relative !important;
+}
+
+/* ── Preview dataframe – stile coerente con mpt ─────────────── */
+
+#preview-table {
+    border: 1px solid #c7d2fe !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+}
+
+#preview-table > div,
+#preview-table .table-wrap {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 14px !important;
+    overflow: auto !important;
+}
+
+/* Header */
+#preview-table table thead tr th {
+    background: var(--c-accent, rgba(114, 116, 215, 0.44)) !important;
+    color: #ffffff !important;
+    font-family: "DM Sans", system-ui, sans-serif !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    padding: 0.65rem 0.9rem !important;
+    white-space: nowrap !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 2 !important;
+}
+
+/* Rows */
+#preview-table table tbody tr {
+    border-bottom: 1px solid #eef2ff !important;
+    transition: background 0.12s !important;
+}
+
+#preview-table table tbody tr:nth-child(even) {
+    background: #f8fafc !important;
+}
+
+#preview-table table tbody tr:hover {
+    background: #eef2ff !important;
+}
+
+#preview-table table tbody td {
+    padding: 0.5rem 0.9rem !important;
+    font-size: 0.80rem !important;
+    color: #334155 !important;
+    border-right: 1px solid #eef2ff !important;
+    white-space: nowrap !important;
+    font-weight: normal !important;
+}
+
+/* Prima colonna indice */
+#preview-table table tbody td:first-child {
+    font-weight: 700 !important;
+    color: var(--c-accent, #6366f1) !important;
+    background: #eef2ff !important;
+    border-left: 3px solid var(--c-accent, rgba(114, 116, 215, 0.44)) !important;
+    border-right: 2px solid #c7d2fe !important;
+}
+
+/* ── Pagination ─────────────────────────────────────────────── */
+
+.preview-pagination-outer {
+    margin-top: 10px !important;
+    align-items: center !important;
+}
 
 .preview-pagination-box {
     width: 188px !important;
     min-width: 188px !important;
     max-width: 188px !important;
     display: flex !important;
-    justify-content: flex-end !important;
+    justify-content: center !important;
     align-items: center !important;
 }
 
@@ -85,9 +310,12 @@ button:hover {
     grid-template-columns: 36px 92px 36px !important;
     column-gap: 12px !important;
     align-items: center !important;
+    background: #f8fafc !important;
+    border: 1px solid #e0e7ff !important;
+    border-radius: 999px !important;
+    padding: 4px 8px !important;
 }
 
-/* wrapper Gradio dei tre componenti */
 .preview-pagination-inner > div {
     width: auto !important;
     min-width: 0 !important;
@@ -95,51 +323,55 @@ button:hover {
     flex: none !important;
 }
 
-/* bottoni */
 .preview-round-btn {
     width: 36px !important;
     min-width: 36px !important;
     max-width: 36px !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-
+    height: 32px !important;
     padding: 0 !important;
     margin: 0 !important;
-    border-radius: 36px !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .preview-round-btn button {
-    width: 36px !important;
-    min-width: 36px !important;
-    max-width: 36px !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
     padding: 0 !important;
     margin: 0 !important;
-    border-radius: 36px !important;
-
+    border-radius: 999px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-
     font-size: 18px !important;
     font-weight: 700 !important;
     line-height: 1 !important;
+    background: transparent !important;
+    color: #4f46e5 !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
-/* label centrale */
+.preview-round-btn button:hover:not(:disabled) {
+    background: #eef2ff !important;
+    transform: none !important;
+}
+
+.preview-round-btn button:disabled {
+    color: #cbd5e1 !important;
+    transform: none !important;
+}
+
 .preview-page-label {
     width: 92px !important;
     min-width: 92px !important;
     max-width: 92px !important;
-    height: 36px !important;
-
+    height: 32px !important;
     padding: 0 !important;
     margin: 0 !important;
-
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -148,20 +380,26 @@ button:hover {
 }
 
 .preview-page-label span {
-    width: 92px !important;
-    height: 36px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    padding: 0 !important;
-    margin: 0 !important;
-
-    font-size: 0.86rem !important;
-    font-weight: 500 !important;
-    line-height: 1 !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
     white-space: nowrap !important;
+}
+
+
+/* Mobile */
+@media (max-width: 900px) {
+
+    .download-top-row {
+        flex-direction: column !important;
+    }
+
+    .download-controls-card,
+    .download-files-card,
+    .download-selector-card,
+    .download-preview-card {
+        width: 100% !important;
+    }
 }
 
 #test-result-box textarea {
