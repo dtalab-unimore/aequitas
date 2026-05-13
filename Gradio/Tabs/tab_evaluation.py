@@ -7,21 +7,26 @@ from pathlib import Path
 from functools import partial
 import pandas as pd
 import gradio as gr
-
 import numpy as np
 from html import escape
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+
+MAX_PLOT_COLUMNS = 3
+FIXED_SUBPLOT_WIDTH = 4.2
+FIXED_SUBPLOT_HEIGHT_EOY = 2.55
+FIXED_SUBPLOT_HEIGHT_QUINTILE = 2.65
 
 # -------------------------------------------------
 # Evaluation config
 # -------------------------------------------------
 CURRENT_FILE = Path(__file__).resolve()
 
-# tab_evaluation.py sta in:
+# tab_evaluation.py is in:
 # FINBENCH_DEMO/Gradio/Tabs/tab_evaluation.py
-# quindi parents[0] = Tabs
+# so    parents[0] = Tabs
 #       parents[1] = Gradio
 #       parents[2] = FINBENCH_DEMO
 PROJECT_ROOT = CURRENT_FILE.parents[2]
@@ -339,36 +344,6 @@ def filter_records_by_length_pairs(records, length_pairs):
             int(r["prediction_length"]),
         ) in selected_pairs
     ]
-
-def selected_combination_exists(
-    task_type,
-    model,
-    universe,
-    configuration,
-    year_start,
-    year_end,
-    sequence_length,
-    prediction_length,
-):
-    records = scan_available_pkls()
-
-    filtered = filter_records(
-        records,
-        task_type=task_type,
-        model=model,
-        universe=universe,
-        configuration=configuration,
-        year_start=year_start,
-        year_end=year_end,
-        sequence_length=sequence_length,
-        prediction_length=prediction_length,
-    )
-
-    if not filtered:
-        return False, None
-
-    return True, filtered[0]["pkl_path"]
-
 
 # -------------------------------------------------
 # Dropdown a cascata
@@ -1033,6 +1008,109 @@ def build_plot_base_dataframe(df):
 
     return plot_df
 
+def compute_shared_y_limits(values, include_zero=True, padding_ratio=0.08):
+    """
+    Compute shared y-axis limits for all subplots.
+    """
+    arr = np.asarray(values, dtype=float).ravel()
+    arr = arr[np.isfinite(arr)]
+
+    if arr.size == 0:
+        return None
+
+    y_min = float(np.min(arr))
+    y_max = float(np.max(arr))
+
+    if include_zero:
+        y_min = min(y_min, 0.0)
+        y_max = max(y_max, 0.0)
+
+    if y_min == y_max:
+        padding = abs(y_min) * 0.10 if y_min != 0 else 1.0
+    else:
+        padding = (y_max - y_min) * padding_ratio
+
+    return y_min - padding, y_max + padding
+
+
+def apply_shared_y_axis(ax, shared_ylim):
+    if shared_ylim is None:
+        return
+
+    ax.set_ylim(shared_ylim)
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
+
+def build_label_color_map(labels):
+    """
+    Assign one stable color to each label across all subplots.
+    """
+    labels = [str(label) for label in labels]
+    palette = [
+        "#5b359c",  # violet
+        "#ec4899",  # pink
+        "#14b8a6",  # teal
+        "#0ea5e9",  # sky
+        "#10b981",  # emerald
+        "#f59e0b",  # amber
+        "#4f46e5",  # indigo
+        "#ef4444",  # red
+        "#6366f1",  # soft indigo
+        "#8b5cf6",  # soft violet
+    ]
+    return {
+        label: palette[idx % len(palette)]
+        for idx, label in enumerate(labels)
+    }
+
+def build_plot_facets(plot_df):
+    """
+    Build only the non-empty subplot combinations.
+    Each facet is one (universe, facet_model) plot.
+    """
+    universes = sort_mixed(plot_df["universe"].dropna().unique())
+    models = sort_mixed(plot_df["facet_model"].dropna().unique())
+
+    facets = []
+
+    for universe in universes:
+        for model_name in models:
+            subset = plot_df[
+                (plot_df["universe"] == universe)
+                & (plot_df["facet_model"] == model_name)
+            ]
+
+            if not subset.empty:
+                facets.append((universe, model_name))
+
+    return facets
+
+
+def create_fixed_facet_grid(
+    facets,
+    subplot_width,
+    subplot_height,
+    max_columns=MAX_PLOT_COLUMNS,
+    dpi=130,
+):
+    """
+    Create a fixed subplot grid with at most max_columns plots per row.
+    """
+    n_facets = max(len(facets), 1)
+    n_cols = min(max_columns, n_facets)
+    n_rows = int(np.ceil(n_facets / n_cols))
+
+    fig_width = subplot_width * n_cols
+    fig_height = subplot_height * n_rows + 1.25
+
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(fig_width, fig_height),
+        squeeze=False,
+        dpi=dpi,
+    )
+
+    return fig, axes, n_rows, n_cols
 
 def build_quintile_plot(df):
     if df is None or df.empty:
@@ -1066,21 +1144,24 @@ def build_quintile_plot(df):
     if plot_df.empty:
         return None
 
-    universes = sort_mixed(plot_df["universe"].dropna().unique())
-    models = sort_mixed(plot_df["facet_model"].dropna().unique())
+    shared_ylim = compute_shared_y_limits(
+        plot_df[["q1", "q2", "q3", "q4", "q5"]].to_numpy(),
+        include_zero=True,
+    )
+
+    facets = build_plot_facets(plot_df)
+
+    if not facets:
+        return None
+
     length_labels = sort_mixed(plot_df["length_label"].dropna().unique())
+    length_color_map = build_label_color_map(length_labels)
 
-    n_rows = len(universes)
-    n_cols = len(models)
-
-    fig_width = max(4.4 * n_cols, 8.5)
-    fig_height = max(2.45 * n_rows + 1.4, 4.6)
-
-    fig, axes = plt.subplots(
-        n_rows,
-        n_cols,
-        figsize=(fig_width, fig_height),
-        squeeze=False,
+    fig, axes, n_rows, n_cols = create_fixed_facet_grid(
+        facets=facets,
+        subplot_width=FIXED_SUBPLOT_WIDTH,
+        subplot_height=FIXED_SUBPLOT_HEIGHT_QUINTILE,
+        max_columns=MAX_PLOT_COLUMNS,
         dpi=130,
     )
 
@@ -1089,69 +1170,65 @@ def build_quintile_plot(df):
     x_labels = ["q1", "q2", "q3", "q4", "q5"]
     x = np.arange(len(x_labels))
 
-    for row_idx, universe in enumerate(universes):
-        for col_idx, model_name in enumerate(models):
-            ax = axes[row_idx][col_idx]
+    for facet_idx, (universe, model_name) in enumerate(facets):
+        row_idx, col_idx = divmod(facet_idx, n_cols)
+        ax = axes[row_idx][col_idx]
 
-            subset = plot_df[
-                (plot_df["universe"] == universe)
-                & (plot_df["facet_model"] == model_name)
+        subset = plot_df[
+            (plot_df["universe"] == universe)
+            & (plot_df["facet_model"] == model_name)
+        ]
+
+        for length_label in length_labels:
+            length_subset = subset[
+                subset["length_label"].astype(str) == str(length_label)
             ]
 
-            if subset.empty:
-                ax.axis("off")
+            if length_subset.empty:
                 continue
 
-            for length_label in length_labels:
-                length_subset = subset[
-                    subset["length_label"].astype(str) == str(length_label)
-                ]
+            values = (
+                length_subset[["q1", "q2", "q3", "q4", "q5"]]
+                .mean(axis=0, numeric_only=True)
+                .values
+            )
 
-                if length_subset.empty:
-                    continue
+            ax.plot(
+                x,
+                values,
+                marker="o",
+                linewidth=1.8,
+                markersize=4.2,
+                label=str(length_label),
+                color=length_color_map[str(length_label)],
+                zorder=3,
+            )
 
-                values = (
-                    length_subset[["q1", "q2", "q3", "q4", "q5"]]
-                    .mean(axis=0, numeric_only=True)
-                    .values
-                )
+        style_evaluation_axis(ax)
+        apply_shared_y_axis(ax, shared_ylim)
 
-                ax.plot(
-                    x,
-                    values,
-                    marker="o",
-                    linewidth=1.8,
-                    markersize=4.2,
-                    label=str(length_label),
-                    zorder=3,
-                )
+        ax.set_title(
+            f"{model_name}",
+            fontsize=10.5,
+            fontweight="bold",
+            color="#1e1b4b",
+            pad=8,
+        )
 
-            style_evaluation_axis(ax)
+        if col_idx == 0:
+            ax.set_ylabel(
+                str(universe),
+                fontsize=9.5,
+                fontweight="bold",
+                color="#1e1b4b",
+                labelpad=8,
+            )
 
-            if row_idx == 0:
-                ax.set_title(
-                    str(model_name),
-                    fontsize=11,
-                    fontweight="bold",
-                    color="#1e1b4b",
-                    pad=8,
-                )
+        ax.set_xticks(x)
+        ax.set_xticklabels(x_labels)
 
-            if col_idx == 0:
-                ax.set_ylabel(
-                    str(universe),
-                    fontsize=10,
-                    fontweight="bold",
-                    color="#1e1b4b",
-                    labelpad=10,
-                )
-
-            if row_idx == n_rows - 1:
-                ax.set_xticks(x)
-                ax.set_xticklabels(x_labels)
-            else:
-                ax.set_xticks(x)
-                ax.set_xticklabels([])
+    for ax in axes.flatten()[len(facets):]:
+        ax.axis("off")
 
     handles, labels = collect_unique_legend_items(axes)
 
@@ -1163,7 +1240,7 @@ def build_quintile_plot(df):
             ncol=min(len(labels), 4),
             frameon=True,
             fontsize=8.5,
-            bbox_to_anchor=(0.5, 0.015),
+            bbox_to_anchor=(0.5, 0.02),
         )
 
         legend.get_frame().set_facecolor("#ffffff")
@@ -1178,7 +1255,7 @@ def build_quintile_plot(df):
         y=0.985,
     )
 
-    fig.tight_layout(rect=[0.02, 0.08, 0.98, 0.94])
+    fig.tight_layout(rect=[0.02, 0.10, 0.98, 0.93])
 
     return fig
 
@@ -1217,7 +1294,6 @@ def build_eoy_plot(df):
     if plot_df.empty:
         return None
 
-    # Benchmark rows, if present.
     benchmark_mask = pd.Series(False, index=plot_df.index)
 
     for col in ["model", "config", "task_type"]:
@@ -1279,117 +1355,127 @@ def build_eoy_plot(df):
     else:
         long_benchmark = pd.DataFrame()
 
-    universes = sort_mixed(long_strategy["universe"].dropna().unique())
-    models = sort_mixed(long_strategy["facet_model"].dropna().unique())
+    shared_y_values = [long_strategy["return"]]
+
+    if not long_benchmark.empty:
+        shared_y_values.append(long_benchmark["return"])
+
+    shared_ylim = compute_shared_y_limits(
+        pd.concat(shared_y_values, ignore_index=True),
+        include_zero=True,
+    )
+
+    facets = build_plot_facets(long_strategy)
+
+    if not facets:
+        return None
+
     horizons = sort_mixed(long_strategy["length_label"].dropna().unique())
     years = [str(col) for col in year_columns]
+    horizon_color_map = build_label_color_map(horizons)
 
-    n_rows = len(universes)
-    n_cols = len(models)
-
-    fig_width = max(4.0 * n_cols, 8.0)
-    fig_height = max(2.2 * n_rows + 1.0, 4.0)
-
-    fig, axes = plt.subplots(
-        n_rows,
-        n_cols,
-        figsize=(fig_width, fig_height),
-        squeeze=False,
+    fig, axes, n_rows, n_cols = create_fixed_facet_grid(
+        facets=facets,
+        subplot_width=FIXED_SUBPLOT_WIDTH,
+        subplot_height=FIXED_SUBPLOT_HEIGHT_EOY,
+        max_columns=MAX_PLOT_COLUMNS,
+        dpi=130,
     )
+
+    fig.patch.set_facecolor("#ffffff")
 
     x = np.arange(len(years))
     n_horizons = max(len(horizons), 1)
     bar_width = min(0.75 / n_horizons, 0.22)
 
-    for row_idx, universe in enumerate(universes):
-        for col_idx, model_name in enumerate(models):
-            ax = axes[row_idx][col_idx]
+    for facet_idx, (universe, model_name) in enumerate(facets):
+        row_idx, col_idx = divmod(facet_idx, n_cols)
+        ax = axes[row_idx][col_idx]
 
-            subset = long_strategy[
-                (long_strategy["universe"] == universe)
-                & (long_strategy["facet_model"] == model_name)
+        subset = long_strategy[
+            (long_strategy["universe"] == universe)
+            & (long_strategy["facet_model"] == model_name)
+        ]
+
+        for horizon_idx, horizon in enumerate(horizons):
+            horizon_subset = subset[
+                subset["length_label"].astype(str) == str(horizon)
             ]
 
-            if subset.empty:
-                ax.axis("off")
+            if horizon_subset.empty:
                 continue
 
-            for horizon_idx, horizon in enumerate(horizons):
-                horizon_subset = subset[
-                    subset["length_label"].astype(str) == str(horizon)
-                ]
+            values_by_year = (
+                horizon_subset
+                .groupby("year")["return"]
+                .mean()
+                .reindex(years)
+            )
 
-                if horizon_subset.empty:
-                    continue
+            offset = (
+                horizon_idx - (n_horizons - 1) / 2
+            ) * bar_width
 
-                values_by_year = (
-                    horizon_subset
+            ax.bar(
+                x + offset,
+                values_by_year.values,
+                width=bar_width,
+                label=str(horizon),
+                color=horizon_color_map[str(horizon)],
+            )
+
+        if not long_benchmark.empty:
+            bench_subset = long_benchmark[
+                long_benchmark["universe"] == universe
+            ]
+
+            if not bench_subset.empty:
+                benchmark_by_year = (
+                    bench_subset
                     .groupby("year")["return"]
                     .mean()
                     .reindex(years)
                 )
 
-                offset = (
-                    horizon_idx - (n_horizons - 1) / 2
-                ) * bar_width
-
-                ax.bar(
-                    x + offset,
-                    values_by_year.values,
-                    width=bar_width,
-                    label=str(horizon),
+                ax.plot(
+                    x,
+                    benchmark_by_year.values,
+                    marker="o",
+                    linewidth=1.35,
+                    markersize=3.4,
+                    label="Benchmark",
+                    color="#111827",
+                    linestyle="--",
+                    zorder=4,
                 )
 
-            if not long_benchmark.empty:
-                bench_subset = long_benchmark[
-                    long_benchmark["universe"] == universe
-                ]
+        style_evaluation_axis(ax)
+        apply_shared_y_axis(ax, shared_ylim)
 
-                if not bench_subset.empty:
-                    benchmark_by_year = (
-                        bench_subset
-                        .groupby("year")["return"]
-                        .mean()
-                        .reindex(years)
-                    )
+        ax.set_title(
+            f"{model_name}",
+            fontsize=10.5,
+            fontweight="bold",
+            color="#1e1b4b",
+            pad=8,
+        )
 
-                    ax.plot(
-                        x,
-                        benchmark_by_year.values,
-                        marker="o",
-                        linewidth=1.2,
-                        markersize=3,
-                        label="Benchmark",
-                    )
+        if col_idx == 0:
+            ax.set_ylabel(
+                str(universe),
+                fontsize=9.5,
+                fontweight="bold",
+                color="#1e1b4b",
+                labelpad=8,
+            )
 
-            style_evaluation_axis(ax)
+        ax.set_xticks(x)
+        ax.set_xticklabels(years, rotation=0)
 
-            if row_idx == 0:
-                ax.set_title(str(model_name), fontsize=11)
+        ax.tick_params(axis="both", labelsize=8)
 
-            if col_idx == 0:
-                ax.set_ylabel(str(universe), fontsize=10)
-
-            if row_idx == n_rows - 1:
-                ax.set_xticks(x)
-                ax.set_xticklabels(years, rotation=0)
-            else:
-                ax.set_xticks(x)
-                ax.set_xticklabels([])
-
-            ax.tick_params(axis="both", labelsize=8)
-            ax.grid(True, axis="y", alpha=0.25)
-
-    handles = []
-    labels = []
-
-    for ax in axes.flatten():
-        h, l = ax.get_legend_handles_labels()
-
-        for handle, label in zip(h, l):
-            if label not in labels:
-                handles.append(handle)
-                labels.append(label)
+    for ax in axes.flatten()[len(facets):]:
+        ax.axis("off")
 
     handles, labels = collect_unique_legend_items(axes)
 
@@ -1401,7 +1487,7 @@ def build_eoy_plot(df):
             ncol=min(len(labels), 4),
             frameon=True,
             fontsize=8.5,
-            bbox_to_anchor=(0.5, 0.015),
+            bbox_to_anchor=(0.5, 0.02),
         )
 
         legend.get_frame().set_facecolor("#ffffff")
@@ -1412,10 +1498,11 @@ def build_eoy_plot(df):
         "End-of-Year returns",
         fontsize=13,
         fontweight="bold",
-        y=0.99,
+        color="#111827",
+        y=0.985,
     )
 
-    fig.tight_layout(rect=[0, 0.07, 1, 0.95])
+    fig.tight_layout(rect=[0.02, 0.10, 0.98, 0.93])
 
     return fig
 
