@@ -7,7 +7,9 @@ import threading
 import time
 import gradio as gr
 import pandas as pd
-
+from pathlib import Path
+import tempfile
+import re
 from Gradio.test_model_dispatcher import dispatch_test
 from utils.filter_constituents import filter_constituents_by_date
 
@@ -16,6 +18,14 @@ MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
 ALL_TASKS = ["Classification", "Regression", "Ranking"]
 TEST_YEARS = [2020, 2021, 2022, 2023, 2024]
+
+TICKERS_EXPORT_DIR = Path("./.gradio_exports/tickers").resolve()
+TICKERS_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+def _safe_filename(value: str) -> str:
+    value = str(value)
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+    return value.strip("_") or "universe"
 
 def get_universe_options():
     universes = set()
@@ -125,6 +135,10 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
             return None, f"config_params.json vuoto: {config_path}"
 
         params = json.loads(raw_text)
+        keys_to_remove = ["start_test_date", "end_date"]
+        for key in keys_to_remove:
+            params.pop(key, None)
+
         return params, json.dumps(params, indent=2, ensure_ascii=False)
 
     except Exception as e:
@@ -300,15 +314,27 @@ def update_end_year_choices(start_year):
     )
 
 
+def _safe_filename(value: str) -> str:
+    value = str(value)
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+    return value.strip("_") or "universe"
+
+
 def get_tickers(universe: str, start_test_year: str):
     if not universe or not start_test_year:
-        return gr.update(
-            visible=True,
-            value="""
-            <div class="ticker-card ticker-warning">
-                Please select both universe and start year before running the test.
-            </div>
-            """
+        return (
+            gr.update(
+                visible=True,
+                value="""
+                <div class="ticker-card ticker-warning">
+                    Please select both universe and start year before running the test.
+                </div>
+                """
+            ),
+            gr.update(
+                visible=False,
+                value=None,
+            ),
         )
 
     start_test_date = f"{int(start_test_year)}-01-01"
@@ -319,6 +345,16 @@ def get_tickers(universe: str, start_test_year: str):
 
     tickers = filter_constituents_by_date(constituents, start_test_date)
     ticker_list = tickers["EODHD"].tolist()
+
+    # CSV scaricabile: contiene tutte le colonne del CSV originale,
+    # filtrate sui tickers effettivamente usati nel test.
+    export_df = tickers.copy()
+    export_df["selected_universe"] = universe
+    export_df["selected_start_test_date"] = start_test_date
+
+    safe_universe = _safe_filename(universe)
+    csv_path = TICKERS_EXPORT_DIR / f"{safe_universe}_{start_test_year}_tickers.csv"
+    export_df.to_csv(csv_path, index=False)
 
     preview_tickers = ticker_list[:40]
     remaining = max(0, len(ticker_list) - len(preview_tickers))
@@ -341,8 +377,10 @@ def get_tickers(universe: str, start_test_year: str):
             The test will be run on the tickers already preprocessed for
             <b>{universe}</b>, filtered from <b>{start_test_date}</b>.
         </div>
-        <div class="ticker-count">
-            {len(ticker_list)} tickers selected
+        <div class="ticker-actions-row">
+            <div class="ticker-count">
+                {len(ticker_list)} tickers selected
+            </div>
         </div>
         <div class="ticker-list">
             {chips}
@@ -351,11 +389,16 @@ def get_tickers(universe: str, start_test_year: str):
     </div>
     """
 
-    return gr.update(
-        visible=True,
-        value=html,
+    return (
+        gr.update(
+            visible=True,
+            value=html,
+        ),
+        gr.update(
+            visible=True,
+            value=str(csv_path),
+        ),
     )
-
 
 def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year):
     logs = []

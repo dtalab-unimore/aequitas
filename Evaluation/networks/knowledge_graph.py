@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 from bs4 import BeautifulSoup
 
-from utils.validation import validate_prices_decorator
+from Evaluation.utils.validation import validate_prices_decorator
 
 
 class WikidataEntityConnector:

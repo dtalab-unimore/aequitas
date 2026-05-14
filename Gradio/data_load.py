@@ -1,78 +1,582 @@
-import os
+from __future__ import annotations
+
 import json
-import gradio as gr
-import pandas as pd
-import numpy as np
 import math
+import os
+import sys
+from collections import defaultdict
 from functools import lru_cache
+from pathlib import Path
 
-# -------------------------------------------------
-# CONFIG
-# -------------------------------------------------
-DRY_RUN = False  # True = does not call paid APIs; generates mock data
-
-# -------------------------------------------------
-# PATH HELPERS
-# -------------------------------------------------
-def dataset_base_path(universe: str) -> str:
-     return os.path.join("./Evaluation/data", universe, f"{universe}.csv")
+import gradio as gr
+import numpy as np
+import pandas as pd
 
 
-def dataset_exists(universe: str) -> bool:
-     if not universe:
-         return False
-     return os.path.exists(dataset_base_path(universe))
+# =============================================================================
+# Project paths
+# =============================================================================
 
-def _ensure_dir(path: str) -> None:
-     os.makedirs(path, exist_ok=True)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+EVALUATION_DIR = PROJECT_ROOT / "Evaluation"
+DATA_DIR = EVALUATION_DIR / "data"
+CONFIG_PATH = PROJECT_ROOT / "Gradio" / "configs" / "model_to_data.json"
 
-def read_configs():
-    with open("./Gradio/configs/model_to_data.json", "r") as f:
-        configs = json.load(f)
-    return configs
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+from Evaluation.main_demo_dataload import (
+    PipelineContext,
+    MarketContext,
+    TARGETS,
+    MARKET_TARGETS,
+    run_universe_pipeline,
+    run_market_pipeline,
+)
+
+
+# =============================================================================
+# Config
+# =============================================================================
 
 PREVIEW_PAGE_SIZE = 10
-CONFIGS = read_configs()
-UNIVERSE_TO_NATION = {
-    "nasdaq100": "us",
+
+DATASET_TO_NATION = {
     "sp500": "us",
     "dji": "us",
+    "nasdaq100": "us",
     "sxxp": "eu",
-    "sx5e": "eu"
+    "sx5e": "eu",
 }
 
-def _build_file_map(universe: str) -> dict:
-    out_dir = os.path.join("./Evaluation/data", universe)
-    data_dir = "./Evaluation/data"
+
+def read_configs() -> dict:
+    if not CONFIG_PATH.exists():
+        return {}
+
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+CONFIGS = read_configs()
+
+
+# =============================================================================
+# Model config -> pipeline target mapping
+# =============================================================================
+
+UNIVERSE_FILE_TO_TARGET = {
+    "{universe}.csv": "prices",
+    "{universe}_info.csv": "info",
+    "{universe}_market_cap.csv": "market_cap",
+    "{universe}_alpha158.csv": "alpha158",
+    "{universe}_alpha360.csv": "alpha360",
+    "{universe}_tech.csv": "technicals",
+    "{universe}_sector_industry_matrix.npz": "sector_industry_matrix",
+    "{universe}_corr_matrix.npz": "corr_matrix",
+    "{universe}_wikidata_matrix.npz": "wikidata_matrix",
+    "{universe}_inc_matrix.npz": "inc_matrix",
+}
+
+MARKET_FILE_TO_TARGET = {
+    "{nation}_indexes.csv": ("auto", "indexes"),
+    "{nation}_market.csv": ("auto", "market"),
+    "cnnpred_market.csv": ("global", "cnnpred_market"),
+}
+
+
+def _template_basename(template: str) -> str:
+    return str(template).replace("\\", "/").split("/")[-1]
+
+
+def get_models() -> list[str]:
+    return list(CONFIGS.keys())
+
+
+def get_nation_from_universe(universe: str) -> str:
+    if universe not in DATASET_TO_NATION:
+        valid = ", ".join(sorted(DATASET_TO_NATION))
+        raise ValueError(f"Unknown universe '{universe}'. Valid values: {valid}")
+
+    return DATASET_TO_NATION[universe]
+
+
+def _resolve_market_nation(dataset: str, nation: str) -> str:
+    if nation == "auto":
+        return get_nation_from_universe(dataset)
+
+    return nation
+
+
+def _dedupe_keep_order(items: list) -> list:
+    out = []
+    seen = set()
+
+    for item in items:
+        key = json.dumps(item, sort_keys=True) if isinstance(item, list) else str(item)
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        out.append(item)
+
+    return out
+
+
+def _targets_from_model_config(
+    dataset: str,
+    model: str | None,
+) -> tuple[list[str], list[list[str]], list[str]]:
+    """
+    Reads Gradio/configs/model_to_data.json and converts required files into
+    pipeline targets.
+
+    Returns:
+        universe_targets
+        market_targets as [[nation, target], ...]
+        unsupported_files
+    """
+    if not model or model not in CONFIGS:
+        return ["prices"], [], []
+
+    raw_files = CONFIGS.get(model, [])
+
+    universe_targets = []
+    market_targets = []
+    unsupported_files = []
+
+    nation = get_nation_from_universe(dataset)
+
+    for file_template in raw_files:
+        template_key = _template_basename(file_template)
+
+        if template_key in UNIVERSE_FILE_TO_TARGET:
+            universe_targets.append(UNIVERSE_FILE_TO_TARGET[template_key])
+            continue
+
+        if template_key in MARKET_FILE_TO_TARGET:
+            nation_key, target_name = MARKET_FILE_TO_TARGET[template_key]
+            resolved_nation = _resolve_market_nation(dataset, nation_key)
+            market_targets.append([resolved_nation, target_name])
+            continue
+
+        try:
+            resolved_name = template_key.format(
+                universe=dataset,
+                nation=nation,
+            )
+        except Exception:
+            resolved_name = template_key
+
+        unsupported_files.append(resolved_name)
+
+    if not universe_targets and not market_targets and not unsupported_files:
+        universe_targets = ["prices"]
+
+    return (
+        _dedupe_keep_order(universe_targets),
+        _dedupe_keep_order(market_targets),
+        unsupported_files,
+    )
+
+
+# =============================================================================
+# File map for preview
+# =============================================================================
+
+def _build_file_map(universe: str) -> dict[str, str]:
+    out_dir = DATA_DIR / universe
+
     return {
-        "Dataset":                 os.path.join(out_dir,  f"{universe}.csv"),
-        "Info":                    os.path.join(out_dir,  f"{universe}_info.csv"),
-        "Market Cap":              os.path.join(out_dir,  f"{universe}_market_cap.csv"),
-        "Alpha158":                os.path.join(out_dir,  f"{universe}_alpha158.csv"),
-        "Alpha360":                os.path.join(out_dir,  f"{universe}_alpha360.csv"),
-        "Technicals":              os.path.join(out_dir,  f"{universe}_tech.csv"),
-        "US Indexes":              os.path.join(data_dir, "us_indexes.csv"),
-        "EU Indexes":              os.path.join(data_dir, "eu_indexes.csv"),
-        "US Market Info":          os.path.join(data_dir, "us_market.csv"),
-        "EU Market Info":          os.path.join(data_dir, "eu_market.csv"),
-        "CNNPred Market Features": os.path.join(data_dir, "cnnpred_market.csv"),
-        "News Relations":          os.path.join(data_dir, "news"),
+        "Dataset": str(out_dir / f"{universe}.csv"),
+        "Info": str(out_dir / f"{universe}_info.csv"),
+        "Market Cap": str(out_dir / f"{universe}_market_cap.csv"),
+        "Alpha158": str(out_dir / f"{universe}_alpha158.csv"),
+        "Alpha360": str(out_dir / f"{universe}_alpha360.csv"),
+        "Technicals": str(out_dir / f"{universe}_tech.csv"),
+        "US Indexes": str(DATA_DIR / "us_indexes.csv"),
+        "EU Indexes": str(DATA_DIR / "eu_indexes.csv"),
+        "US Market Info": str(DATA_DIR / "us_market.csv"),
+        "EU Market Info": str(DATA_DIR / "eu_market.csv"),
+        "CNNPred Market Features": str(DATA_DIR / "cnnpred_market.csv"),
+        "News Relations": str(DATA_DIR / "news"),
+        "Incidence Matrix": str(out_dir / f"{universe}_inc_matrix.npz"),
+        "Correlation Matrix": str(out_dir / f"{universe}_corr_matrix.npz"),
+        "Wikidata Matrix": str(out_dir / f"{universe}_wikidata_matrix.npz"),
+        "Sector and Industry Relations": str(out_dir / f"{universe}_sector_industry_matrix.npz"),
     }
 
 
+def dataset_base_path(universe: str) -> str:
+    return str(DATA_DIR / universe / f"{universe}.csv")
+
+
+def dataset_exists(universe: str) -> bool:
+    if not universe:
+        return False
+
+    return Path(dataset_base_path(universe)).exists()
+
+
+def get_preview_options(universe: str) -> list[str]:
+    if not universe:
+        return []
+
+    return [
+        label
+        for label, path in _build_file_map(universe).items()
+        if Path(path).exists()
+    ]
+
+
+def _relative_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+# =============================================================================
+# Dependency inspection
+# =============================================================================
+
+def _expand_universe_targets(targets: list[str] | tuple[str, ...]) -> list[str]:
+    ordered = []
+    visited = set()
+
+    def visit(target_name: str) -> None:
+        if target_name in visited:
+            return
+
+        if target_name not in TARGETS:
+            valid = ", ".join(sorted(TARGETS))
+            raise ValueError(
+                f"Unknown universe target '{target_name}'. Valid targets: {valid}"
+            )
+
+        for dep in TARGETS[target_name].deps:
+            visit(dep)
+
+        visited.add(target_name)
+        ordered.append(target_name)
+
+    for target_name in targets:
+        visit(target_name)
+
+    return ordered
+
+
+def _expand_market_targets(targets: list[str] | tuple[str, ...]) -> list[str]:
+    ordered = []
+    visited = set()
+
+    def visit(target_name: str) -> None:
+        if target_name in visited:
+            return
+
+        if target_name not in MARKET_TARGETS:
+            valid = ", ".join(sorted(MARKET_TARGETS))
+            raise ValueError(
+                f"Unknown market target '{target_name}'. Valid targets: {valid}"
+            )
+
+        for dep in MARKET_TARGETS[target_name].deps:
+            visit(dep)
+
+        visited.add(target_name)
+        ordered.append(target_name)
+
+    for target_name in targets:
+        visit(target_name)
+
+    return ordered
+
+
+def _collect_required_files(
+    dataset: str,
+    universe_targets: list[str],
+    market_targets: list[list[str]] | list[tuple[str, str]],
+) -> list[dict]:
+    rows = []
+
+    universe_ctx = PipelineContext(
+        universe=dataset,
+        base_dir=EVALUATION_DIR,
+    )
+
+    for target_name in _expand_universe_targets(universe_targets):
+        target = TARGETS[target_name]
+
+        for path in target.outputs(universe_ctx):
+            path = Path(path)
+
+            rows.append(
+                {
+                    "scope": "dataset",
+                    "target": target_name,
+                    "path": path,
+                    "exists": path.exists(),
+                }
+            )
+
+    market_targets_by_nation = defaultdict(list)
+
+    for nation, target_name in market_targets:
+        market_targets_by_nation[nation].append(target_name)
+
+    for nation, targets in market_targets_by_nation.items():
+        market_ctx = MarketContext(
+            nation=nation,
+            base_dir=EVALUATION_DIR,
+        )
+
+        for target_name in _expand_market_targets(targets):
+            target = MARKET_TARGETS[target_name]
+
+            for path in target.outputs(market_ctx):
+                path = Path(path)
+
+                rows.append(
+                    {
+                        "scope": "market",
+                        "target": target_name,
+                        "path": path,
+                        "exists": path.exists(),
+                    }
+                )
+
+    unique_rows = []
+    seen_paths = set()
+
+    for row in rows:
+        path_key = str(row["path"])
+
+        if path_key in seen_paths:
+            continue
+
+        seen_paths.add(path_key)
+        unique_rows.append(row)
+
+    return unique_rows
+
+
+def _format_required_files_report(
+    rows: list[dict],
+    unsupported_files: list[str] | None = None,
+) -> str:
+    unsupported_files = unsupported_files or []
+
+    if not rows and not unsupported_files:
+        return "No required files found."
+
+    lines = []
+
+    existing = sum(1 for row in rows if row["exists"])
+    missing = len(rows) - existing
+
+    lines.append(f"Required files: {len(rows)}")
+    lines.append(f"Available: {existing}")
+    lines.append(f"Missing: {missing}")
+    lines.append("")
+
+    for row in rows:
+        status = "OK" if row["exists"] else "MISSING"
+        path = _relative_path(row["path"])
+
+        lines.append(
+            f"[{status}] {row['target']} -> {path}"
+        )
+
+    if unsupported_files:
+        lines.append("")
+        lines.append("Files configured for the model but not linked to a download target:")
+
+        for file_name in unsupported_files:
+            lines.append(f"[UNSUPPORTED] {file_name}")
+
+    return "\n".join(lines)
+
+
+def inspect_required_files(dataset: str | None, model: str | None):
+    if not dataset and not model:
+        return (
+            "Select a dataset and a model.",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+    if not dataset:
+        return (
+            "Select a dataset.",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+    if not model:
+        return (
+            "Select a model.",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+    try:
+        universe_targets, market_targets, unsupported_files = _targets_from_model_config(
+            dataset=dataset,
+            model=model,
+        )
+
+        rows = _collect_required_files(
+            dataset=dataset,
+            universe_targets=universe_targets,
+            market_targets=market_targets,
+        )
+
+        report = _format_required_files_report(rows, unsupported_files)
+        missing_count = sum(1 for row in rows if not row["exists"])
+
+        if missing_count == 0:
+            if unsupported_files:
+                status = "All downloadable required files are available. Some configured files are unsupported."
+            else:
+                status = "All required files are already available."
+
+            button = gr.update(
+                value="No Missing Files",
+                interactive=False,
+            )
+        else:
+            status = f"{missing_count} required file(s) are missing."
+            button = gr.update(
+                value=f"Download Missing Files ({missing_count})",
+                interactive=True,
+            )
+
+        return (
+            status,
+            report,
+            button,
+            universe_targets,
+            market_targets,
+        )
+
+    except Exception as exc:
+        return (
+            f"File inspection failed: {exc}",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+
+def download_missing_files(
+    dataset: str | None,
+    model: str | None,
+    universe_targets: list[str] | None,
+    market_targets: list[list[str]] | None,
+):
+    if not dataset:
+        return (
+            "Select a dataset first.",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+    if not model:
+        return (
+            "Select a model first.",
+            "",
+            gr.update(value="Download Missing Files", interactive=False),
+            [],
+            [],
+        )
+
+    if not universe_targets and not market_targets:
+        universe_targets, market_targets, _ = _targets_from_model_config(
+            dataset=dataset,
+            model=model,
+        )
+
+    universe_targets = universe_targets or []
+    market_targets = market_targets or []
+
+    try:
+        if universe_targets:
+            run_universe_pipeline(
+                dataset,
+                targets=universe_targets,
+                force=False,
+                verbose=True,
+                workers=4,
+            )
+
+        market_targets_by_nation = defaultdict(list)
+
+        for nation, target_name in market_targets:
+            market_targets_by_nation[nation].append(target_name)
+
+        for nation, targets in market_targets_by_nation.items():
+            run_market_pipeline(
+                nation,
+                targets=targets,
+                force=False,
+                verbose=True,
+                workers=4,
+            )
+
+    except Exception as exc:
+        status, report, button, universe_state, market_state = inspect_required_files(
+            dataset,
+            model,
+        )
+
+        return (
+            f"Download failed: {exc}",
+            report,
+            button,
+            universe_state,
+            market_state,
+        )
+
+    status, report, button, universe_state, market_state = inspect_required_files(
+        dataset,
+        model,
+    )
+
+    return (
+        "Download completed. Required files are now available.",
+        report,
+        button,
+        universe_state,
+        market_state,
+    )
+
+
+# =============================================================================
+# Preview helpers
+# =============================================================================
+
 @lru_cache(maxsize=256)
 def _count_csv_rows(path: str) -> int:
-    """
-    Counts CSV rows without loading the full file into memory.
-    Subtracts 1 for the header.
-    """
     try:
         with open(path, "rb") as f:
             total_lines = sum(
                 chunk.count(b"\n")
                 for chunk in iter(lambda: f.read(1024 * 1024), b"")
             )
+
         return max(total_lines - 1, 0)
+
     except Exception:
         return 0
 
@@ -82,9 +586,6 @@ def _csv_preview_page_df(
     page: int = 0,
     page_size: int = PREVIEW_PAGE_SIZE,
 ) -> tuple[pd.DataFrame, int]:
-    """
-    Loads only one page from a CSV file.
-    """
     total_rows = _count_csv_rows(path)
     total_pages = max(math.ceil(total_rows / page_size), 1)
 
@@ -112,39 +613,66 @@ def _safe_json_load(path: str):
 
 
 def _flatten_json_records(file_name: str, payload) -> list[dict]:
-    """
-    Returns a list of table rows based on the JSON content.
-    - dict -> 1 row
-    - list[dict] -> one row per element
-    - other types -> 1 row with raw_json
-    """
     if isinstance(payload, dict):
-        row = pd.json_normalize(payload, sep=".").to_dict(orient="records")[0]
+        rows = pd.json_normalize(payload, sep=".").to_dict(orient="records")
+
+        if not rows:
+            return [{"file_name": file_name}]
+
+        row = rows[0]
         row["file_name"] = file_name
         return [row]
 
     if isinstance(payload, list):
         if len(payload) == 0:
-            return [{
-                "file_name": file_name,
-                "message": "Empty JSON list",
-            }]
+            return [
+                {
+                    "file_name": file_name,
+                    "message": "Empty JSON list",
+                }
+            ]
 
         if all(isinstance(item, dict) for item in payload):
             rows = pd.json_normalize(payload, sep=".").to_dict(orient="records")
+
             for row in rows:
                 row["file_name"] = file_name
+
             return rows
 
-        return [{
+        return [
+            {
+                "file_name": file_name,
+                "raw_json": json.dumps(payload, ensure_ascii=False),
+            }
+        ]
+
+    return [
+        {
             "file_name": file_name,
             "raw_json": json.dumps(payload, ensure_ascii=False),
-        }]
+        }
+    ]
 
-    return [{
-        "file_name": file_name,
-        "raw_json": json.dumps(payload, ensure_ascii=False),
-    }]
+
+def _json_preview_page_df(
+    path: str,
+    page: int = 0,
+    page_size: int = PREVIEW_PAGE_SIZE,
+) -> tuple[pd.DataFrame, int]:
+    payload, err = _safe_json_load(path)
+
+    if err is not None:
+        return pd.DataFrame({"file_name": [Path(path).name], "error": [err]}), 1
+
+    rows = _flatten_json_records(Path(path).name, payload)
+    total_rows = len(rows)
+
+    page = max(0, int(page))
+    start = page * page_size
+    end = start + page_size
+
+    return pd.DataFrame(rows[start:end]), total_rows
 
 
 def _directory_json_preview_page_df(
@@ -153,22 +681,17 @@ def _directory_json_preview_page_df(
     page_size: int = PREVIEW_PAGE_SIZE,
     max_rows_per_file: int = 20,
 ) -> tuple[pd.DataFrame, int]:
-    """
-    Pagetes JSON files inside a directory.
-    Each JSON file can produce multiple rows.
-    For speed, Pagetion is file-based first, then flattened.
-    """
-    json_files = sorted([
-        f for f in os.listdir(path)
-        if os.path.isfile(os.path.join(path, f)) and f.lower().endswith(".json")
-    ])
+    json_files = sorted(
+        [
+            f for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f)) and f.lower().endswith(".json")
+        ]
+    )
 
     total_files = len(json_files)
 
     if total_files == 0:
-        return pd.DataFrame({
-            "message": [f"No JSON files found in: {path}"]
-        }), 0
+        return pd.DataFrame({"message": [f"No JSON files found in: {path}"]}), 0
 
     page = max(0, int(page))
     start_file = page * page_size
@@ -183,34 +706,74 @@ def _directory_json_preview_page_df(
         payload, err = _safe_json_load(full_path)
 
         if err is not None:
-            rows.append({
-                "file_name": file_name,
-                "error": err,
-            })
+            rows.append(
+                {
+                    "file_name": file_name,
+                    "error": err,
+                }
+            )
             continue
 
         file_rows = _flatten_json_records(file_name, payload)
         rows.extend(file_rows[:max_rows_per_file])
 
     if not rows:
-        return pd.DataFrame({
-            "message": [f"No JSON rows found in: {path}"]
-        }), total_files
+        return pd.DataFrame({"message": [f"No JSON rows found in: {path}"]}), total_files
 
     df = pd.DataFrame(rows)
 
-    cols = list(df.columns)
     preferred = [
-        "file_name", "date", "title", "source", "ticker",
-        "content", "summary", "url", "error"
-    ]
-    ordered = [c for c in preferred if c in cols] + [
-        c for c in cols if c not in preferred
+        "file_name",
+        "date",
+        "title",
+        "source",
+        "ticker",
+        "content",
+        "summary",
+        "url",
+        "error",
     ]
 
-    df = df[ordered]
+    ordered = [c for c in preferred if c in df.columns] + [
+        c for c in df.columns if c not in preferred
+    ]
 
-    return df, total_files
+    return df[ordered], total_files
+
+
+def _npz_preview_page_df(path: str) -> tuple[pd.DataFrame, int]:
+    rows = []
+
+    try:
+        with np.load(path, allow_pickle=True) as data:
+            for key in data.files:
+                arr = data[key]
+
+                preview_value = ""
+
+                try:
+                    flat = arr.ravel()
+                    preview_value = str(flat[:5].tolist())
+                except Exception:
+                    preview_value = ""
+
+                rows.append(
+                    {
+                        "array": key,
+                        "shape": str(arr.shape),
+                        "dtype": str(arr.dtype),
+                        "preview": preview_value,
+                    }
+                )
+
+    except Exception as exc:
+        rows.append(
+            {
+                "error": str(exc),
+            }
+        )
+
+    return pd.DataFrame(rows), len(rows)
 
 
 def load_preview_file_page(
@@ -219,15 +782,7 @@ def load_preview_file_page(
     page: int = 0,
     page_size: int = PREVIEW_PAGE_SIZE,
 ):
-    """
-    Loads one preview page and returns:
-    dataframe,
-    page label,
-    previous button update,
-    next button update,
-    normalized current page.
-    """
-    if not preview_name:
+    if not universe or not preview_name:
         return (
             pd.DataFrame(),
             "0 / 0",
@@ -255,7 +810,17 @@ def load_preview_file_page(
             page=page,
             page_size=page_size,
         )
-        # item_label = "righe"
+
+    elif path.endswith(".json"):
+        df, total_items = _json_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+
+    elif path.endswith(".npz"):
+        df, total_items = _npz_preview_page_df(path)
+        page = 0
 
     elif os.path.isdir(path):
         df, total_items = _directory_json_preview_page_df(
@@ -263,7 +828,6 @@ def load_preview_file_page(
             page=page,
             page_size=page_size,
         )
-        # item_label = "file JSON"
 
     else:
         return (
@@ -277,12 +841,7 @@ def load_preview_file_page(
     total_pages = max(math.ceil(total_items / page_size), 1)
     page = max(0, min(page, total_pages - 1))
 
-    # start_item = page * page_size + 1 if total_items > 0 else 0
-    # end_item = min((page + 1) * page_size, total_items)
-
     page_label = f"{page + 1} / {total_pages}"
-        # f"— {item_label} {start_item}-{end_item} di {total_items}"
-
 
     return (
         df,
@@ -318,42 +877,88 @@ def prev_preview_page(universe: str, preview_name: str, current_page: int):
 
 
 def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
-    """
-    Backward-compatible function.
-    It now returns only the first preview page.
-    """
     df, _, _, _, _ = load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=0,
     )
+
     return df
 
 
 def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
-    """
-    Backward-compatible function.
-    Prefer reset_preview_page in the Gradio UI.
-    """
     return load_preview_file(universe, preview_name)
 
 
-def refresh_preview_controls(universe: str):
+def refresh_preview_controls(
+    universe: str,
+    universe_targets: list[str] | None = None,
+    market_targets: list[list[str]] | None = None,
+):
     """
-    Only refreshes the dropdown options.
-    Does not load the full preview automatically.
+    Updates the preview dropdown.
+
+    If universe_targets / market_targets are provided, it shows only the files
+    required by the selected model and already available on disk.
+
+    Otherwise it falls back to all available preview files for the dataset.
     """
     if not universe:
         return gr.update(choices=[], value=None)
 
-    options = get_preview_options(universe)
+    universe_targets = universe_targets or []
+    market_targets = market_targets or []
+
+    # Fallback: if no model/targets selected, show all available files
+    if not universe_targets and not market_targets:
+        options = get_preview_options(universe)
+        default_preview = options[0] if options else None
+        return gr.update(choices=options, value=default_preview)
+
+    # Build label lookup from the preview file map
+    file_map = _build_file_map(universe)
+
+    path_to_label = {
+        str(Path(path).resolve()): label
+        for label, path in file_map.items()
+    }
+
+    try:
+        rows = _collect_required_files(
+            dataset=universe,
+            universe_targets=universe_targets,
+            market_targets=market_targets,
+        )
+    except Exception:
+        return gr.update(choices=[], value=None)
+
+    options = []
+
+    for row in rows:
+        path = Path(row["path"])
+
+        if not path.exists():
+            continue
+
+        resolved_path = str(path.resolve())
+        label = path_to_label.get(resolved_path)
+
+        if label is None:
+            # fallback if the file exists but is not explicitly mapped
+            label = path.name
+
+        if label not in options:
+            options.append(label)
+
     default_preview = options[0] if options else None
 
     return gr.update(choices=options, value=default_preview)
 
-# -------------------------------------------------
-# BUTTON STATE
-# -------------------------------------------------
+
+# =============================================================================
+# Backward-compatible helpers for old UI pieces
+# =============================================================================
+
 def update_existing_button(universe: str):
     if dataset_exists(universe):
         return gr.update(
@@ -361,22 +966,28 @@ def update_existing_button(universe: str):
             interactive=True,
             variant="secondary",
         )
+
     return gr.update(
         value="Dataset Not Available",
         interactive=False,
         variant="stop",
     )
 
+
 def update_datasets(market):
     if market == "EU":
         datasets = ["sx5e", "sxxp"]
-    else:
+    elif market == "USA":
         datasets = ["sp500", "nasdaq100", "dji"]
+    else:
+        datasets = []
+
     return gr.update(choices=datasets, value=datasets[0] if datasets else None)
 
 
 def on_dataset_change(dataset_value):
     btn_update = update_existing_button(dataset_value)
+
     return (
         btn_update,
         "",
@@ -391,6 +1002,7 @@ def on_dataset_change(dataset_value):
 
 def on_market_change(market_value):
     new_dataset_update = update_datasets(market_value)
+
     return (
         new_dataset_update,
         "",
@@ -402,13 +1014,14 @@ def on_market_change(market_value):
         0,
     )
 
+
 def use_existing_dataset(universe: str):
     if not universe:
         return (
-            "❌ Select a dataset",
+            "Select a dataset.",
             gr.update(choices=[], value=None),
             pd.DataFrame(),
-            "Page 0 / 0",
+            "0 / 0",
             gr.update(interactive=False),
             gr.update(interactive=False),
             0,
@@ -417,10 +1030,10 @@ def use_existing_dataset(universe: str):
 
     if not dataset_exists(universe):
         return (
-            f"❌ The dataset '{universe}' does not exist",
+            f"The dataset '{universe}' does not exist.",
             gr.update(choices=[], value=None),
             pd.DataFrame(),
-            "Page 0 / 0",
+            "0 / 0",
             gr.update(interactive=False),
             gr.update(interactive=False),
             0,
@@ -437,13 +1050,13 @@ def use_existing_dataset(universe: str):
         )
     else:
         preview_df = pd.DataFrame()
-        page_label = "Page 0 / 0"
+        page_label = "0 / 0"
         prev_btn = gr.update(interactive=False)
         next_btn = gr.update(interactive=False)
         page_state = 0
 
     return (
-        f"✅ Dataset '{universe}' already present, preview loaded",
+        f"Dataset '{universe}' already present, preview loaded.",
         gr.update(choices=options, value=default_preview),
         preview_df,
         page_label,
@@ -454,409 +1067,47 @@ def use_existing_dataset(universe: str):
     )
 
 
-# -------------------------------------------------
-# MOCK DATA CREATION
-# -------------------------------------------------
-def _mock_create_dataset_files(universe: str) -> None:
+def run_data_pipeline(universe: str):
     """
-    Creates fake files compatible with the UI preview.
-    This does not replace the actual logic in Evaluation/main.py:
-    it is intended solely for demonstration purposes without using paid APIs.
+    Old button compatibility.
+    New UI should prefer inspect_required_files + download_missing_files.
     """
-    out_dir = os.path.join("./Evaluation/data", universe)
-    _ensure_dir(out_dir)
-    _ensure_dir("./Evaluation/data")
-
-    rng = np.random.default_rng(42)
-    dates = pd.date_range(start="2020-01-01", periods=120, freq="D")
-    tickers = ["AAA", "BBB", "CCC", "DDD"]
-
-    # --- price data ---
-    rows = []
-    for t in tickers:
-        base = 100 + rng.normal(0, 2)
-        prices = base + np.cumsum(rng.normal(0, 1, size=len(dates)))
-        for d, p in zip(dates, prices):
-            rows.append({
-                "date": d,
-                "instrument": t,
-                "adj_open":  p + rng.normal(0, 0.5),
-                "adj_high":  p + abs(rng.normal(0, 1)),
-                "adj_low":   p - abs(rng.normal(0, 1)),
-                "adj_close": p,
-                "volume":    int(rng.integers(1000, 10000)),
-            })
-
-    df_prices = pd.DataFrame(rows)
-    df_prices.to_csv(os.path.join(out_dir, f"{universe}.csv"), index=False)
-
-    # --- info ---
-    pd.DataFrame({
-        "instrument": tickers,
-        "Name":        [f"Company {t}" for t in tickers],
-        "GicSector":   ["Tech", "Finance", "Tech", "Energy"],
-        "GicIndustry": ["Software", "Banks", "Hardware", "Oil & Gas"],
-    }).to_csv(os.path.join(out_dir, f"{universe}_info.csv"), index=False)
-
-    # --- market cap ---
-    df_mc = df_prices[["date", "instrument"]].copy()
-    df_mc["market_cap"] = rng.integers(1_000_000, 10_000_000, size=len(df_mc))
-    df_mc.to_csv(os.path.join(out_dir, f"{universe}_market_cap.csv"), index=False)
-
-    # --- feature files ---
-    feature_cols = {
-        "alpha158": ["alpha_001", "alpha_002", "alpha_003"],
-        "alpha360": ["alpha_101", "alpha_102", "alpha_103"],
-        "tech":     ["rsi", "macd", "atr"],
-    }
-    for suffix, cols in feature_cols.items():
-        dff = df_prices[["date", "instrument"]].copy()
-        for c in cols:
-            dff[c] = rng.normal(0, 1, size=len(dff))
-        dff.to_csv(os.path.join(out_dir, f"{universe}_{suffix}.csv"), index=False)
-
-    # --- adjacency matrices ---
-    _write_sector_matrix(out_dir, universe, tickers, rng)
-    _write_corr_matrix(out_dir, universe, tickers, dates, rng)
-    _write_wikidata_matrix(out_dir, universe, tickers, dates, rng)
-    _write_incidence_matrix(out_dir, universe, tickers, rng)
-
-    # --- market information ---
-    for region in ["us", "eu"]:
-        pd.DataFrame({
-            "date": dates,
-            f"{region}_index_1": 100 + np.cumsum(rng.normal(0, 1, len(dates))),
-            f"{region}_index_2": 110 + np.cumsum(rng.normal(0, 1, len(dates))),
-        }).to_csv(os.path.join("./Evaluation/data", f"{region}_indexes.csv"), index=False)
-
-        pd.DataFrame({
-            "date":              dates,
-            "market_return":     rng.normal(0, 0.01, len(dates)),
-            "market_volatility": np.abs(rng.normal(0.02, 0.01, len(dates))),
-        }).to_csv(os.path.join("./Evaluation/data", f"{region}_market.csv"), index=False)
-
-    # --- CNNPred market features ---
-    pd.DataFrame({
-        "date":           dates,
-        "fred_1":         rng.normal(0, 1, len(dates)),
-        "commodity_1":    rng.normal(0, 1, len(dates)),
-        "world_index_1":  rng.normal(0, 1, len(dates)),
-    }).to_csv("./Evaluation/data/cnnpred_market.csv", index=False)
-
-    news_dir = os.path.join("./Evaluation/data", "news")
-    _ensure_dir(news_dir)
-
-    # --- fake news json files ---
-    for i in range(25):
-        payload = {
-            "ticker": tickers[i % len(tickers)],
-            "title": f"Mock news {i}",
-            "date": str(dates[i].date()),
-            "source": "demo",
-            "sentiment": float(rng.normal(0, 1)),
-            "entities": ["macro", "earnings"],
-        }
-        file_name = f"{tickers[i % len(tickers)]}.{i:02d}.json"
-        with open(os.path.join(news_dir, file_name), "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
-def _write_sector_matrix(out_dir, universe, tickers, rng):
-    adj = rng.integers(0, 2, size=(len(tickers), len(tickers), 2))
-    np.savez_compressed(
-        os.path.join(out_dir, f"{universe}_sector_industry_matrix.npz"),
-        adj_matrix=adj,
-        dates=np.array([np.nan]),
-        relations=np.array(["same_sector", "same_industry"], dtype=object),
-        tickers=np.array(tickers, dtype=object),
-    )
-
-
-def _write_corr_matrix(out_dir, universe, tickers, dates, rng):
-    adj = rng.integers(0, 2, size=(10, len(tickers), len(tickers), 2))
-    np.savez_compressed(
-        os.path.join(out_dir, f"{universe}_corr_matrix.npz"),
-        adj_matrix=adj,
-        dates=pd.date_range("2020-01-01", periods=10, freq="7D").values,
-        relations=np.array(["pos_corr", "neg_corr"], dtype=object),
-        tickers=np.array(tickers, dtype=object),
-    )
-
-
-def _write_wikidata_matrix(out_dir, universe, tickers, dates, rng):
-    adj = rng.integers(0, 2, size=(5, len(tickers), len(tickers), 3))
-    np.savez_compressed(
-        os.path.join(out_dir, f"{universe}_wikidata_matrix.npz"),
-        adj_matrix=adj,
-        dates=pd.date_range("2020-01-01", periods=5, freq="30D").values,
-        relations=np.array(["parent", "subsidiary", "partner"], dtype=object),
-        tickers=np.array(tickers, dtype=object),
-    )
-
-
-def _write_incidence_matrix(out_dir, universe, tickers, rng):
-    inc = rng.integers(0, 2, size=(len(tickers), 6))
-    np.savez_compressed(
-        os.path.join(out_dir, f"{universe}_inc_matrix.npz"),
-        inc_matrix=inc,
-        relations=np.array([f"E{i}" for i in range(6)], dtype=object),
-        tickers=np.array(tickers, dtype=object),
-    )
-
-
-# -------------------------------------------------
-# PREVIEW HELPERS
-# -------------------------------------------------
-
-def get_preview_options(universe: str) -> list[str]:
-    return [label for label, path in _build_file_map(universe).items() if os.path.exists(path)]
-
-
-def _csv_preview_df(path: str, max_rows: int = 20) -> pd.DataFrame:
-    return pd.read_csv(path).head(max_rows)
-
-
-def _safe_json_load(path: str):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f), None
-    except Exception as e:
-        return None, str(e)
-
-def _flatten_json_records(file_name: str, payload) -> list[dict]:
-    """
-    Returns a list of table rows based on the JSON content.
-    - dict  -> 1 row
-    - list[dict] -> one row per element
-    - other types -> 1 row with raw_json
-    """
-    # Case 1: single JSON object
-    if isinstance(payload, dict):
-        row = pd.json_normalize(payload, sep=".").to_dict(orient="records")[0]
-        row["file_name"] = file_name
-        return [row]
-
-    # Case 2: JSON object list
-    if isinstance(payload, list):
-        if len(payload) == 0:
-            return [{
-                "file_name": file_name,
-                "message": "Empty JSON list",
-            }]
-
-        # if all or almost all are strings, split them into lines
-        if all(isinstance(item, dict) for item in payload):
-            rows = pd.json_normalize(payload, sep=".").to_dict(orient="records")
-            for row in rows:
-                row["file_name"] = file_name
-            return rows
-
-        # non-tabular list
-        return [{
-            "file_name": file_name,
-            "raw_json": json.dumps(payload, ensure_ascii=False),
-        }]
-
-    # Case 3: type that cannot be handled in a table
-    return [{
-        "file_name": file_name,
-        "raw_json": json.dumps(payload, ensure_ascii=False),
-    }]
-
-def _directory_json_preview_df(path: str, max_files: int = 20, max_rows_per_file: int = 20) -> pd.DataFrame:
-    json_files = sorted(
-        [
-            f for f in os.listdir(path)
-            if os.path.isfile(os.path.join(path, f)) and f.lower().endswith(".json")
-        ]
-    )[:max_files]
-
-    rows = []
-    for file_name in json_files:
-        full_path = os.path.join(path, file_name)
-        payload, err = _safe_json_load(full_path)
-
-        if err is not None:
-            rows.append({
-                "file_name": file_name,
-                "error": err,
-            })
-            continue
-
-        file_rows = _flatten_json_records(file_name, payload)
-
-        # limits the number of lines per file, so the preview doesn't get too long
-        rows.extend(file_rows[:max_rows_per_file])
-
-    if not rows:
-        return pd.DataFrame({
-            "message": [f"No JSON files found in: {path}"]
-        })
-
-    df = pd.DataFrame(rows)
-
-    cols = list(df.columns)
-    preferred = [
-        "file_name", "date", "title", "source", "ticker",
-        "content", "summary", "url", "error"
-    ]
-    ordered = [c for c in preferred if c in cols] + [c for c in cols if c not in preferred]
-    df = df[ordered]
-
-    return df
-
-def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
-    if not preview_name:
-        return pd.DataFrame()
-
-    path = _build_file_map(universe).get(preview_name)
-    if not path or not os.path.exists(path):
-        return pd.DataFrame({"message": [f"File not found: {preview_name}"]})
-
-    if path.endswith(".csv"):
-        return _csv_preview_df(path, max_rows=20)
-
-    if os.path.isdir(path):
-        return _directory_json_preview_df(path, max_files=20)
-
-    return pd.DataFrame({"message": [f"Format not supported: {path}"]})
-
-
-def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
-    return load_preview_file(universe, preview_name)
-
-# -------------------------------------------------
-# MAIN PIPELINE
-# -------------------------------------------------
-def run_data_pipeline(universe: str, progress=gr.Progress(track_tqdm=False)):
     if not universe:
         return (
-            "❌ Select a dataset",
+            "Select a dataset.",
             update_existing_button(universe),
         )
 
     try:
-        progress(0.0, desc="Pipeline initialisation...")
+        run_universe_pipeline(
+            universe,
+            targets=["prices"],
+            force=False,
+            verbose=True,
+            workers=4,
+        )
 
-        if DRY_RUN:
-            _run_mock_pipeline(universe, progress)
-            status_msg = f"✅ DEMO pipeline completed for “{universe}” (no actual downloads performed)"
-        else:
-            _run_real_pipeline(universe, progress)
-            status_msg = f"✅ Pipeline completed for '{universe}'"
-
-        progress(0.97, desc="Loading preview...")
-        options = get_preview_options(universe)
-        default_preview = options[0] if options else None
-        preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
-
-        progress(1.0, desc="Completed")
         return (
-            status_msg,
+            f"Dataset '{universe}' downloaded.",
             update_existing_button(universe),
         )
 
-    except Exception as e:
+    except Exception as exc:
         return (
-            f"❌ Error during the pipeline: {str(e)}",
+            f"Error during pipeline: {exc}",
             update_existing_button(universe),
         )
 
-def refresh_preview_controls(universe: str):
-    if not universe:
-        return gr.update(choices=[], value=None), pd.DataFrame()
-
-    options = get_preview_options(universe)
-    default_preview = options[0] if options else None
-    preview_df = load_preview_file(universe, default_preview) if default_preview else pd.DataFrame()
-
-    return (
-        gr.update(choices=options, value=default_preview),
-        preview_df,
-    )
-
-def _run_mock_pipeline(universe: str, progress) -> None:
-    steps = [
-        (0.10, f"Creating mock dataset for {universe}..."),
-        (0.30, "Simulating feature extraction..."),
-        (0.45, "Simulating compute relation..."),
-        (0.60, "Simulating incidence matrix..."),
-        (0.75, "Simulating market information..."),
-        (0.90, "Simulating CNNPred market features..."),
-    ]
-    for pct, desc in steps:
-        progress(pct, desc=desc)
-
-    _mock_create_dataset_files(universe)
-
-
-def _run_real_pipeline(universe: str, progress) -> None:
-    from Evaluation import main as eval_main
-
-    steps = [
-        (0.05, f"1/6 Download dataset: {universe}", lambda: eval_main.demo_download_dataset(universe)),
-        (0.25, f"2/6 Feature extraction: {universe}", lambda: eval_main.demo_feature_extraction(universe)),
-        (0.45, f"3/6 Compute relation: {universe}", lambda: eval_main.demo_compute_relation(universe)),
-        (0.65, f"4/6 Incidence matrix: {universe}", lambda: eval_main.demo_incidence_matrix(universe)),
-        (0.80, "5/6 Market information", lambda: eval_main.demo_market_information()),
-        (0.92, "6/6 CNNPred market features", lambda: eval_main.cnnpred_market_features()),
-    ]
-    for pct, desc, fn in steps:
-        progress(pct, desc=desc)
-        fn()
-
-def get_models():
-    return list(CONFIGS.keys())
-
-def _build_file_lookup(universe: str) -> dict:
-    file_map = _build_file_map(universe)
-
-    return {
-        os.path.basename(os.path.normpath(path)): {
-            "label": label,
-            "path": path,
-        }
-        for label, path in file_map.items()
-    }
-
-def get_nation_from_universe(universe: str) -> str:
-    try:
-        return UNIVERSE_TO_NATION[universe]
-    except KeyError:
-        raise ValueError(f"Unknown universe: {universe}")
 
 def get_files(universe, models):
-    raw_files = CONFIGS[models]
+    """
+    Old Check Files button compatibility.
+    """
+    if not universe:
+        return "Select a dataset."
 
-    nation = get_nation_from_universe(universe).lower()
-    lookup = _build_file_lookup(universe)
+    if not models:
+        return "Select a model."
 
-    lines = [
-        f"🌍 Universe: {universe}",
-        f"🏳️ Nation: {nation.upper()}",
-        "",
-        "📁 File check:",
-        ""
-    ]
-
-    for file_template in raw_files:
-        filename = file_template.format(
-            universe=universe,
-            nation=nation
-        )
-
-        item = lookup.get(filename)
-
-        if item is None:
-            lines.append(f"❓ {filename} — not configured in file map")
-            continue
-
-        label = item["label"]
-        path = item["path"]
-
-        if os.path.exists(path):
-            lines.append(f"✅ {label} ")
-        else:
-            lines.append(f"❌ {label} ")
-
-    return "\n".join(lines)
+    _, report, _, _, _ = inspect_required_files(universe, models)
+    return report

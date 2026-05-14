@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from utils.validation import validate_prices_decorator
+from Evaluation.utils.validation import validate_prices_decorator
 
 
 def _compute_feature_correlations(

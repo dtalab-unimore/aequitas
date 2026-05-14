@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 from numpy import maximum, minimum
 
-from utils.validation import validate_prices_decorator
+from Evaluation.utils.validation import validate_prices_decorator
 
 from .utils import ref, mean, std, slope, rsquare, resi, max_, min_, quantile, rank, idx_max, idx_min, corr, sum_
 

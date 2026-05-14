@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.validation import validate_prices_decorator
+from Evaluation.utils.validation import validate_prices_decorator
 
 from .utils import ref
 

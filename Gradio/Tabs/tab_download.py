@@ -1,190 +1,369 @@
 import gradio as gr
 
 from Gradio.data_load import (
-    run_data_pipeline,
-    use_existing_dataset,
+    get_models,
+    inspect_required_files,
+    download_missing_files,
     refresh_preview_controls,
     reset_preview_page,
     next_preview_page,
     prev_preview_page,
-    on_dataset_change,
-    on_market_change, get_models, get_files,
 )
 
 
+DATASETS = ["sp500", "dji", "nasdaq100", "sxxp", "sx5e"]
+
+
 def build_tab():
-    with gr.Tab("Download Data"):
-        with gr.Row():
-            market = gr.Dropdown(["EU", "USA"], label="Market", value=None)
-            dataset = gr.Dropdown(label="Dataset")
-            status = gr.Textbox(label="Status")
+    with gr.Tab("Download Data", elem_id="main-tabs"):
+        with gr.Column(elem_classes=["download-shell"]):
 
-        with gr.Row():
-            with gr.Column(scale=2):
-                gr.Markdown("")
-            with gr.Column(scale=3):
-                btn_download = gr.Button("Fetch Dataset", variant="primary", min_width=140)
-            with gr.Column(scale=3):
-                btn_existing = gr.Button(
-                    "Dataset Not Available", interactive=False, variant="stop", min_width=140
-                )
-            with gr.Column(scale=2):
-                gr.Markdown("")
+            # ── Top row: controls + required files ────────────────────────
+            with gr.Row(elem_classes=["download-top-row"]):
 
-        gr.Markdown("---")
+                # LEFT – selezione + azione
+                with gr.Column(scale=1, min_width=260, elem_classes=["download-card", "download-controls-card"]):
+                    gr.Markdown(
+                        """<div class="evaluation-output-header">
+                            <span>Configuration</span>
+                        </div>"""
+                    )
 
-        with gr.Row():
-            with gr.Column():
-                universes = gr.Dropdown(
-                    choices=['sp500', "dji", "nasdaq100", "sxxp", "sx5e"],
-                    label="Select the dataset",
-                    value=None
-                )
+                    dataset = gr.Dropdown(
+                        choices=DATASETS,
+                        label="Dataset",
+                        value=None,
+                    )
+                    models = gr.Dropdown(
+                        choices=get_models(),
+                        label="Model",
+                        value=None,
+                    )
+                    status = gr.Textbox(
+                        label="Status",
+                        interactive=False,
+                        elem_id="download-status-box",
+                    )
 
-                models = gr.Dropdown(
-                    choices=get_models(),
-                    label="Available Models",
-                    value=None
-                )
+                    # Stati interni
+                    universe_targets_state = gr.State([])
+                    market_targets_state = gr.State([])
 
-                btn_check_files = gr.Button(
-                    "Check Files",
-                    variant="primary",
-                    min_width=140
-                )
+                    btn_download_missing = gr.Button(
+                        "Download Missing Files",
+                        variant="primary",
+                        interactive=False,
+                        elem_id="download-missing-btn",
+                    )
 
-            with gr.Column():
-                files = gr.Textbox(
-                    label="Data Description",
-                    interactive=False,
-                    lines=10,
-                    max_lines=10,
-                    elem_id="files",
-                )
+                # RIGHT – required files con spinner
+                with gr.Column(
+                    scale=2,
+                    elem_classes=["download-card", "download-files-card", "evaluation-loading-host"],
+                ):
+                    gr.Markdown(
+                        """<div class="evaluation-output-header">
+                            <span>Required files</span>
+                        </div>"""
+                    )
 
-        gr.Markdown("---")
+                    files_loading = gr.HTML(
+                        """
+                        <div class="evaluation-loading-overlay">
+                            <div class="evaluation-loading-box">
+                                <div class="evaluation-loading-spinner"></div>
+                                <div class="evaluation-loading-text">Downloading files...</div>
+                            </div>
+                        </div>
+                        """,
+                        visible=False,
+                        elem_id="files-loading-overlay",
+                    )
 
-        preview_page_state = gr.State(0)
+                    files = gr.Textbox(
+                        label=None,
+                        interactive=False,
+                        lines=11,
+                        max_lines=14,
+                        show_label=False,
+                        elem_id="files",
+                    )
 
-        with gr.Row():
-            with gr.Column(scale=1):
-                preview_selector = gr.Dropdown(
-                    label="Preview file",
-                    choices=[],
-                    value=None,
-                )
+            # ── Bottom row: preview selector + dataframe ───────────────────
+            with gr.Row(elem_classes=["download-top-row", "download-preview-row"]):
 
-            with gr.Column(scale=4):
-                preview = gr.Dataframe(
-                    label="Data Preview",
-                    interactive=False,
-                    max_height=420,
-                    buttons=["fullscreen", "copy"],
-                )
+                # LEFT – selettore file
+                with gr.Column(scale=1, min_width=200, elem_classes=["download-card", "download-selector-card"]):
+                    gr.Markdown(
+                        """<div class="evaluation-output-header">
+                            <span>Preview file</span>
+                        </div>"""
+                    )
+                    preview_selector = gr.Dropdown(
+                        label=None,
+                        choices=[],
+                        value=None,
+                        show_label=False,
+                        elem_id="preview-selector",
+                    )
 
-                with gr.Row(elem_classes="preview-pagination-outer"):
-                    with gr.Column(scale=1):
-                        gr.Markdown("")
-                    with gr.Column(scale=0, min_width=200, elem_classes="preview-pagination-box"):
-                        with gr.Row(elem_classes="preview-pagination-inner"):
-                            btn_prev_preview = gr.Button(
-                                "‹",
-                                interactive=False,
-                                elem_classes="preview-round-btn",
-                                scale=0,
-                                min_width=36,
-                            )
-                            preview_page_label = gr.HTML(
-                                "",
-                                elem_classes="preview-page-label",
-                            )
-                            btn_next_preview = gr.Button(
-                                "›",
-                                interactive=False,
-                                elem_classes="preview-round-btn",
-                                scale=0,
-                                min_width=36,
-                            )
+                # RIGHT – dataframe + paginazione + spinner
+                with gr.Column(
+                    scale=5,
+                    elem_classes=["download-card", "download-preview-card", "evaluation-loading-host"],
+                ):
+                    gr.Markdown(
+                        """<div class="evaluation-output-header">
+                            <span>Data preview</span>
+                        </div>"""
+                    )
 
-        # ── wiring ─────────────────────────────────────────────────────────
-        market.change(
-            fn=on_market_change,
-            inputs=market,
-            outputs=[
-                dataset, status, preview_selector, preview,
-                preview_page_label, btn_prev_preview, btn_next_preview,
-                preview_page_state,
-            ],
-        )
+                    preview_page_state = gr.State(0)
+
+                    preview_loading = gr.HTML(
+                        """
+                        <div class="evaluation-loading-overlay">
+                            <div class="evaluation-loading-box">
+                                <div class="evaluation-loading-spinner"></div>
+                                <div class="evaluation-loading-text">Loading preview...</div>
+                            </div>
+                        </div>
+                        """,
+                        visible=False,
+                        elem_id="preview-loading-overlay",
+                    )
+
+                    preview = gr.Dataframe(
+                        label=None,
+                        interactive=False,
+                        max_height=360,
+                        show_label=False,
+                        elem_id="preview-table",
+                    )
+
+                    with gr.Row(elem_classes=["preview-pagination-outer"]):
+                        with gr.Column(scale=1):
+                            gr.HTML("")
+                        with gr.Column(
+                            scale=0,
+                            min_width=200,
+                            elem_classes=["preview-pagination-box"],
+                        ):
+                            with gr.Row(elem_classes=["preview-pagination-inner"]):
+                                btn_prev_preview = gr.Button(
+                                    "‹",
+                                    interactive=False,
+                                    elem_classes=["preview-round-btn"],
+                                    scale=0,
+                                    min_width=36,
+                                )
+                                preview_page_label = gr.HTML(
+                                    "",
+                                    elem_classes=["preview-page-label"],
+                                )
+                                btn_next_preview = gr.Button(
+                                    "›",
+                                    interactive=False,
+                                    elem_classes=["preview-round-btn"],
+                                    scale=0,
+                                    min_width=36,
+                                )
+                        with gr.Column(scale=1):
+                            gr.HTML("")
+
+        # ── Wiring ────────────────────────────────────────────────────────
 
         dataset.change(
-            fn=on_dataset_change,
-            inputs=dataset,
+            fn=inspect_required_files,
+            inputs=[dataset, models],
             outputs=[
-                btn_existing, status, preview_selector, preview,
-                preview_page_label, btn_prev_preview, btn_next_preview,
-                preview_page_state,
+                status,
+                files,
+                btn_download_missing,
+                universe_targets_state,
+                market_targets_state,
             ],
-        )
-
-        download_evt = btn_download.click(
-            fn=run_data_pipeline,
-            inputs=[dataset],
-            outputs=[status, btn_existing],
-        )
-
-        download_evt.then(
+            show_progress="hidden",
+            queue=False,
+        ).then(
             fn=refresh_preview_controls,
-            inputs=[dataset],
+            inputs=[dataset, universe_targets_state, market_targets_state],
             outputs=[preview_selector],
+            show_progress="hidden",
+            queue=False,
         ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector],
             outputs=[
-                preview, preview_page_label, btn_prev_preview,
-                btn_next_preview, preview_page_state,
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
-        btn_existing.click(
-            fn=use_existing_dataset,
-            inputs=[dataset],
+        models.change(
+            fn=inspect_required_files,
+            inputs=[dataset, models],
             outputs=[
-                status, preview_selector, preview, preview_page_label,
-                btn_prev_preview, btn_next_preview, preview_page_state,
-                btn_existing,
+                status,
+                files,
+                btn_download_missing,
+                universe_targets_state,
+                market_targets_state,
             ],
-        )
-
-        preview_selector.change(
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=refresh_preview_controls,
+            inputs=[dataset, universe_targets_state, market_targets_state],
+            outputs=[preview_selector],
+            show_progress="hidden",
+            queue=False,
+        ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector],
             outputs=[
-                preview, preview_page_label, btn_prev_preview,
-                btn_next_preview, preview_page_state,
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
             ],
+            show_progress="hidden",
+            queue=False,
         )
 
+        download_evt = btn_download_missing.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[files_loading],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=download_missing_files,
+            inputs=[
+                dataset,
+                models,
+                universe_targets_state,
+                market_targets_state,
+            ],
+            outputs=[
+                status,
+                files,
+                btn_download_missing,
+                universe_targets_state,
+                market_targets_state,
+            ],
+            show_progress="full",
+            queue=True,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[files_loading],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        download_evt.then(
+            fn=refresh_preview_controls,
+            inputs=[dataset,  universe_targets_state, market_targets_state],
+            outputs=[preview_selector],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        preview_selector.change(
+            fn=lambda: gr.update(visible=True),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        # Pagina successiva preview
         btn_next_preview.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
+        ).then(
             fn=next_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state],
-            outputs=[
-                preview, preview_page_label, btn_prev_preview,
-                btn_next_preview, preview_page_state,
+            inputs=[
+                dataset,
+                preview_selector,
+                preview_page_state,
             ],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
         )
 
+        # Pagina precedente preview
         btn_prev_preview.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
+        ).then(
             fn=prev_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state],
-            outputs=[
-                preview, preview_page_label, btn_prev_preview,
-                btn_next_preview, preview_page_state,
+            inputs=[
+                dataset,
+                preview_selector,
+                preview_page_state,
             ],
-        )
-
-        btn_check_files.click(
-            fn=get_files,
-            inputs=[universes, models],
-            outputs=[files]
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[preview_loading],
+            show_progress="hidden",
+            queue=False,
         )
