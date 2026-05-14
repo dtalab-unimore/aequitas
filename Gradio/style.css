@@ -8,6 +8,7 @@
     padding-top: 8px;
     padding-bottom: 24px;
     gap: 0 !important;
+    margin-bottom: -20px !important;
 }
 
 /* ── Hero ───────────────────────────────────────────────────── */
@@ -67,33 +68,41 @@ button {
 button:hover {
     transform: translateY(-1px);
 }
+
 /* ── Download tab ───────────────────────────────────────────── */
 
 .download-shell {
-    max-width: 1220px;
-    margin: 0 auto;
-    padding: 8px 4px 22px;
-    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12px 2px 24px !important;
+    gap: 14px !important;
+    box-sizing: border-box !important;
 }
 
 .download-top-row {
     gap: 16px !important;
-    align-items: flex-start !important;
+    align-items: flex-start !important;   /* card alte quanto il loro contenuto */
     margin-bottom: 0 !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
 }
 
 .download-preview-row {
-    margin-top: 12px !important;
+    margin-top: 14px !important;
+    width: 100% !important;
 }
 
-/* Card base – coerente con evaluation-output-card */
+/* Card base */
 .download-card {
     background: #ffffff !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 18px !important;
-    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
-    padding: 16px !important;
+    box-shadow: 0 4px 20px rgba(49, 46, 129, 0.07) !important;
+    padding: 18px !important;
     overflow: visible !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
 }
 
 .download-card > div {
@@ -101,9 +110,11 @@ button:hover {
     box-shadow: none !important;
 }
 
-/* Controls card */
+/* ── Controls card ─────────────────────────────────────────── */
+
 .download-controls-card {
     display: flex !important;
+    height: 250px;
     flex-direction: column !important;
     gap: 10px !important;
 }
@@ -122,7 +133,7 @@ button:hover {
 
 #download-missing-btn {
     width: 100% !important;
-    height: 42px !important;
+    height: 44px !important;
     margin-top: 4px !important;
     border-radius: 999px !important;
     font-weight: 850 !important;
@@ -135,40 +146,21 @@ button:hover {
 
 #download-missing-btn:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 12px 26px rgba(79, 70, 229, 0.28) !important;
+    box-shadow: 0 12px 26px rgba(79, 70, 229, 0.30) !important;
 }
 
 #download-missing-btn:disabled {
     background: #e2e8f0 !important;
     border-color: #cbd5e1 !important;
-    color: #64748b !important;
+    color: #94a3b8 !important;
     box-shadow: none !important;
     transform: none !important;
 }
 
-/* Status box */
-#download-status-box,
-#download-status-box > div {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-}
+/* ── Files textbox ─────────────────────────────────────────── */
 
-#download-status-box textarea {
-    background: #fbfdff !important;
-    border: 1px solid #e0e7ff !important;
-    border-radius: 12px !important;
-    padding: 10px 12px !important;
-    font-size: 0.83rem !important;
-    line-height: 1.5 !important;
-    color: #0f172a !important;
-    resize: none !important;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
-}
-
-/* Files textbox */
 .download-files-card {
+    height: 250px;
     position: relative !important;
 }
 
@@ -181,159 +173,268 @@ button:hover {
 }
 
 #files textarea {
-    background: #fbfdff !important;
+    background: #f8faff !important;
     border: 1px solid #e0e7ff !important;
     border-radius: 14px !important;
-    padding: 13px !important;
+    padding: 14px !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.80rem !important;
-    line-height: 1.6 !important;
-    color: #0f172a !important;
+    font-size: 0.90rem !important;
+    line-height: 1.4 !important;
+    color: #193c83 !important;
     resize: none !important;
     overflow-y: auto !important;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.04) !important;
 }
 
-/* Selector card */
-.download-selector-card {
-    display: flex !important;
-    flex-direction: column !important;
-}
+/* ── Preview card ──────────────────────────────────────────── */
 
-.download-selector-card label,
-#preview-selector label {
-    font-size: 0.72rem !important;
-    font-weight: 800 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.055em !important;
-    color: #475569 !important;
-}
-
-.download-selector-card .wrap {
-    border-radius: 14px !important;
-}
-
-/* Preview card */
 .download-preview-card {
     position: relative !important;
+    width: 100% !important;
 }
 
-/* ── Preview dataframe – stile coerente con mpt ─────────────── */
-
-#preview-table {
-    border: 1px solid #c7d2fe !important;
-    border-radius: 14px !important;
-    overflow: hidden !important;
-    background: #ffffff !important;
-    box-shadow: none !important;
+.preview-header-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    margin-bottom: -8px !important;
+    width: 100% !important;
 }
 
-#preview-table > div,
-#preview-table .table-wrap {
+/* Neutralizza wrapper Gradio: colonne, .block, .form, fieldset */
+.preview-header-row > *,
+.preview-header-row > * > * {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    border-radius: 14px !important;
-    overflow: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
-/* Header */
-#preview-table table thead tr th {
+.preview-header-row .block,
+.preview-header-row .form,
+.preview-header-row fieldset {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Colonna markdown: si espande */
+.preview-header-row > div:first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+/* Colonna dropdown: larghezza automatica */
+.preview-header-row > div:last-child {
+    flex: 0 0 auto !important;
+}
+
+
+.preview-header-row #preview-selector {
+    min-width: 200px !important;
+    /*max-width: 320px !important;*/
+    flex-shrink: 0 !important;
+}
+
+/* Il wrapper principale del componente (div.block o fieldset) */
+#preview-selector .block,
+#preview-selector fieldset,
+.preview-header-row #preview-selector > div,
+.preview-header-row #preview-selector > div > div {
+    background: #f8faff !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 13px !important;
+    /*padding: 2px 6px !important;*/
+    box-shadow: none !important;
+}
+
+/* Il .wrap interno (la select vera e propria) */
+#preview-selector .wrap {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border-radius: 10px !important;
+}
+
+/* Hover sul wrapper */
+#preview-selector .block:hover,
+#preview-selector fieldset:hover {
+    border-color: #a5b4fc !important;
+}
+
+.preview-header-row #preview-selector label {
+    display: none !important;
+}
+
+
+/* ── Preview HTML table ─────────────────────────────────────── */
+
+#preview-table {
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: -20px !important;
+    height:360px;
+    max-height: 360px !important;
+}
+
+/* Wrapper */
+#preview-table .preview-table-wrap {
+    width: 100% !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 14px !important;
+    background: #ffffff !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+}
+
+/* Scroll container */
+#preview-table .preview-table-scroll {
+    width: 100% !important;
+    max-height: 420px !important;
+    overflow: auto !important;
+    background: #ffffff !important;
+}
+
+
+#preview-table table.preview-html-table {
+    width: max-content !important;
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+    font-family: "DM Sans", system-ui, sans-serif !important;
+}
+
+
+#preview-table table.preview-html-table thead th {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+
     background: var(--c-accent, rgba(114, 116, 215, 0.44)) !important;
     color: #ffffff !important;
-    font-family: "DM Sans", system-ui, sans-serif !important;
-    font-size: 0.72rem !important;
+
+    font-size: 0.82rem !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.06em !important;
+
     padding: 0.65rem 0.9rem !important;
     white-space: nowrap !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 2 !important;
+
+    border-right: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-bottom: 1px solid #c7d2fe !important;
+}
+
+/* Cels */
+#preview-table table.preview-html-table tbody td {
+    padding: 0.5rem 0.9rem !important;
+    font-size: 1.0rem !important;
+    color: #334155 !important;
+    border-right: 1px solid #eef2ff !important;
+    border-bottom: 1px solid #eef2ff !important;
+    white-space: nowrap !important;
+    font-weight: 500 !important;
 }
 
 /* Rows */
-#preview-table table tbody tr {
-    border-bottom: 1px solid #eef2ff !important;
-    transition: background 0.12s !important;
-}
-
-#preview-table table tbody tr:nth-child(even) {
+#preview-table table.preview-html-table tbody tr:nth-child(even) {
     background: #f8fafc !important;
 }
 
-#preview-table table tbody tr:hover {
+#preview-table table.preview-html-table tbody tr:hover {
     background: #eef2ff !important;
 }
 
-#preview-table table tbody td {
-    padding: 0.5rem 0.9rem !important;
-    font-size: 0.80rem !important;
-    color: #334155 !important;
-    border-right: 1px solid #eef2ff !important;
-    white-space: nowrap !important;
-    font-weight: normal !important;
-}
-
-/* Prima colonna indice */
-#preview-table table tbody td:first-child {
-    font-weight: 700 !important;
-    color: var(--c-accent, #6366f1) !important;
+/* First column */
+#preview-table table.preview-html-table .row-index {
+    font-weight: 800 !important;
+    align-content: center;
+    color: #4f46e5 !important;
     background: #eef2ff !important;
     border-left: 3px solid var(--c-accent, rgba(114, 116, 215, 0.44)) !important;
     border-right: 2px solid #c7d2fe !important;
 }
 
+/* Empty state */
+#preview-table .preview-empty {
+    min-height: 320px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    font-weight: 650 !important;
+
+    background: #fbfdff !important;
+}
 /* ── Pagination ─────────────────────────────────────────────── */
 
 .preview-pagination-outer {
-    margin-top: 10px !important;
+    margin-top: 0px !important;
+    display: flex !important;
     align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
+.preview-pagination-outer > .gap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
 }
 
 .preview-pagination-box {
-    width: 188px !important;
-    min-width: 188px !important;
-    max-width: 188px !important;
     display: flex !important;
     justify-content: center !important;
     align-items: center !important;
+    flex: 0 0 auto !important;
 }
 
 .preview-pagination-inner {
-    width: 188px !important;
-    min-width: 188px !important;
-    max-width: 188px !important;
-    display: grid !important;
-    grid-template-columns: 36px 92px 36px !important;
-    column-gap: 12px !important;
+    display: inline-flex !important;
     align-items: center !important;
-    background: #f8fafc !important;
-    border: 1px solid #e0e7ff !important;
-    border-radius: 999px !important;
-    padding: 4px 8px !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    background: #ffffff !important;
+    margin-bottom: -15px !important;
+    padding: 4px 10px !important;
+    height: 40px !important;
+    box-sizing: border-box !important;
+    width: auto !important;
+    min-width: auto !important;
+    max-width: none !important;
+    grid-template-columns: unset !important;
+    column-gap: unset !important;
 }
 
 .preview-pagination-inner > div {
+    display: contents !important;
     width: auto !important;
     min-width: 0 !important;
-    max-width: none !important;
     flex: none !important;
 }
 
 .preview-round-btn {
-    width: 36px !important;
-    min-width: 36px !important;
-    max-width: 36px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
     height: 32px !important;
     padding: 0 !important;
     margin: 0 !important;
-    border-radius: 999px !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 .preview-round-btn button {
@@ -356,49 +457,53 @@ button:hover {
 }
 
 .preview-round-btn button:hover:not(:disabled) {
-    background: #eef2ff !important;
-    transform: none !important;
+    background: #e0e7ff !important;
 }
 
 .preview-round-btn button:disabled {
     color: #cbd5e1 !important;
-    transform: none !important;
 }
 
 .preview-page-label {
-    width: 92px !important;
-    min-width: 92px !important;
-    max-width: 92px !important;
-    height: 32px !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    text-align: center !important;
-    white-space: nowrap !important;
+    height: 32px !important;
+    padding: 0 8px !important;
+    min-width: 60px !important;
+    width: auto !important;
 }
 
-.preview-page-label span {
-    font-size: 0.82rem !important;
+.preview-page-label > div,
+.preview-page-label span,
+.preview-page-label p {
+    font-size: 0.83rem !important;
     font-weight: 600 !important;
     color: #475569 !important;
     white-space: nowrap !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 
-/* Mobile */
+/* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-
     .download-top-row {
         flex-direction: column !important;
     }
-
     .download-controls-card,
     .download-files-card,
-    .download-selector-card,
     .download-preview-card {
         width: 100% !important;
+    }
+    .preview-header-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .preview-header-row #preview-selector {
+        min-width: 100% !important;
+        max-width: 100% !important;
     }
 }
 
@@ -1950,4 +2055,64 @@ table.mpt td.missing {
     color: #4338ca !important;
     border-color: #a5b4fc !important;
     transform: none !important;
+}
+
+
+/*prova*/
+/* Il componente gr.HTML dell'overlay non deve occupare spazio nel layout */
+#files-loading-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 80 !important;
+
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+
+    pointer-events: none !important;
+}
+
+/* Neutralizza wrapper interni Gradio dell'HTML */
+#files-loading-overlay > div,
+#files-loading-overlay .prose,
+#files-loading-overlay .markdown,
+#files-loading-overlay .html-container {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Overlay specifico della card Required Files */
+#files-loading-overlay .evaluation-loading-overlay {
+    position: absolute !important;
+    inset: 54px 18px 18px 18px !important;
+    z-index: 90 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    background: rgba(248, 250, 252, 0.78) !important;
+    backdrop-filter: blur(3px) !important;
+
+    border: 1px solid #dbe4ff !important;
+    border-radius: 16px !important;
+}
+
+/* La card deve essere il riferimento dell'absolute */
+.download-files-card {
+    position: relative !important;
+    overflow: hidden !important;
 }
