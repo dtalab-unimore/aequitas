@@ -2218,6 +2218,7 @@ def build_tab():
                         """,
                         visible=False,
                     )
+
                     output_table = gr.HTML(
                         value=empty_evaluation_table_html(),
                         elem_id="evaluation-output-table",

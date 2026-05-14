@@ -13,8 +13,8 @@
 
 /* ── Hero ───────────────────────────────────────────────────── */
 .hero {
-    padding: 4px 10px 0px;
-    margin-bottom: 0px !important;
+    padding: 4px 10px 0;
+    margin-bottom: 0 !important;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -379,7 +379,7 @@ button:hover {
 /* ── Pagination ─────────────────────────────────────────────── */
 
 .preview-pagination-outer {
-    margin-top: 0px !important;
+    margin-top: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -1348,7 +1348,7 @@ table.mpt td.missing {
 }
 
 /* ── Assessment type card ───────────────────────────────────── */
-
+.evaluation-mode-col{align-items: center}
 .evaluation-mode-row {
     width: 100% !important;
     display: flex !important;
@@ -1813,13 +1813,9 @@ table.mpt td.missing {
     align-items: center !important;
     justify-content: center !important;
 
-    background: rgba(248, 250, 252, 0.78) !important;
+    background:transparent !important;
     backdrop-filter: blur(3px) !important;
 
-    border: 1px solid #dbe4ff !important;
-    border-radius: 16px !important;
-
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
 }
 
 .evaluation-loading-box {
