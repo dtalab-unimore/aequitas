@@ -2225,7 +2225,7 @@ def build_tab():
                     )
                     with gr.Row(elem_classes=["metrics-download-row", "evaluation-download-row"]):
                         download_evaluation_button = gr.DownloadButton(
-                            "Download CSV",
+                            "Download CSV ⭣",
                             value=None,
                             visible=False,
                             elem_id="download-evaluation-button",

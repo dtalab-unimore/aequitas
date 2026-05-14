@@ -2054,7 +2054,6 @@ table.mpt td.missing {
 }
 
 
-/*prova*/
 /* Il componente gr.HTML dell'overlay non deve occupare spazio nel layout */
 #files-loading-overlay {
     position: absolute !important;
