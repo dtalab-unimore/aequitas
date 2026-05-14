@@ -1,4 +1,3 @@
-import os
 import re
 import sys
 import shlex
@@ -13,11 +12,22 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 MAX_PLOT_COLUMNS = 3
 FIXED_SUBPLOT_WIDTH = 4.2
 FIXED_SUBPLOT_HEIGHT_EOY = 2.55
 FIXED_SUBPLOT_HEIGHT_QUINTILE = 2.65
+
+# -------------------------------------------------
+# OpenAI config
+# -------------------------------------------------
+OPENAI_EXPLANATION_MODEL = os.getenv("OPENAI_EXPLANATION_MODEL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+print(f"Using OpenAI model: {OPENAI_EXPLANATION_MODEL}")
 
 # -------------------------------------------------
 # Evaluation config
@@ -1529,10 +1539,13 @@ def matplotlib_plot_update(fig):
 
 def show_evaluation_loading():
     return (
-        gr.update(visible=True),             # table_loading
-        gr.update(visible=True),             # plot_loading
-        gr.update(interactive=False),        # run_btn
-        gr.update(value=None, visible=False) # download_evaluation_button
+        gr.update(visible=True),              # table_loading
+        gr.update(visible=True),              # plot_loading
+        gr.update(interactive=False),         # run_btn
+        gr.update(value=None, visible=False), # download_evaluation_button
+        gr.update(visible=False, interactive=False), #explain_evaluation_button
+        gr.update(visible=False),             # chatgpt_explanation_group
+        "",                                   # chatgpt_explanation
     )
 
 
@@ -1541,6 +1554,23 @@ def hide_evaluation_loading():
         gr.update(visible=False),       # table_loading
         gr.update(visible=False),       # plot_loading
         gr.update(interactive=True),    # run_btn
+        gr.update(visible=True, interactive=True),  # explain_evaluation_button
+    )
+
+def show_chatgpt_explanation_loading():
+    return (
+        gr.update(visible=True),                     # chatgpt_loading
+        gr.update(visible=True, interactive=False),  # explain_evaluation_button
+        gr.update(visible=False),                    # chatgpt_explanation_group
+        "",                                          # chatgpt_explanation
+    )
+
+
+def hide_chatgpt_explanation_loading():
+    return (
+        gr.update(visible=False),                    # chatgpt_loading
+        gr.update(visible=True, interactive=True),   # explain_evaluation_button
+        gr.update(visible=True),                     # chatgpt_explanation_group
     )
 
 def selected_records_for_form(
@@ -1797,6 +1827,67 @@ def write_evaluation_download_file(df, eval_mode):
 
     return str(output_path)
 
+def dataframe_to_llm_text(df, max_rows=80):
+    pretty_df = prettify_output_dataframe(df)
+
+    if pretty_df.empty:
+        return ""
+
+    truncated = pretty_df.head(max_rows).copy()
+
+    csv_text = truncated.to_csv(index=False)
+
+    if len(pretty_df) > max_rows:
+        csv_text += (
+            f"\n\n[Nota: la tabella originale contiene {len(pretty_df)} righe; "
+            f"qui sono mostrate solo le prime {max_rows}.]"
+        )
+
+    return csv_text
+
+
+def explain_evaluation_with_chatgpt(output_df, eval_mode):
+    if output_df is None or output_df.empty:
+        return "Run an evaluation first, then ask ChatGPT to explain the results."
+
+    table_text = dataframe_to_llm_text(output_df)
+
+    prompt = f"""
+You are a financial evaluation analyst.
+
+The user has run a evaluation with mode: {eval_mode}.
+
+Explain the results in English.
+
+Use Markdown formatting. 
+
+Focus on:
+1. What the table is showing.
+2. Which models/configurations look better.
+3. Any relevant differences between sequence length and prediction length.
+4. Any relevant universe/configuration effects.
+
+Use a clear, concise explanation suitable for a demo UI.
+
+Here is the evaluation output table in CSV format:
+
+{table_text}
+"""
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        response = client.responses.create(
+            model=OPENAI_EXPLANATION_MODEL,
+            input=prompt,
+        )
+
+        explanation = response.output_text
+
+        return explanation
+
+    except Exception as e:
+        return f"Error while calling ChatGPT: {escape(str(e))}"
 
 def run_evaluation(
     eval_mode,
@@ -1825,7 +1916,9 @@ def run_evaluation(
             "The selected values do not match any available .pkl file.",
             empty_evaluation_table_html("The selected values do not match any available .pkl file."),
             gr.update(value=None, visible=False),
+            gr.update(visible=False, interactive=False),
             empty_plot(),
+            pd.DataFrame()
         )
 
     jobs = []
@@ -1853,7 +1946,9 @@ def run_evaluation(
             "No valid Top K / Short K pair is available for the selected universes.",
             empty_evaluation_table_html("No valid Top K / Short K pair is available for the selected universes."),
             gr.update(value=None, visible=False),
+            gr.update(visible=False, interactive=False),
             empty_plot(),
+            pd.DataFrame()
         )
 
     env = os.environ.copy()
@@ -2014,10 +2109,16 @@ def run_evaluation(
 
     if download_file is None:
         download_update = gr.update(value=None, visible=False)
+        gpt_button_update = gr.update(visible=False,interactive=False,)
     else:
         download_update = gr.update(value=download_file, visible=True)
+        gpt_button_update = gr.update(
+            value="Explain with ChatGPT",
+            visible=True,
+            interactive=True,
+        )
 
-    return "\n".join(logs), table_html, download_update, plot_update
+    return "\n".join(logs), table_html, download_update, gpt_button_update, plot_update, output_df
 
 # -------------------------------------------------
 # Build tab
@@ -2231,6 +2332,32 @@ def build_tab():
                             elem_id="download-evaluation-button",
                         )
 
+                        explain_evaluation_button = gr.Button(
+                            "Explain with ChatGPT",
+                            visible=False,
+                            interactive=False,
+                            elem_id="explain-evaluation-button",
+                        )
+
+                    chatgpt_loading = gr.HTML(
+                        """
+                        <div class="evaluation-chatgpt-inline-loading">
+                            <div class="evaluation-loading-spinner"></div>
+                            <div class="evaluation-loading-text">Generating explanation...</div>
+                        </div>
+                        """,
+                        visible=False,
+                    )
+                    with gr.Group(
+                            visible=False,
+                            elem_classes=[
+                                "evaluation-chatgpt-explanation-card",
+                            ],
+                    )as chatgpt_explanation_group:
+                        chatgpt_explanation = gr.Markdown(
+                            value="",
+                            elem_id="evaluation-chatgpt-explanation",
+                        )
             # ── Plot ─────────────────────────────────────────────────────────
             with gr.Group(
                 visible=True,
@@ -2265,6 +2392,8 @@ def build_tab():
                     container=False,
                     elem_id="evaluation-plot",
                 )
+
+        evaluation_output_state = gr.State(value=pd.DataFrame())
 
         form_inputs = [
             eval_mode,
@@ -2322,6 +2451,9 @@ def build_tab():
                 plot_loading,
                 run_btn,
                 download_evaluation_button,
+                explain_evaluation_button,
+                chatgpt_explanation_group,
+                chatgpt_explanation,
             ],
             show_progress="hidden",
             queue=False,
@@ -2334,7 +2466,10 @@ def build_tab():
                 log_box,
                 output_table,
                 download_evaluation_button,
+                explain_evaluation_button,
                 plot_output,
+                evaluation_output_state,
+
             ],
             show_progress="hidden",
         )
@@ -2346,6 +2481,44 @@ def build_tab():
                 table_loading,
                 plot_loading,
                 run_btn,
+                explain_evaluation_button
+            ],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        explain_event = explain_evaluation_button.click(
+            fn=show_chatgpt_explanation_loading,
+            inputs=[],
+            outputs=[
+                chatgpt_loading,
+                explain_evaluation_button,
+                chatgpt_explanation_group,
+                chatgpt_explanation,
+            ],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        explain_event = explain_event.then(
+            fn=explain_evaluation_with_chatgpt,
+            inputs=[
+                evaluation_output_state,
+                eval_mode,
+            ],
+            outputs=[
+                chatgpt_explanation,
+            ],
+            show_progress="hidden",
+        )
+
+        explain_event.then(
+            fn=hide_chatgpt_explanation_loading,
+            inputs=[],
+            outputs=[
+                chatgpt_loading,
+                explain_evaluation_button,
+                chatgpt_explanation_group,
             ],
             show_progress="hidden",
             queue=False,

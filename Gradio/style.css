@@ -1739,6 +1739,11 @@ table.mpt td.missing {
     border-color: #eef2ff !important;
     font-weight: normal !important;
 }
+#evaluation-output-table > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
 
 /* Mobile */
 @media (max-width: 900px) {
@@ -1766,6 +1771,132 @@ table.mpt td.missing {
         min-width: 100% !important;
         max-width: 100% !important;
     }
+}
+
+.evaluation-chatgpt-explanation-card {
+    position: relative !important;
+    margin-top: 12px !important;
+    min-height: 80px !important;
+}
+
+#evaluation-chatgpt-explanation {
+    max-height: 360px !important;
+    overflow-y: auto !important;
+
+    padding: 16px 18px !important;
+    margin-top: 10px !important;
+
+    background: #ffffff !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
+
+    color: #0f172a !important;
+    font-size: 0.80rem !important;
+    line-height: 1.55 !important;
+}
+
+#evaluation-chatgpt-explanation:empty {
+    display: none !important;
+}
+
+#evaluation-chatgpt-explanation h1,
+#evaluation-chatgpt-explanation h2,
+#evaluation-chatgpt-explanation h3 {
+    color: #1e1b4b !important;
+    font-weight: 800 !important;
+    margin-top: 0.2rem !important;
+    margin-bottom: 0.65rem !important;
+}
+
+#evaluation-chatgpt-explanation p {
+    margin-bottom: 0.75rem !important;
+}
+
+#evaluation-chatgpt-explanation ul,
+#evaluation-chatgpt-explanation ol {
+    padding-left: 1.25rem !important;
+    margin-bottom: 0.8rem !important;
+}
+
+#evaluation-chatgpt-explanation li {
+    margin-bottom: 0.35rem !important;
+}
+
+#evaluation-chatgpt-explanation strong {
+    color: #3730a3 !important;
+    font-weight: 800 !important;
+}
+.evaluation-chatgpt-explanation-card *:not(#evaluation-chatgpt-explanation):not(#evaluation-chatgpt-explanation *) {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/*.evaluation-chatgpt-inline-loading {*/
+/*    display: flex !important;*/
+/*    align-items: center !important;*/
+/*    justify-content: center !important;*/
+/*    gap: 8px !important;*/
+
+/*    margin-top: 14px !important;*/
+/*    margin-bottom: 4px !important;*/
+
+/*    width: 100% !important;*/
+/*    height: 34px !important;*/
+
+/*    !*background: transparent !important;*!*/
+/*    !*!*border: none !important;*!*!*/
+/*    !*!*box-shadow: none !important;*!*!*/
+/*}*/
+
+.evaluation-chatgpt-inline-loading {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+
+    width: fit-content !important;
+    max-width: max-content !important;
+
+    height: 34px !important;
+
+    margin: 14px auto 4px auto !important;
+
+    background: transparent !important;
+
+    border: 1px solid #c7d2fe !important;
+    border-radius: 999px !important;
+
+    padding: 10px 16px !important;
+
+    box-shadow: 0 10px 24px rgba(49, 46, 129, 0.12) !important;
+}
+
+.evaluation-chatgpt-inline-loading .evaluation-loading-text {
+    color: #3730a3 !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+}
+
+.evaluation-chatgpt-explanation-card {
+    margin-top: 14px !important;
+}
+
+#evaluation-chatgpt-explanation {
+    max-height: 360px !important;
+    overflow-y: auto !important;
+
+    padding: 16px 18px !important;
+
+    background: rgb(246 252 255) !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
+
+    color: #0f172a !important;
+    font-size: 0.9rem !important;
+    line-height: 1.55 !important;
 }
 /* Evaluation plot */
 .evaluation-plot-card {
@@ -1980,15 +2111,17 @@ table.mpt td.missing {
     padding: 0 !important;
 }
 
-#evaluation-output-table > div {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    padding: 0 !important;
+.evaluation-download-row {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
 }
 
-/* Evaluation download button: same style as metrics download button */
-#download-evaluation-button {
+/* Same pill style for Download and Explain buttons */
+#download-evaluation-button,
+#explain-evaluation-button {
     width: fit-content !important;
     min-width: 0 !important;
     max-width: max-content !important;
@@ -2014,9 +2147,13 @@ table.mpt td.missing {
     transform: none !important;
 }
 
+/* Internal Gradio elements */
 #download-evaluation-button button,
 #download-evaluation-button a,
-#download-evaluation-button span {
+#download-evaluation-button span,
+#explain-evaluation-button button,
+#explain-evaluation-button a,
+#explain-evaluation-button span {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -2043,16 +2180,20 @@ table.mpt td.missing {
     box-shadow: none !important;
 }
 
+/* Hover */
 #download-evaluation-button:hover,
 #download-evaluation-button:hover button,
 #download-evaluation-button:hover a,
-#download-evaluation-button:hover span {
+#download-evaluation-button:hover span,
+#explain-evaluation-button:hover,
+#explain-evaluation-button:hover button,
+#explain-evaluation-button:hover a,
+#explain-evaluation-button:hover span {
     background: #e0e7ff !important;
     color: #4338ca !important;
     border-color: #a5b4fc !important;
     transform: none !important;
 }
-
 
 /* Il componente gr.HTML dell'overlay non deve occupare spazio nel layout */
 #files-loading-overlay {
