@@ -94,19 +94,6 @@ def build_tab():
                     elem_classes=["download-card", "download-preview-card", "evaluation-loading-host"],
                 ):
 
-                    # with gr.Row(elem_classes=["preview-header-row"]):
-                    #     gr.Markdown(
-                    #         """<div class="evaluation-output-header">
-                    #             <span>Data preview</span>
-                    #         </div>"""
-                    #     )
-                    #     preview_selector = gr.Dropdown(
-                    #         label=None,
-                    #         choices=[],
-                    #         value=None,
-                    #         show_label=False,
-                    #         elem_id="preview-selector",
-                    #     )
                     with gr.Row(elem_classes=["preview-header-row"]):
                         gr.Markdown(
                             """<div class="evaluation-output-header">
@@ -174,22 +161,6 @@ def build_tab():
 
         # ── Wiring ────────────────────────────────────────────────────────
 
-        # dataset.change(
-        #     fn=inspect_required_files,
-        #     inputs=[dataset, models],
-        #     outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
-        #     show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=refresh_preview_controls,
-        #     inputs=[dataset, universe_targets_state, market_targets_state],
-        #     outputs=[preview_selector],
-        #     show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=reset_preview_page,
-        #     inputs=[dataset, preview_selector],
-        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-        #     show_progress="hidden", queue=False,
-        # )
         dataset.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
@@ -212,22 +183,6 @@ def build_tab():
             show_progress="hidden", queue=False,
         )
 
-        # models.change(
-        #     fn=inspect_required_files,
-        #     inputs=[dataset, models],
-        #     outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
-        #     show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=refresh_preview_controls,
-        #     inputs=[dataset, universe_targets_state, market_targets_state],
-        #     outputs=[preview_selector],
-        #     show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=reset_preview_page,
-        #     inputs=[dataset, preview_selector],
-        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-        #     show_progress="hidden", queue=False,
-        # )
         models.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
@@ -263,16 +218,6 @@ def build_tab():
             outputs=[files_loading], show_progress="hidden", queue=False,
         )
 
-        # download_evt.then(
-        #     fn=refresh_preview_controls,
-        #     inputs=[dataset, universe_targets_state, market_targets_state],
-        #     outputs=[preview_selector], show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=reset_preview_page,
-        #     inputs=[dataset, preview_selector],
-        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-        #     show_progress="hidden", queue=False,
-        # )
         download_evt.then(
             fn=refresh_preview_controls,
             inputs=[dataset, universe_targets_state, market_targets_state],
@@ -290,18 +235,6 @@ def build_tab():
             show_progress="hidden", queue=False,
         )
 
-        # preview_selector.change(
-        #     fn=lambda: gr.update(visible=True),
-        #     outputs=[preview_loading], show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=reset_preview_page,
-        #     inputs=[dataset, preview_selector],
-        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-        #     show_progress="hidden", queue=False,
-        # ).then(
-        #     fn=lambda: gr.update(visible=False),
-        #     outputs=[preview_loading], show_progress="hidden", queue=False,
-        # )
         preview_selector.change(
             fn=lambda: gr.update(visible=True),
             outputs=[preview_loading],
