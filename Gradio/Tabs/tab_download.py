@@ -9,7 +9,8 @@ from Gradio.data_load import (
     reset_preview_page,
     next_preview_page,
     prev_preview_page,
-    empty_preview_table_html
+    empty_preview_table_html,
+    refresh_preview_year_filter,
 )
 
 
@@ -34,11 +35,14 @@ def build_tab():
                             choices=DATASETS,
                             label="Dataset",
                             value=None,
+                            elem_classes=['dropdown-single-compact']
                         )
                         models = gr.Dropdown(
                             choices=get_models(),
-                            label="Model",
-                            value=None,
+                            label="Models",
+                            value=[],
+                            multiselect=True,
+                            elem_classes=["dropdown-multiselect-compact"]
                         )
 
                     universe_targets_state = gr.State([])
@@ -90,20 +94,42 @@ def build_tab():
                     elem_classes=["download-card", "download-preview-card", "evaluation-loading-host"],
                 ):
 
+                    # with gr.Row(elem_classes=["preview-header-row"]):
+                    #     gr.Markdown(
+                    #         """<div class="evaluation-output-header">
+                    #             <span>Data preview</span>
+                    #         </div>"""
+                    #     )
+                    #     preview_selector = gr.Dropdown(
+                    #         label=None,
+                    #         choices=[],
+                    #         value=None,
+                    #         show_label=False,
+                    #         elem_id="preview-selector",
+                    #     )
                     with gr.Row(elem_classes=["preview-header-row"]):
                         gr.Markdown(
                             """<div class="evaluation-output-header">
                                 <span>Data preview</span>
                             </div>"""
                         )
-                        preview_selector = gr.Dropdown(
-                            label=None,
-                            choices=[],
-                            value=None,
-                            show_label=False,
-                            elem_id="preview-selector",
-                        )
 
+                        with gr.Row(elem_classes=["preview-header-controls"]):
+                            preview_selector = gr.Dropdown(
+                                label=None,
+                                choices=[],
+                                value=None,
+                                show_label=False,
+                                elem_id="preview-selector",
+                            )
+                            preview_start_year = gr.Dropdown(
+                                label=None,
+                                choices=[],
+                                value=None,
+                                show_label=False,
+                                visible=False,
+                                elem_id="preview-selector",
+                            )
                     preview_page_state = gr.State(0)
 
                     preview_loading = gr.HTML(
@@ -148,6 +174,22 @@ def build_tab():
 
         # ── Wiring ────────────────────────────────────────────────────────
 
+        # dataset.change(
+        #     fn=inspect_required_files,
+        #     inputs=[dataset, models],
+        #     outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
+        #     show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=refresh_preview_controls,
+        #     inputs=[dataset, universe_targets_state, market_targets_state],
+        #     outputs=[preview_selector],
+        #     show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=reset_preview_page,
+        #     inputs=[dataset, preview_selector],
+        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+        #     show_progress="hidden", queue=False,
+        # )
         dataset.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
@@ -159,12 +201,33 @@ def build_tab():
             outputs=[preview_selector],
             show_progress="hidden", queue=False,
         ).then(
-            fn=reset_preview_page,
+            fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
+            outputs=[preview_start_year],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector, preview_start_year],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
 
+        # models.change(
+        #     fn=inspect_required_files,
+        #     inputs=[dataset, models],
+        #     outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
+        #     show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=refresh_preview_controls,
+        #     inputs=[dataset, universe_targets_state, market_targets_state],
+        #     outputs=[preview_selector],
+        #     show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=reset_preview_page,
+        #     inputs=[dataset, preview_selector],
+        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+        #     show_progress="hidden", queue=False,
+        # )
         models.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
@@ -176,8 +239,13 @@ def build_tab():
             outputs=[preview_selector],
             show_progress="hidden", queue=False,
         ).then(
-            fn=reset_preview_page,
+            fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
+            outputs=[preview_start_year],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector, preview_start_year],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
@@ -195,33 +263,82 @@ def build_tab():
             outputs=[files_loading], show_progress="hidden", queue=False,
         )
 
+        # download_evt.then(
+        #     fn=refresh_preview_controls,
+        #     inputs=[dataset, universe_targets_state, market_targets_state],
+        #     outputs=[preview_selector], show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=reset_preview_page,
+        #     inputs=[dataset, preview_selector],
+        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+        #     show_progress="hidden", queue=False,
+        # )
         download_evt.then(
             fn=refresh_preview_controls,
             inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector], show_progress="hidden", queue=False,
+            outputs=[preview_selector],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=refresh_preview_year_filter,
+            inputs=[dataset, preview_selector],
+            outputs=[preview_start_year],
+            show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector],
+            inputs=[dataset, preview_selector, preview_start_year],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
 
+        # preview_selector.change(
+        #     fn=lambda: gr.update(visible=True),
+        #     outputs=[preview_loading], show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=reset_preview_page,
+        #     inputs=[dataset, preview_selector],
+        #     outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+        #     show_progress="hidden", queue=False,
+        # ).then(
+        #     fn=lambda: gr.update(visible=False),
+        #     outputs=[preview_loading], show_progress="hidden", queue=False,
+        # )
         preview_selector.change(
             fn=lambda: gr.update(visible=True),
-            outputs=[preview_loading], show_progress="hidden", queue=False,
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=refresh_preview_year_filter,
+            inputs=[dataset, preview_selector],
+            outputs=[preview_start_year],
+            show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector],
+            inputs=[dataset, preview_selector, preview_start_year],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         ).then(
             fn=lambda: gr.update(visible=False),
-            outputs=[preview_loading], show_progress="hidden", queue=False,
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
+        )
+        preview_start_year.change(
+            fn=lambda: gr.update(visible=True),
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector, preview_start_year],
+            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
         )
 
         btn_next_preview.click(
             fn=next_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state],
+            inputs=[dataset, preview_selector, preview_page_state,preview_start_year],
             outputs=[
                 preview,
                 preview_page_label,
@@ -235,7 +352,7 @@ def build_tab():
 
         btn_prev_preview.click(
             fn=prev_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state],
+            inputs=[dataset, preview_selector, preview_page_state,preview_start_year],
             outputs=[
                 preview,
                 preview_page_label,

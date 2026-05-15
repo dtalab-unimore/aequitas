@@ -5,8 +5,8 @@
 .main-shell {
     max-width: 1250px;
     margin: 0 auto;
-    padding-top: 8px;
-    padding-bottom: 24px;
+    padding-top: 0px;
+    padding-bottom: 6px;
     gap: 0 !important;
     margin-bottom: -20px !important;
 }
@@ -69,6 +69,35 @@ button:hover {
     transform: translateY(-1px);
 }
 
+/* ── Gradio custom scrollbar ───────────────────────────────── */
+.gradio-container,
+.gradio-container * {
+    scrollbar-width: thin;
+    scrollbar-color: #c7d2fe transparent;
+}
+
+.gradio-container *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.gradio-container *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.gradio-container *::-webkit-scrollbar-thumb {
+    background: #c7d2fe;
+    border-radius: 999px;
+}
+
+.gradio-container *::-webkit-scrollbar-thumb:hover {
+    background: #818cf8;
+}
+
+.gradio-container *::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /* ── Download tab ───────────────────────────────────────────── */
 
 .download-shell {
@@ -76,13 +105,13 @@ button:hover {
     max-width: 100% !important;
     margin: 0 !important;
     padding: 12px 2px 24px !important;
-    gap: 14px !important;
+    gap: 0px !important;
     box-sizing: border-box !important;
 }
 
 .download-top-row {
     gap: 16px !important;
-    align-items: flex-start !important;   /* card alte quanto il loro contenuto */
+    align-items: flex-start !important;
     margin-bottom: 0 !important;
     width: 100% !important;
     flex-wrap: nowrap !important;
@@ -116,7 +145,7 @@ button:hover {
     display: flex !important;
     height: 250px;
     flex-direction: column !important;
-    gap: 10px !important;
+    gap: 0px !important;
 }
 
 .download-controls-card label {
@@ -198,12 +227,11 @@ button:hover {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 12px !important;
-    margin-bottom: -8px !important;
+    gap: 0px !important;
+    margin-bottom: -12px !important;
     width: 100% !important;
 }
 
-/* Neutralizza wrapper Gradio: colonne, .block, .form, fieldset */
 .preview-header-row > *,
 .preview-header-row > * > * {
     background: transparent !important;
@@ -223,25 +251,19 @@ button:hover {
     margin: 0 !important;
 }
 
-/* Colonna markdown: si espande */
 .preview-header-row > div:first-child {
     flex: 1 1 auto !important;
     min-width: 0 !important;
 }
 
-/* Colonna dropdown: larghezza automatica */
-.preview-header-row > div:last-child {
-    flex: 0 0 auto !important;
-}
-
 
 .preview-header-row #preview-selector {
     min-width: 200px !important;
-    /*max-width: 320px !important;*/
+    max-width: 200px !important;
     flex-shrink: 0 !important;
 }
 
-/* Il wrapper principale del componente (div.block o fieldset) */
+
 #preview-selector .block,
 #preview-selector fieldset,
 .preview-header-row #preview-selector > div,
@@ -253,7 +275,6 @@ button:hover {
     box-shadow: none !important;
 }
 
-/* Il .wrap interno (la select vera e propria) */
 #preview-selector .wrap {
     border: none !important;
     box-shadow: none !important;
@@ -271,6 +292,23 @@ button:hover {
     display: none !important;
 }
 
+.preview-header-controls {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+.preview-header-controls > .gap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    width: auto !important;
+}
 
 /* ── Preview HTML table ─────────────────────────────────────── */
 
@@ -519,7 +557,7 @@ button:hover {
     align-items: center;
 }
 
-/* centra il plot */
+/* centering plot */
 .metrics-plot-col > div {
     width: 100%;
     max-width: 900px;
@@ -782,7 +820,7 @@ button:hover {
     margin-top: 14px;
 }
 
-/* Download button: posizione + stile identico a .ticker-count */
+/* Download button= equal to .ticker-count */
 #download-tickers-button {
     position: absolute !important;
     left: 205px !important;
@@ -818,7 +856,6 @@ button:hover {
     transform: none !important;
 }
 
-/* Se Gradio crea elementi interni, forziamo anche quelli */
 #download-tickers-button button,
 #download-tickers-button a,
 #download-tickers-button span,
@@ -848,7 +885,6 @@ button:hover {
     box-shadow: none !important;
 }
 
-/* Hover identico al badge */
 #download-tickers-button:hover,
 #download-tickers-button:hover button,
 #download-tickers-button:hover a,
@@ -859,8 +895,7 @@ button:hover {
     border-color: #a5b4fc !important;
     transform: none !important;
 }
-/* Output section */
-/* altezza unica per logs e result */
+
 :root {
     --test-box-height: 260px;
 }
@@ -887,7 +922,6 @@ button:hover {
     flex-direction: column !important;
 }
 
-/* Pulisce wrapper interni Gradio */
 .test-output-card,
 .test-output-card > div,
 .test-output-card .form,
@@ -1724,7 +1758,14 @@ table.mpt td.missing {
     display: none !important;
 }
 
+.dropdown-single-compact .wrap {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
 
+    overflow: hidden !important;
+    border-radius: 14px !important;
+}
 /* ── Compact multiselect ───────────────────────────────────── */
 
 .dropdown-multiselect-compact .wrap {
@@ -1746,9 +1787,9 @@ table.mpt td.missing {
     flex-wrap: nowrap !important;
 
     align-items: center !important;
-    gap: 6px !important;
+    gap: 5px !important;
 
-    padding: 6px 38px 6px 8px !important;
+    padding: 5px 22px 2px 7px !important;
 
     overflow-x: auto !important;
     overflow-y: hidden !important;
