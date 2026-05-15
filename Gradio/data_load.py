@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import math
 import json
 import math
 import os
@@ -7,7 +7,7 @@ import sys
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
-
+from html import escape
 import gradio as gr
 import numpy as np
 import pandas as pd
@@ -40,7 +40,7 @@ from Evaluation.main_demo_dataload import (
 # Config
 # =============================================================================
 
-PREVIEW_PAGE_SIZE = 10
+PREVIEW_PAGE_SIZE = 7
 
 DATASET_TO_NATION = {
     "sp500": "us",
@@ -213,23 +213,6 @@ def dataset_base_path(universe: str) -> str:
     return str(DATA_DIR / universe / f"{universe}.csv")
 
 
-def dataset_exists(universe: str) -> bool:
-    if not universe:
-        return False
-
-    return Path(dataset_base_path(universe)).exists()
-
-
-def get_preview_options(universe: str) -> list[str]:
-    if not universe:
-        return []
-
-    return [
-        label
-        for label, path in _build_file_map(universe).items()
-        if Path(path).exists()
-    ]
-
 
 def _relative_path(path: Path) -> str:
     try:
@@ -376,13 +359,11 @@ def _format_required_files_report(
     existing = sum(1 for row in rows if row["exists"])
     missing = len(rows) - existing
 
-    lines.append(f"Required files: {len(rows)}")
-    lines.append(f"Available: {existing}")
-    lines.append(f"Missing: {missing}")
+    lines.append(f"ℹ️ Required files: {len(rows)} | Available: {existing} | Missing: {missing}")
     lines.append("")
 
     for row in rows:
-        status = "OK" if row["exists"] else "MISSING"
+        status = "✅ OK" if row["exists"] else "⛔ MISSING"
         path = _relative_path(row["path"])
 
         lines.append(
@@ -402,7 +383,6 @@ def _format_required_files_report(
 def inspect_required_files(dataset: str | None, model: str | None):
     if not dataset and not model:
         return (
-            "Select a dataset and a model.",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -411,7 +391,6 @@ def inspect_required_files(dataset: str | None, model: str | None):
 
     if not dataset:
         return (
-            "Select a dataset.",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -420,7 +399,6 @@ def inspect_required_files(dataset: str | None, model: str | None):
 
     if not model:
         return (
-            "Select a model.",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -443,24 +421,19 @@ def inspect_required_files(dataset: str | None, model: str | None):
         missing_count = sum(1 for row in rows if not row["exists"])
 
         if missing_count == 0:
-            if unsupported_files:
-                status = "All downloadable required files are available. Some configured files are unsupported."
-            else:
-                status = "All required files are already available."
 
             button = gr.update(
                 value="No Missing Files",
                 interactive=False,
             )
         else:
-            status = f"{missing_count} required file(s) are missing."
+
             button = gr.update(
                 value=f"Download Missing Files ({missing_count})",
                 interactive=True,
             )
 
         return (
-            status,
             report,
             button,
             universe_targets,
@@ -469,7 +442,6 @@ def inspect_required_files(dataset: str | None, model: str | None):
 
     except Exception as exc:
         return (
-            f"File inspection failed: {exc}",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -485,7 +457,6 @@ def download_missing_files(
 ):
     if not dataset:
         return (
-            "Select a dataset first.",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -494,7 +465,6 @@ def download_missing_files(
 
     if not model:
         return (
-            "Select a model first.",
             "",
             gr.update(value="Download Missing Files", interactive=False),
             [],
@@ -535,74 +505,212 @@ def download_missing_files(
             )
 
     except Exception as exc:
-        status, report, button, universe_state, market_state = inspect_required_files(
+        (report, button, universe_state, market_state) = inspect_required_files(
             dataset,
             model,
         )
 
         return (
-            f"Download failed: {exc}",
             report,
             button,
             universe_state,
             market_state,
         )
 
-    status, report, button, universe_state, market_state = inspect_required_files(
+    (report, button, universe_state, market_state) = inspect_required_files(
         dataset,
         model,
     )
 
     return (
-        "Download completed. Required files are now available.",
         report,
         button,
         universe_state,
         market_state,
     )
+# =============================================================================
+# Cache data table html based on file path and modification time
+# =============================================================================
+
+def _path_signature(path: str) -> int:
+    p = Path(path)
+
+    if not p.exists():
+        return 0
+
+    if p.is_file():
+        return p.stat().st_mtime_ns
+
+    mtimes = [p.stat().st_mtime_ns]
+
+    for child in p.rglob("*"):
+        try:
+            if child.is_file():
+                mtimes.append(child.stat().st_mtime_ns)
+        except OSError:
+            pass
+
+    return max(mtimes) if mtimes else p.stat().st_mtime_ns
 
 
+@lru_cache(maxsize=256)
+def _load_preview_file_page_cached(
+    path: str,
+    page: int,
+    page_size: int,
+) -> tuple[str, str, bool, bool, int]:
+    page = max(0, int(page))
+
+    if path.endswith(".csv"):
+        df, total_items = _csv_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+
+    elif path.endswith(".json"):
+        df, total_items = _json_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+
+    elif path.endswith(".npz"):
+        df, total_items = _npz_preview_page_df(path)
+        page = 0
+
+    elif os.path.isdir(path):
+        df, total_items = _directory_json_preview_page_df(
+            path=path,
+            page=page,
+            page_size=page_size,
+        )
+
+    else:
+        return (
+            empty_preview_table_html(f"Format not supported: {path}"),
+            "<span>0 / 0</span>",
+            False,
+            False,
+            0,
+        )
+
+    total_pages = max(math.ceil(total_items / page_size), 1)
+    page = max(0, min(page, total_pages - 1))
+
+    return (
+        preview_table_html(df),
+        f"<span>{page + 1} / {total_pages}</span>",
+        page > 0,
+        page < total_pages - 1,
+        page,
+    )
 # =============================================================================
 # Preview helpers
 # =============================================================================
 
-@lru_cache(maxsize=256)
-def _count_csv_rows(path: str) -> int:
-    try:
-        with open(path, "rb") as f:
-            total_lines = sum(
-                chunk.count(b"\n")
-                for chunk in iter(lambda: f.read(1024 * 1024), b"")
-            )
+def empty_preview_table_html(message: str = "Select a dataset and/or a model to preview data.") -> str:
+    return f"""
+    <div class="preview-table-wrap">
+        <div class="preview-empty">
+            <div>{escape(message)}</div>
+        </div>
+    </div>
+    """
 
-        return max(total_lines - 1, 0)
 
-    except Exception:
-        return 0
+def preview_table_html(df: pd.DataFrame) -> str:
+    if df is None or df.empty:
+        return empty_preview_table_html()
+
+    headers = ["#"] + [str(col) for col in df.columns]
+
+    th_cells = "".join(
+        f"<th>{escape(col)}</th>" for col in headers
+    )
+
+    rows = []
+    for display_idx, (_, row) in enumerate(df.iterrows()):
+        td_cells = [f"<td class='row-index'>{display_idx}</td>"]
+
+        td_cells.extend(
+            f"<td>{escape(str(v)) if pd.notna(v) else ''}</td>"
+            for v in row
+        )
+
+        rows.append(f"<tr>{''.join(td_cells)}</tr>")
+
+    return f"""
+    <div class="preview-table-wrap">
+        <div class="preview-table-scroll">
+            <table class="preview-html-table">
+                <thead>
+                    <tr>{th_cells}</tr>
+                </thead>
+                <tbody>
+                    {''.join(rows)}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+
+
+def get_preview_page(
+        df: pd.DataFrame,
+        page: int,
+) -> tuple[str, str, bool, bool, int]:
+
+    if df is None or df.empty:
+        return (
+            empty_preview_table_html(),
+            _page_label(0, 0),
+            False,
+            False,
+            0,
+        )
+
+    total_pages = max(1, (len(df) + PREVIEW_PAGE_SIZE - 1) // PREVIEW_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * PREVIEW_PAGE_SIZE
+    end = start + PREVIEW_PAGE_SIZE
+    html = preview_table_html(df.iloc[start:end].reset_index(drop=True))
+
+    label = _page_label(page + 1, total_pages)
+    return html, label, page > 0, page < total_pages - 1, page
+
+
+def _page_label(current: int, total: int) -> str:
+    return f"<span>{current} / {total}</span>"
+
+
+
+@lru_cache(maxsize=128)
+def _csv_total_rows_cached(path: str, signature: int) -> int:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        # -1 per header
+        return max(sum(1 for _ in f) - 1, 0)
 
 
 def _csv_preview_page_df(
     path: str,
-    page: int = 0,
-    page_size: int = PREVIEW_PAGE_SIZE,
+    page: int,
+    page_size: int,
 ) -> tuple[pd.DataFrame, int]:
-    total_rows = _count_csv_rows(path)
-    total_pages = max(math.ceil(total_rows / page_size), 1)
+    signature = _path_signature(path)
 
-    page = max(0, min(int(page), total_pages - 1))
-    start_row = page * page_size
+    total_items = _csv_total_rows_cached(path, signature)
 
-    try:
-        df = pd.read_csv(
-            path,
-            skiprows=range(1, start_row + 1),
-            nrows=page_size,
-        )
-    except pd.errors.EmptyDataError:
-        df = pd.DataFrame()
+    start = page * page_size
 
-    return df, total_rows
+    df = pd.read_csv(
+        path,
+        skiprows=range(1, start + 1),
+        nrows=page_size,
+    )
 
+    return df, total_items
 
 def _safe_json_load(path: str):
     try:
@@ -784,73 +892,40 @@ def load_preview_file_page(
 ):
     if not universe or not preview_name:
         return (
-            pd.DataFrame(),
-            "0 / 0",
+            empty_preview_table_html(),
+            "<span>0 / 0</span>",
             gr.update(interactive=False),
             gr.update(interactive=False),
             0,
         )
 
-    path = _build_file_map(universe).get(preview_name)
+    file_map = _build_file_map(universe)
+    path = file_map.get(preview_name)
 
     if not path or not os.path.exists(path):
         return (
-            pd.DataFrame({"message": [f"File not found: {preview_name}"]}),
-            "0 / 0",
+            empty_preview_table_html(f"File not found: {preview_name}"),
+            "<span>0 / 0</span>",
             gr.update(interactive=False),
             gr.update(interactive=False),
             0,
         )
 
-    page = max(0, int(page))
+    path = str(Path(path).resolve())
 
-    if path.endswith(".csv"):
-        df, total_items = _csv_preview_page_df(
-            path=path,
-            page=page,
-            page_size=page_size,
-        )
-
-    elif path.endswith(".json"):
-        df, total_items = _json_preview_page_df(
-            path=path,
-            page=page,
-            page_size=page_size,
-        )
-
-    elif path.endswith(".npz"):
-        df, total_items = _npz_preview_page_df(path)
-        page = 0
-
-    elif os.path.isdir(path):
-        df, total_items = _directory_json_preview_page_df(
-            path=path,
-            page=page,
-            page_size=page_size,
-        )
-
-    else:
-        return (
-            pd.DataFrame({"message": [f"Format not supported: {path}"]}),
-            "0 / 0",
-            gr.update(interactive=False),
-            gr.update(interactive=False),
-            0,
-        )
-
-    total_pages = max(math.ceil(total_items / page_size), 1)
-    page = max(0, min(page, total_pages - 1))
-
-    page_label = f"{page + 1} / {total_pages}"
-
-    return (
-        df,
-        page_label,
-        gr.update(interactive=page > 0),
-        gr.update(interactive=page < total_pages - 1),
-        page,
+    html, label, can_prev, can_next, page = _load_preview_file_page_cached(
+        path=path,
+        page=int(page),
+        page_size=int(page_size),
     )
 
+    return (
+        html,
+        label,
+        gr.update(interactive=can_prev),
+        gr.update(interactive=can_next),
+        page,
+    )
 
 def reset_preview_page(universe: str, preview_name: str):
     return load_preview_file_page(
@@ -876,19 +951,6 @@ def prev_preview_page(universe: str, preview_name: str, current_page: int):
     )
 
 
-def load_preview_file(universe: str, preview_name: str) -> pd.DataFrame:
-    df, _, _, _, _ = load_preview_file_page(
-        universe=universe,
-        preview_name=preview_name,
-        page=0,
-    )
-
-    return df
-
-
-def update_preview(universe: str, preview_name: str) -> pd.DataFrame:
-    return load_preview_file(universe, preview_name)
-
 
 def refresh_preview_controls(
     universe: str,
@@ -898,29 +960,41 @@ def refresh_preview_controls(
     """
     Updates the preview dropdown.
 
+    Shows only .csv and .npz files.
     If universe_targets / market_targets are provided, it shows only the files
     required by the selected model and already available on disk.
 
     Otherwise it falls back to all available preview files for the dataset.
     """
+    allowed_suffixes = {".csv", ".npz"}
+
     if not universe:
         return gr.update(choices=[], value=None)
 
     universe_targets = universe_targets or []
     market_targets = market_targets or []
 
-    # Fallback: if no model/targets selected, show all available files
+    # Fallback: if no model/targets selected, show all available CSV/NPZ files
     if not universe_targets and not market_targets:
-        options = get_preview_options(universe)
+        file_map = _build_file_map(universe)
+
+        options = [
+            label
+            for label, path in file_map.items()
+            if Path(path).suffix.lower() in allowed_suffixes
+            and Path(path).exists()
+        ]
+
         default_preview = options[0] if options else None
         return gr.update(choices=options, value=default_preview)
 
-    # Build label lookup from the preview file map
+    # Build label lookup from the preview file map, only for CSV/NPZ files
     file_map = _build_file_map(universe)
 
     path_to_label = {
         str(Path(path).resolve()): label
         for label, path in file_map.items()
+        if Path(path).suffix.lower() in allowed_suffixes
     }
 
     try:
@@ -940,11 +1014,13 @@ def refresh_preview_controls(
         if not path.exists():
             continue
 
+        if path.suffix.lower() not in allowed_suffixes:
+            continue
+
         resolved_path = str(path.resolve())
         label = path_to_label.get(resolved_path)
 
         if label is None:
-            # fallback if the file exists but is not explicitly mapped
             label = path.name
 
         if label not in options:
@@ -955,159 +1031,3 @@ def refresh_preview_controls(
     return gr.update(choices=options, value=default_preview)
 
 
-# =============================================================================
-# Backward-compatible helpers for old UI pieces
-# =============================================================================
-
-def update_existing_button(universe: str):
-    if dataset_exists(universe):
-        return gr.update(
-            value="Use Existing Dataset",
-            interactive=True,
-            variant="secondary",
-        )
-
-    return gr.update(
-        value="Dataset Not Available",
-        interactive=False,
-        variant="stop",
-    )
-
-
-def update_datasets(market):
-    if market == "EU":
-        datasets = ["sx5e", "sxxp"]
-    elif market == "USA":
-        datasets = ["sp500", "nasdaq100", "dji"]
-    else:
-        datasets = []
-
-    return gr.update(choices=datasets, value=datasets[0] if datasets else None)
-
-
-def on_dataset_change(dataset_value):
-    btn_update = update_existing_button(dataset_value)
-
-    return (
-        btn_update,
-        "",
-        gr.update(choices=[], value=None),
-        pd.DataFrame(),
-        "",
-        gr.update(interactive=False),
-        gr.update(interactive=False),
-        0,
-    )
-
-
-def on_market_change(market_value):
-    new_dataset_update = update_datasets(market_value)
-
-    return (
-        new_dataset_update,
-        "",
-        gr.update(choices=[], value=None),
-        pd.DataFrame(),
-        "",
-        gr.update(interactive=False),
-        gr.update(interactive=False),
-        0,
-    )
-
-
-def use_existing_dataset(universe: str):
-    if not universe:
-        return (
-            "Select a dataset.",
-            gr.update(choices=[], value=None),
-            pd.DataFrame(),
-            "0 / 0",
-            gr.update(interactive=False),
-            gr.update(interactive=False),
-            0,
-            update_existing_button(universe),
-        )
-
-    if not dataset_exists(universe):
-        return (
-            f"The dataset '{universe}' does not exist.",
-            gr.update(choices=[], value=None),
-            pd.DataFrame(),
-            "0 / 0",
-            gr.update(interactive=False),
-            gr.update(interactive=False),
-            0,
-            update_existing_button(universe),
-        )
-
-    options = get_preview_options(universe)
-    default_preview = options[0] if options else None
-
-    if default_preview:
-        preview_df, page_label, prev_btn, next_btn, page_state = reset_preview_page(
-            universe,
-            default_preview,
-        )
-    else:
-        preview_df = pd.DataFrame()
-        page_label = "0 / 0"
-        prev_btn = gr.update(interactive=False)
-        next_btn = gr.update(interactive=False)
-        page_state = 0
-
-    return (
-        f"Dataset '{universe}' already present, preview loaded.",
-        gr.update(choices=options, value=default_preview),
-        preview_df,
-        page_label,
-        prev_btn,
-        next_btn,
-        page_state,
-        update_existing_button(universe),
-    )
-
-
-def run_data_pipeline(universe: str):
-    """
-    Old button compatibility.
-    New UI should prefer inspect_required_files + download_missing_files.
-    """
-    if not universe:
-        return (
-            "Select a dataset.",
-            update_existing_button(universe),
-        )
-
-    try:
-        run_universe_pipeline(
-            universe,
-            targets=["prices"],
-            force=False,
-            verbose=True,
-            workers=4,
-        )
-
-        return (
-            f"Dataset '{universe}' downloaded.",
-            update_existing_button(universe),
-        )
-
-    except Exception as exc:
-        return (
-            f"Error during pipeline: {exc}",
-            update_existing_button(universe),
-        )
-
-
-def get_files(universe, models):
-    """
-    Old Check Files button compatibility.
-    """
-    if not universe:
-        return "Select a dataset."
-
-    if not models:
-        return "Select a model."
-
-    _, report, _, _, _ = inspect_required_files(universe, models)
-    return report
