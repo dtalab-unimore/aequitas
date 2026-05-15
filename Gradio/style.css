@@ -1256,159 +1256,91 @@ table.mpt td.missing {
     transform: none !important;
 }
 
-/* ── Evaluation tab ─────────────────────────────────────────── */
+/* ── Evaluation tab layout ─────────────────────────────────── */
 
 .evaluation-shell {
-    max-width: 1220px;
-    margin: 0 auto;
-    padding: 8px 4px 22px;
-    gap: 12px !important;
-}
-
-
-/* Compact params panel */
-.evaluation-panel-compact {
-    padding: 10px !important;
-}
-
-.evaluation-params-grid {
-    gap: 10px !important;
-    align-items: stretch !important;
-}
-
-.evaluation-subpanel {
-    background: #fbfdff !important;
-    border: 1px solid #dbe4ff !important;
-    border-radius: 16px !important;
-    padding: 12px !important;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.025) !important;
-}
-
-.evaluation-subpanel > div {
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-/* Hero */
-.evaluation-hero-card {
-    background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
-    border: 1px solid #c7d2fe;
-    border-radius: 20px;
-    padding: 20px 24px;
-    box-shadow: 0 10px 28px rgba(49, 46, 129, 0.08);
-    position: relative;
-    overflow: hidden;
-}
-
-.evaluation-hero-card::after {
-    content: "";
-    position: absolute;
-    right: -45px;
-    top: -45px;
-    width: 150px;
-    height: 150px;
-    border-radius: 999px;
-    background: rgba(99, 102, 241, 0.10);
-}
-
-.evaluation-badge {
-    display: inline-flex;
-    align-items: center;
-    width: fit-content;
-
-    background: #eef2ff;
-    color: #4f46e5;
-    border: 1px solid #c7d2fe;
-    border-radius: 999px;
-
-    padding: 5px 11px;
-    margin-bottom: 10px;
-
-    font-size: 0.76rem;
-    font-weight: 850;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.evaluation-hero-card h2 {
-    margin: 0 0 6px !important;
-    color: #1e1b4b;
-    font-size: 1.55rem;
-    font-weight: 850;
-    letter-spacing: -0.03em;
-    line-height: 1.1;
-}
-
-.evaluation-hero-card p {
-    max-width: 780px;
+    width: 100% !important;
+    max-width: 100% !important;
     margin: 0 !important;
-    color: #475569;
-    font-size: 0.94rem;
-    line-height: 1.5;
+    padding: 12px 2px 24px !important;
+    gap: 14px !important;
+    box-sizing: border-box !important;
 }
 
-/* ── Assessment type card ───────────────────────────────────── */
-.evaluation-mode-col{align-items: center}
-.evaluation-mode-row {
+
+
+.evaluation-main-layout {
     width: 100% !important;
     display: flex !important;
-    justify-content: center !important;
     align-items: flex-start !important;
-    margin: 4px 0 10px 0 !important;
+    justify-content: center !important;
+    gap: 18px !important;
 }
 
-.evaluation-mode-card {
-    width: fit-content !important;
-    min-width: 0 !important;
-    max-width: max-content !important;
-
-    padding: 4px 4px !important;
-
-    display: inline-flex !important;
+.evaluation-left-col {
+    display: flex !important;
     flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+}
 
-    background: transparent !important;
+.evaluation-right-col {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+
+.evaluation-mode-card,
+.evaluation-panel,
+.evaluation-output-card {
+    width: 100% !important;
+    background: #ffffff !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 18px !important;
     box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
 }
 
-.evaluation-mode-card > div {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
+.evaluation-mode-card {
+    padding: 5px 0px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+}
 
+.evaluation-panel {
+    padding: 5px !important;
+}
+
+.evaluation-output-card {
+    padding: 5px !important;
+    overflow: hidden !important;
+}
+
+.evaluation-mode-card > div,
+.evaluation-panel > div,
+.evaluation-output-card > div {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
 
-.evaluation-mode-card .prose,
-.evaluation-mode-card .markdown {
-    width: 100% !important;
-    text-align: center !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
+/* ── Assessment card ───────────────────────────────────────── */
 
 .evaluation-mode-title-wrap {
     width: 100% !important;
     display: flex !important;
     justify-content: center !important;
     align-items: center !important;
-    margin: 0 0 8px 0 !important;
-    padding: 0 !important;
-}
-
-.evaluation-mode-title {
-    margin: 0 auto !important;
+    margin-bottom: 8px !important;
 }
 
 .evaluation-radio {
     width: fit-content !important;
-    min-width: 0 !important;
     max-width: max-content !important;
     margin: 0 auto !important;
     padding: 0 !important;
@@ -1419,91 +1351,58 @@ table.mpt td.missing {
 .evaluation-radio .form,
 .evaluation-radio .container {
     width: fit-content !important;
-    min-width: 0 !important;
     max-width: max-content !important;
-
     margin: 0 auto !important;
     padding: 0 !important;
-
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
 
 .evaluation-radio label {
-    text-transform: none !important;
-    letter-spacing: normal !important;
-    font-size: 0.80rem !important;
+    font-size: 0.8rem !important;
     font-weight: 740 !important;
     color: #1e293b !important;
 }
 
-/* ── Main cards ─────────────────────────────────────────────── */
+/* ── Section headers ───────────────────────────────────────── */
 
-.evaluation-panel,
-.evaluation-output-card {
-    background: #ffffff !important;
+.evaluation-section-title,
+.evaluation-output-header {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+
+    width: fit-content !important;
+
+    background: #eef2ff !important;
+    color: #312e81 !important;
     border: 1px solid #c7d2fe !important;
-    border-radius: 18px !important;
-    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
-}
+    border-radius: 999px !important;
 
-.evaluation-panel {
-    padding: 18px !important;
-}
+    padding: 6px 12px !important;
+    margin-bottom: 12px !important;
 
-.evaluation-output-card {
-    padding: 14px !important;
-    overflow: hidden !important;
-}
-
-.evaluation-panel > div,
-.evaluation-output-card > div {
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-/* Section headings */
-.evaluation-section-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-
-    width: fit-content;
-
-    background: #eef2ff;
-    color: #312e81;
-    border: 1px solid #c7d2fe;
-    border-radius: 999px;
-
-    padding: 6px 12px;
-    margin-bottom: 12px;
-
-    font-size: 0.78rem;
-    font-weight: 850;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 0.78rem !important;
+    font-weight: 850 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
 }
 
 .evaluation-section-spaced {
-    margin-top: 10px;
+    margin-top: 14px !important;
 }
 
 .evaluation-section-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.13);
+    width: 7px !important;
+    height: 7px !important;
+    border-radius: 999px !important;
+    background: #6366f1 !important;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.13) !important;
 }
 
-/* Form rows */
-.evaluation-form-row {
-    gap: 14px !important;
-    margin-bottom: 8px !important;
-}
+/* ── Inputs ──────────────────────────────────── */
 
-.evaluation-form-row label,
 .evaluation-panel label {
     font-size: 0.72rem !important;
     font-weight: 800 !important;
@@ -1521,12 +1420,11 @@ table.mpt td.missing {
     font-size: 0.88rem !important;
 }
 
-/* ── Portfolio construction ─────────────────────────────────── */
+/* ── Portfolio construction ───────────────────────────────── */
 
 .evaluation-portfolio-card {
-    margin-top: 10px !important;
+    margin-top: 12px !important;
     padding: 0 !important;
-
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -1538,69 +1436,15 @@ table.mpt td.missing {
     box-shadow: none !important;
 }
 
-.evaluation-portfolio-card[style*="display: none"] {
-    display: none !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-/* Compact Top K / Short K dropdowns, left aligned */
-.evaluation-portfolio-compact-row {
-    justify-content: flex-start !important;
-    align-items: flex-start !important;
-    gap: 14px !important;
-    margin-bottom: 8px !important;
-}
-
-.evaluation-portfolio-small-col {
-    flex: 0 0 180px !important;
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
-}
-
-.evaluation-portfolio-small-col > div {
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
-}
-
-/* ── Run button ─────────────────────────────────────────────── */
-
-.evaluation-run-row {
-    width: 100% !important;
-    justify-content: center !important;
-    align-items: center !important;
-    margin-top: 14px !important;
-    margin-bottom: 14px !important;
-}
-
-.evaluation-run-button-col {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-
-    flex: 0 0 auto !important;
-    width: 240px !important;
-    min-width: 240px !important;
-    max-width: 240px !important;
-}
-
-.evaluation-run-button-col > div {
-    width: 100% !important;
-}
+/* ── Run button ────────────────────────────────────────────── */
 
 #evaluation-run-button {
     width: 100% !important;
-    min-width: 220px !important;
-    max-width: 240px !important;
-    height: 44px !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
 
-    margin: 0 auto !important;
+    height: 44px !important;
+    margin: 0 !important;
 
     border-radius: 999px !important;
     font-weight: 850 !important;
@@ -1624,41 +1468,13 @@ table.mpt td.missing {
     transform: none !important;
 }
 
-/* ── Output layout ──────────────────────────────────────────── */
+/* ── Execution log ─────────────────────────────────────────── */
 
-.evaluation-output-row {
-    gap: 16px !important;
-    align-items: flex-start !important;
-    margin-top: 4px !important;
+.evaluation-log-card {
+    padding: 5px !important;
 }
 
-.evaluation-output-header {
-    display: inline-flex;
-    align-items: center;
-
-    width: fit-content;
-
-    background: #eef2ff;
-    color: #312e81;
-    border: 1px solid #c7d2fe;
-    border-radius: 999px;
-
-    padding: 6px 12px;
-    margin-bottom: 12px;
-
-    font-size: 0.8rem;
-    font-weight: 850;
-    letter-spacing: 0.035em;
-    text-transform: uppercase;
-}
-
-/* Execution log accordion */
-.evaluation-log-accordion {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
+.evaluation-log-accordion,
 .evaluation-log-accordion > div {
     background: transparent !important;
     border: none !important;
@@ -1670,14 +1486,11 @@ table.mpt td.missing {
     border: 1px solid #dbe4ff !important;
     border-radius: 12px !important;
     color: #1e1b4b !important;
-
-    padding: 10px 12px !important;
+    padding: 10px 5px !important;
     margin-bottom: 8px !important;
-
     font-weight: 750 !important;
 }
 
-/* Execution log textbox */
 #execution-log,
 #execution-log > div {
     background: transparent !important;
@@ -1687,15 +1500,15 @@ table.mpt td.missing {
 }
 
 #execution-log textarea {
-    height: 260px !important;
-    min-height: 260px !important;
-    max-height: 260px !important;
+    height: 240px !important;
+    min-height: 240px !important;
+    max-height: 240px !important;
 
     background: #fbfdff !important;
     border: 1px solid #e0e7ff !important;
     border-radius: 14px !important;
 
-    padding: 13px !important;
+    padding: 5px !important;
 
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     font-size: 0.78rem !important;
@@ -1708,21 +1521,28 @@ table.mpt td.missing {
     box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
 }
 
-/* Output dataframe */
-#evaluation-output-table {
-    border: 1px solid #e0e7ff !important;
-    border-radius: 14px !important;
-    overflow: hidden !important;
-    font-weight: normal !important;
-    background: #ffffff !important;
+/* ── Evaluation output table ───────────────────────────────── */
+
+.evaluation-table-card {
+    min-height: 0 !important;
 }
 
-#evaluation-output-table,
+#evaluation-output-table {
+    width: 100% !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
 #evaluation-output-table > div {
+    background: transparent !important;
+    border: none !important;
     box-shadow: none !important;
 }
 
 #evaluation-output-table table {
+    width: 100% !important;
     font-size: 0.80rem !important;
     font-weight: normal !important;
 }
@@ -1739,173 +1559,44 @@ table.mpt td.missing {
     border-color: #eef2ff !important;
     font-weight: normal !important;
 }
-#evaluation-output-table > div {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
 
-/* Mobile */
-@media (max-width: 900px) {
-    .evaluation-shell {
-        padding-left: 0;
-        padding-right: 0;
-    }
+/* ── Button ─────────────────────────────────── */
 
-    .evaluation-hero-card {
-        padding: 18px;
-    }
-
-    .evaluation-output-row {
-        flex-direction: column !important;
-    }
-
-    .evaluation-run-button-col {
-        width: 100% !important;
-        min-width: 100% !important;
-        max-width: 100% !important;
-    }
-
-    #evaluation-run-button {
-        width: 100% !important;
-        min-width: 100% !important;
-        max-width: 100% !important;
-    }
-}
-
-.evaluation-chatgpt-explanation-card {
-    position: relative !important;
-    margin-top: 12px !important;
-    min-height: 80px !important;
-}
-
-#evaluation-chatgpt-explanation {
-    max-height: 360px !important;
-    overflow-y: auto !important;
-
-    padding: 16px 18px !important;
-    margin-top: 10px !important;
-
-    background: #ffffff !important;
-    border: 1px solid #c7d2fe !important;
-    border-radius: 14px !important;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
-
-    color: #0f172a !important;
-    font-size: 0.80rem !important;
-    line-height: 1.55 !important;
-}
-
-#evaluation-chatgpt-explanation:empty {
-    display: none !important;
-}
-
-#evaluation-chatgpt-explanation h1,
-#evaluation-chatgpt-explanation h2,
-#evaluation-chatgpt-explanation h3 {
-    color: #1e1b4b !important;
-    font-weight: 800 !important;
-    margin-top: 0.2rem !important;
-    margin-bottom: 0.65rem !important;
-}
-
-#evaluation-chatgpt-explanation p {
-    margin-bottom: 0.75rem !important;
-}
-
-#evaluation-chatgpt-explanation ul,
-#evaluation-chatgpt-explanation ol {
-    padding-left: 1.25rem !important;
-    margin-bottom: 0.8rem !important;
-}
-
-#evaluation-chatgpt-explanation li {
-    margin-bottom: 0.35rem !important;
-}
-
-#evaluation-chatgpt-explanation strong {
-    color: #3730a3 !important;
-    font-weight: 800 !important;
-}
-.evaluation-chatgpt-explanation-card *:not(#evaluation-chatgpt-explanation):not(#evaluation-chatgpt-explanation *) {
-    background: transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
-}
-
-/*.evaluation-chatgpt-inline-loading {*/
-/*    display: flex !important;*/
-/*    align-items: center !important;*/
-/*    justify-content: center !important;*/
-/*    gap: 8px !important;*/
-
-/*    margin-top: 14px !important;*/
-/*    margin-bottom: 4px !important;*/
-
-/*    width: 100% !important;*/
-/*    height: 34px !important;*/
-
-/*    !*background: transparent !important;*!*/
-/*    !*!*border: none !important;*!*!*/
-/*    !*!*box-shadow: none !important;*!*!*/
-/*}*/
-
-.evaluation-chatgpt-inline-loading {
+.evaluation-download-row {
     display: flex !important;
-    align-items: center !important;
     justify-content: center !important;
-    gap: 8px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+}
 
+#download-evaluation-button,
+#explain-evaluation-button {
     width: fit-content !important;
+    min-width: 0 !important;
     max-width: max-content !important;
 
-    height: 34px !important;
-
-    margin: 14px auto 4px auto !important;
-
-    background: transparent !important;
-
+    background: #eef2ff !important;
+    color: #4f46e5 !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 999px !important;
 
-    padding: 10px 16px !important;
+    padding: 4px 10px !important;
 
-    box-shadow: 0 10px 24px rgba(49, 46, 129, 0.12) !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    line-height: normal !important;
+
+    box-shadow: none !important;
+    cursor: pointer !important;
+    transform: none !important;
 }
 
-.evaluation-chatgpt-inline-loading .evaluation-loading-text {
-    color: #3730a3 !important;
-    font-size: 0.82rem !important;
-    font-weight: 700 !important;
-}
+/* ── Plot  ──────────────────────────── */
 
-.evaluation-chatgpt-explanation-card {
-    margin-top: 14px !important;
-}
-
-#evaluation-chatgpt-explanation {
-    max-height: 360px !important;
-    overflow-y: auto !important;
-
-    padding: 16px 18px !important;
-
-    background: rgb(246 252 255) !important;
-    border: 1px solid #c7d2fe !important;
-    border-radius: 14px !important;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
-
-    color: #0f172a !important;
-    font-size: 0.9rem !important;
-    line-height: 1.55 !important;
-}
-/* Evaluation plot */
 .evaluation-plot-card {
-    margin-top: 14px !important;
-    padding: 18px !important;
-    background: #ffffff !important;
-    border: 1px solid #c7d2fe !important;
-    border-radius: 20px !important;
-    box-shadow: 0 10px 28px rgba(49, 46, 129, 0.08) !important;
+    min-height: 260px !important;
 }
 
 #evaluation-plot {
@@ -1918,6 +1609,7 @@ table.mpt td.missing {
 }
 
 #evaluation-plot > div {
+    width: 100% !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -1930,7 +1622,8 @@ table.mpt td.missing {
     height: auto !important;
 }
 
-/* Loading overlay for evaluation table and plot */
+/* ── Loading overlay ───────────────────────────────────────── */
+
 .evaluation-loading-host {
     position: relative !important;
 }
@@ -1944,31 +1637,38 @@ table.mpt td.missing {
     align-items: center !important;
     justify-content: center !important;
 
-    background:transparent !important;
+    background: transparent !important;
     backdrop-filter: blur(3px) !important;
-
 }
 
-.evaluation-loading-box {
-    display: inline-flex !important;
+.evaluation-loading-box,
+.evaluation-chatgpt-inline-loading {
+    display: flex !important;
     align-items: center !important;
-    gap: 10px !important;
+    justify-content: center !important;
+    gap: 8px !important;
 
-    background: #ffffff !important;
+    width: fit-content !important;
+    max-width: max-content !important;
+    height: 34px !important;
+    margin: 14px auto 4px auto !important;
+
+    background: transparent !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 999px !important;
 
     padding: 10px 16px !important;
 
-    box-shadow: 0 10px 24px rgba(49, 46, 129, 0.12) !important;
 }
 
-.evaluation-loading-text {
-    color: #312e81 !important;
-    font-size: 0.84rem !important;
-    font-weight: 850 !important;
-    letter-spacing: 0.02em !important;
+
+
+.evaluation-chatgpt-inline-loading .evaluation-loading-text {
+    color: #3730a3 !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
 }
+
 
 .evaluation-loading-spinner {
     width: 17px !important;
@@ -1991,6 +1691,42 @@ table.mpt td.missing {
     }
 }
 
+/* ── ChatGPT explanation ───────────────────────────────────── */
+
+.evaluation-chatgpt-explanation-card {
+    margin-top: 14px !important;
+    min-height: 80px !important;
+}
+
+.evaluation-chatgpt-explanation-card *:not(#evaluation-chatgpt-explanation):not(#evaluation-chatgpt-explanation *) {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+#evaluation-chatgpt-explanation {
+    max-height: 360px !important;
+    overflow-y: auto !important;
+
+    padding: 16px 18px !important;
+
+    background: rgb(246 252 255) !important;
+    border: 1px solid #c7d2fe !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
+
+    color: #0f172a !important;
+    font-size: 0.9rem !important;
+    line-height: 1.55 !important;
+}
+
+#evaluation-chatgpt-explanation:empty {
+    display: none !important;
+}
+
+
+/* ── Compact multiselect ───────────────────────────────────── */
+
 .dropdown-multiselect-compact .wrap {
     height: 42px !important;
     min-height: 42px !important;
@@ -2000,9 +1736,8 @@ table.mpt td.missing {
     border-radius: 14px !important;
 }
 
-/* Container of selected chips */
 .dropdown-multiselect-compact .wrap > div {
-   height: 42px !important;
+    height: 42px !important;
     min-height: 42px !important;
     max-height: 42px !important;
 
@@ -2011,9 +1746,8 @@ table.mpt td.missing {
     flex-wrap: nowrap !important;
 
     align-items: center !important;
-    align-content: center !important;
-
     gap: 6px !important;
+
     padding: 6px 38px 6px 8px !important;
 
     overflow-x: auto !important;
@@ -2022,7 +1756,6 @@ table.mpt td.missing {
     white-space: nowrap !important;
 }
 
-/* Selected chips */
 .dropdown-multiselect-compact .wrap button {
     flex: 0 0 auto !important;
 
@@ -2046,209 +1779,34 @@ table.mpt td.missing {
     border-radius: 8px !important;
 }
 
-/* Text inside chips */
-.dropdown-multiselect-compact .wrap button span,
-.dropdown-multiselect-compact .wrap span {
-    white-space: nowrap !important;
-    line-height: 1 !important;
-}
+/* ── Responsive ────────────────────────────────────────────── */
 
-/* Keep dropdown arrow / clear icon from being squeezed */
-.dropdown-multiselect-compact .wrap svg {
-    flex: 0 0 auto !important;
-}
+@media (max-width: 900px) {
+    .evaluation-main-layout {
+        flex-direction: column !important;
+    }
 
-/* Horizontal scrollbar */
-.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar {
-    height: 5px;
-}
+    .evaluation-left-col,
+    .evaluation-right-col {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
 
-.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar-track {
-    background: transparent;
+    #evaluation-run-button {
+        width: 100% !important;
+    }
 }
-
-.dropdown-multiselect-compact .wrap > div::-webkit-scrollbar-thumb {
-    background: #c7d2fe;
-    border-radius: 999px;
-}
-
-.dropdown-multiselect-compact .wrap > div {
-    scrollbar-width: thin;
-    scrollbar-color: #c7d2fe transparent;
-}
-
-/* ── Evaluation sidebar ─────────────────────────────────────── */
-.evaluation-controls-col {
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 1.25rem 1rem !important;
-    box-shadow: var(--shadow-sm);
-}
-.evaluation-controls-col label {
-    font-size: .72rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: .06em !important;
-    color: var(--c-muted) !important;
-}
-
-/* run button full-width */
-.evaluation-run-btn-full {
-    width: 100% !important;
-    margin-top: 1.25rem !important;
-}
-/* Evaluation table rendered with the same style as metrics table */
-.evaluation-metrics-table-wrap {
-    margin-top: 0 !important;
-    margin-bottom: 8px !important;
-}
-
-#evaluation-output-table {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
+#chatgpt-explanation-wrapper,
+#chatgpt-explanation-wrapper.contain,
+.gradio-container .contain.evaluation-chatgpt-explanation-card,
+.gradio-container .evaluation-chatgpt-explanation-card {
     padding: 0 !important;
-}
-
-.evaluation-download-row {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 10px !important;
-    width: 100% !important;
-}
-
-/* Same pill style for Download and Explain buttons */
-#download-evaluation-button,
-#explain-evaluation-button {
-    width: fit-content !important;
-    min-width: 0 !important;
-    max-width: max-content !important;
-
-    height: auto !important;
-    min-height: 0 !important;
-
-    margin: 0 !important;
-
-    background: #eef2ff !important;
-    color: #4f46e5 !important;
-    border: 1px solid #c7d2fe !important;
-    border-radius: 999px !important;
-
-    padding: 4px 10px !important;
-
-    font-size: 0.78rem !important;
-    font-weight: 800 !important;
-    line-height: normal !important;
-
-    box-shadow: none !important;
-    cursor: pointer !important;
-    transform: none !important;
-}
-
-/* Internal Gradio elements */
-#download-evaluation-button button,
-#download-evaluation-button a,
-#download-evaluation-button span,
-#explain-evaluation-button button,
-#explain-evaluation-button a,
-#explain-evaluation-button span {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: max-content !important;
-
-    height: auto !important;
-    min-height: 0 !important;
+    margin-top: 14px !important;
 
     background: transparent !important;
-    color: #4f46e5 !important;
-    border: none !important;
+    background-color: transparent !important;
 
-    padding: 0 !important;
-    margin: 0 !important;
-
-    font-size: 0.78rem !important;
-    font-weight: 800 !important;
-    line-height: normal !important;
-    text-decoration: none !important;
-
-    box-shadow: none !important;
-}
-
-/* Hover */
-#download-evaluation-button:hover,
-#download-evaluation-button:hover button,
-#download-evaluation-button:hover a,
-#download-evaluation-button:hover span,
-#explain-evaluation-button:hover,
-#explain-evaluation-button:hover button,
-#explain-evaluation-button:hover a,
-#explain-evaluation-button:hover span {
-    background: #e0e7ff !important;
-    color: #4338ca !important;
-    border-color: #a5b4fc !important;
-    transform: none !important;
-}
-
-/* Il componente gr.HTML dell'overlay non deve occupare spazio nel layout */
-#files-loading-overlay {
-    position: absolute !important;
-    inset: 0 !important;
-    z-index: 80 !important;
-
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-
-    pointer-events: none !important;
-}
-
-/* Neutralizza wrapper interni Gradio dell'HTML */
-#files-loading-overlay > div,
-#files-loading-overlay .prose,
-#files-loading-overlay .markdown,
-#files-loading-overlay .html-container {
-    width: 100% !important;
-    height: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-/* Overlay specifico della card Required Files */
-#files-loading-overlay .evaluation-loading-overlay {
-    position: absolute !important;
-    inset: 54px 18px 18px 18px !important;
-    z-index: 90 !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    background: rgba(248, 250, 252, 0.78) !important;
-    backdrop-filter: blur(3px) !important;
-
-    border: 1px solid #dbe4ff !important;
-    border-radius: 16px !important;
-}
-
-/* La card deve essere il riferimento dell'absolute */
-.download-files-card {
-    position: relative !important;
-    overflow: hidden !important;
+    outline: none !important;
 }
