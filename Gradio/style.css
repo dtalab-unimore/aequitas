@@ -111,7 +111,7 @@ button:hover {
 
 .download-top-row {
     gap: 16px !important;
-    align-items: flex-start !important;   /* card alte quanto il loro contenuto */
+    align-items: flex-start !important;
     margin-bottom: 0 !important;
     width: 100% !important;
     flex-wrap: nowrap !important;
@@ -232,7 +232,6 @@ button:hover {
     width: 100% !important;
 }
 
-/* Neutralizza wrapper Gradio: colonne, .block, .form, fieldset */
 .preview-header-row > *,
 .preview-header-row > * > * {
     background: transparent !important;
@@ -252,13 +251,11 @@ button:hover {
     margin: 0 !important;
 }
 
-/* Colonna markdown: si espande */
 .preview-header-row > div:first-child {
     flex: 1 1 auto !important;
     min-width: 0 !important;
 }
 
-/* Colonna dropdown: larghezza automatica */
 .preview-header-row > div:last-child {
     flex: 0 0 auto !important;
 }
@@ -266,11 +263,10 @@ button:hover {
 
 .preview-header-row #preview-selector {
     min-width: 200px !important;
-    /*max-width: 320px !important;*/
     flex-shrink: 0 !important;
 }
 
-/* Il wrapper principale del componente (div.block o fieldset) */
+
 #preview-selector .block,
 #preview-selector fieldset,
 .preview-header-row #preview-selector > div,
@@ -282,7 +278,6 @@ button:hover {
     box-shadow: none !important;
 }
 
-/* Il .wrap interno (la select vera e propria) */
 #preview-selector .wrap {
     border: none !important;
     box-shadow: none !important;
@@ -548,7 +543,7 @@ button:hover {
     align-items: center;
 }
 
-/* centra il plot */
+/* centering plot */
 .metrics-plot-col > div {
     width: 100%;
     max-width: 900px;
@@ -811,7 +806,7 @@ button:hover {
     margin-top: 14px;
 }
 
-/* Download button: posizione + stile identico a .ticker-count */
+/* Download button= equal to .ticker-count */
 #download-tickers-button {
     position: absolute !important;
     left: 205px !important;
@@ -847,7 +842,6 @@ button:hover {
     transform: none !important;
 }
 
-/* Se Gradio crea elementi interni, forziamo anche quelli */
 #download-tickers-button button,
 #download-tickers-button a,
 #download-tickers-button span,
@@ -877,7 +871,6 @@ button:hover {
     box-shadow: none !important;
 }
 
-/* Hover identico al badge */
 #download-tickers-button:hover,
 #download-tickers-button:hover button,
 #download-tickers-button:hover a,
@@ -888,8 +881,7 @@ button:hover {
     border-color: #a5b4fc !important;
     transform: none !important;
 }
-/* Output section */
-/* altezza unica per logs e result */
+
 :root {
     --test-box-height: 260px;
 }
@@ -916,7 +908,6 @@ button:hover {
     flex-direction: column !important;
 }
 
-/* Pulisce wrapper interni Gradio */
 .test-output-card,
 .test-output-card > div,
 .test-output-card .form,
