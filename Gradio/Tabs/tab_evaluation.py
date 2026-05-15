@@ -83,12 +83,14 @@ def build_tab():
                                 value=None,
                                 label="Task type",
                                 interactive=False,
+                                elem_classes=['dropdown-single-compact']
                             )
                             universe = gr.Dropdown(
                                 choices=[],
                                 value=None,
                                 label="Universe",
                                 interactive=False,
+                                elem_classes=['dropdown-single-compact']
                             )
 
                         with gr.Row():
@@ -125,6 +127,7 @@ def build_tab():
                                 value=None,
                                 label="Year start",
                                 interactive=False,
+                                elem_classes=['dropdown-single-compact']
                             )
 
                             year_end = gr.Dropdown(
@@ -132,6 +135,7 @@ def build_tab():
                                 value=None,
                                 label="Year end",
                                 interactive=False,
+                                elem_classes=['dropdown-single-compact']
                             )
 
                         length_pair = gr.CheckboxGroup(
@@ -162,6 +166,7 @@ def build_tab():
                                     value=None,
                                     label="Top K",
                                     interactive=False,
+                                    elem_classes=['dropdown-single-compact']
                                 )
 
                                 short_k = gr.Dropdown(
@@ -169,6 +174,7 @@ def build_tab():
                                     value=None,
                                     label="Short K",
                                     interactive=False,
+                                    elem_classes=['dropdown-single-compact']
                                 )
 
                     run_btn = gr.Button(

@@ -5,8 +5,8 @@
 .main-shell {
     max-width: 1250px;
     margin: 0 auto;
-    padding-top: 8px;
-    padding-bottom: 24px;
+    padding-top: 0px;
+    padding-bottom: 6px;
     gap: 0 !important;
     margin-bottom: -20px !important;
 }
@@ -69,6 +69,35 @@ button:hover {
     transform: translateY(-1px);
 }
 
+/* ── Gradio custom scrollbar ───────────────────────────────── */
+.gradio-container,
+.gradio-container * {
+    scrollbar-width: thin;
+    scrollbar-color: #c7d2fe transparent;
+}
+
+.gradio-container *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.gradio-container *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.gradio-container *::-webkit-scrollbar-thumb {
+    background: #c7d2fe;
+    border-radius: 999px;
+}
+
+.gradio-container *::-webkit-scrollbar-thumb:hover {
+    background: #818cf8;
+}
+
+.gradio-container *::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /* ── Download tab ───────────────────────────────────────────── */
 
 .download-shell {
@@ -76,7 +105,7 @@ button:hover {
     max-width: 100% !important;
     margin: 0 !important;
     padding: 12px 2px 24px !important;
-    gap: 14px !important;
+    gap: 0px !important;
     box-sizing: border-box !important;
 }
 
@@ -116,7 +145,7 @@ button:hover {
     display: flex !important;
     height: 250px;
     flex-direction: column !important;
-    gap: 10px !important;
+    gap: 0px !important;
 }
 
 .download-controls-card label {
@@ -198,8 +227,8 @@ button:hover {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 12px !important;
-    margin-bottom: -8px !important;
+    gap: 0px !important;
+    margin-bottom: -12px !important;
     width: 100% !important;
 }
 
@@ -1724,7 +1753,14 @@ table.mpt td.missing {
     display: none !important;
 }
 
+.dropdown-single-compact .wrap {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
 
+    overflow: hidden !important;
+    border-radius: 14px !important;
+}
 /* ── Compact multiselect ───────────────────────────────────── */
 
 .dropdown-multiselect-compact .wrap {
@@ -1746,9 +1782,9 @@ table.mpt td.missing {
     flex-wrap: nowrap !important;
 
     align-items: center !important;
-    gap: 6px !important;
+    gap: 5px !important;
 
-    padding: 6px 38px 6px 8px !important;
+    padding: 5px 22px 2px 7px !important;
 
     overflow-x: auto !important;
     overflow-y: hidden !important;

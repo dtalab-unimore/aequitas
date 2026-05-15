@@ -34,11 +34,14 @@ def build_tab():
                             choices=DATASETS,
                             label="Dataset",
                             value=None,
+                            elem_classes=['dropdown-single-compact']
                         )
                         models = gr.Dropdown(
                             choices=get_models(),
-                            label="Model",
-                            value=None,
+                            label="Models",
+                            value=[],
+                            multiselect=True,
+                            elem_classes=["dropdown-multiselect-compact"]
                         )
 
                     universe_targets_state = gr.State([])

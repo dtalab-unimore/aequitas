@@ -124,24 +124,43 @@ def _dedupe_keep_order(items: list) -> list:
 
     return out
 
+def _normalize_models(model: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    """
+    Normalizes the Gradio multiselect value.
+
+    Gradio multiselect returns:
+        []              if nothing is selected
+        ["A", "B"]      if multiple models are selected
+
+    This helper also supports the old single-string case.
+    """
+    if model is None:
+        return []
+
+    if isinstance(model, str):
+        return [model] if model else []
+
+    return [m for m in model if isinstance(m, str) and m]
 
 def _targets_from_model_config(
     dataset: str,
-    model: str | None,
+    model: str | list[str] | tuple[str, ...] | None,
 ) -> tuple[list[str], list[list[str]], list[str]]:
     """
     Reads Gradio/configs/model_to_data.json and converts required files into
     pipeline targets.
+
+    Supports multiple selected models.
 
     Returns:
         universe_targets
         market_targets as [[nation, target], ...]
         unsupported_files
     """
-    if not model or model not in CONFIGS:
-        return ["prices"], [], []
+    models = _normalize_models(model)
 
-    raw_files = CONFIGS.get(model, [])
+    if not models:
+        return ["prices"], [], []
 
     universe_targets = []
     market_targets = []
@@ -149,28 +168,35 @@ def _targets_from_model_config(
 
     nation = get_nation_from_universe(dataset)
 
-    for file_template in raw_files:
-        template_key = _template_basename(file_template)
-
-        if template_key in UNIVERSE_FILE_TO_TARGET:
-            universe_targets.append(UNIVERSE_FILE_TO_TARGET[template_key])
+    for model_name in models:
+        if model_name not in CONFIGS:
+            unsupported_files.append(f"{model_name} -> model not found in config")
             continue
 
-        if template_key in MARKET_FILE_TO_TARGET:
-            nation_key, target_name = MARKET_FILE_TO_TARGET[template_key]
-            resolved_nation = _resolve_market_nation(dataset, nation_key)
-            market_targets.append([resolved_nation, target_name])
-            continue
+        raw_files = CONFIGS.get(model_name, [])
 
-        try:
-            resolved_name = template_key.format(
-                universe=dataset,
-                nation=nation,
-            )
-        except Exception:
-            resolved_name = template_key
+        for file_template in raw_files:
+            template_key = _template_basename(file_template)
 
-        unsupported_files.append(resolved_name)
+            if template_key in UNIVERSE_FILE_TO_TARGET:
+                universe_targets.append(UNIVERSE_FILE_TO_TARGET[template_key])
+                continue
+
+            if template_key in MARKET_FILE_TO_TARGET:
+                nation_key, target_name = MARKET_FILE_TO_TARGET[template_key]
+                resolved_nation = _resolve_market_nation(dataset, nation_key)
+                market_targets.append([resolved_nation, target_name])
+                continue
+
+            try:
+                resolved_name = template_key.format(
+                    universe=dataset,
+                    nation=nation,
+                )
+            except Exception:
+                resolved_name = template_key
+
+            unsupported_files.append(f"{model_name} -> {resolved_name}")
 
     if not universe_targets and not market_targets and not unsupported_files:
         universe_targets = ["prices"]
@@ -178,10 +204,8 @@ def _targets_from_model_config(
     return (
         _dedupe_keep_order(universe_targets),
         _dedupe_keep_order(market_targets),
-        unsupported_files,
+        _dedupe_keep_order(unsupported_files),
     )
-
-
 # =============================================================================
 # File map for preview
 # =============================================================================
@@ -348,13 +372,19 @@ def _collect_required_files(
 def _format_required_files_report(
     rows: list[dict],
     unsupported_files: list[str] | None = None,
+    selected_models: list[str] | None = None,
 ) -> str:
     unsupported_files = unsupported_files or []
+    selected_models = selected_models or []
 
     if not rows and not unsupported_files:
         return "No required files found."
 
     lines = []
+
+    if selected_models:
+        lines.append(f"Models: {', '.join(selected_models)}")
+        lines.append("")
 
     existing = sum(1 for row in rows if row["exists"])
     missing = len(rows) - existing
@@ -372,7 +402,7 @@ def _format_required_files_report(
 
     if unsupported_files:
         lines.append("")
-        lines.append("Files configured for the model but not linked to a download target:")
+        lines.append("Files configured for the selected model(s) but not linked to a download target:")
 
         for file_name in unsupported_files:
             lines.append(f"[UNSUPPORTED] {file_name}")
@@ -380,14 +410,11 @@ def _format_required_files_report(
     return "\n".join(lines)
 
 
-def inspect_required_files(dataset: str | None, model: str | None):
-    if not dataset and not model:
-        return (
-            "",
-            gr.update(value="Download Missing Files", interactive=False),
-            [],
-            [],
-        )
+def inspect_required_files(
+    dataset: str | None,
+    model: str | list[str] | tuple[str, ...] | None,
+):
+    models = _normalize_models(model)
 
     if not dataset:
         return (
@@ -397,7 +424,7 @@ def inspect_required_files(dataset: str | None, model: str | None):
             [],
         )
 
-    if not model:
+    if not models:
         return (
             "",
             gr.update(value="Download Missing Files", interactive=False),
@@ -408,7 +435,7 @@ def inspect_required_files(dataset: str | None, model: str | None):
     try:
         universe_targets, market_targets, unsupported_files = _targets_from_model_config(
             dataset=dataset,
-            model=model,
+            model=models,
         )
 
         rows = _collect_required_files(
@@ -417,17 +444,20 @@ def inspect_required_files(dataset: str | None, model: str | None):
             market_targets=market_targets,
         )
 
-        report = _format_required_files_report(rows, unsupported_files)
+        report = _format_required_files_report(
+            rows=rows,
+            unsupported_files=unsupported_files,
+            selected_models=models,
+        )
+
         missing_count = sum(1 for row in rows if not row["exists"])
 
         if missing_count == 0:
-
             button = gr.update(
                 value="No Missing Files",
                 interactive=False,
             )
         else:
-
             button = gr.update(
                 value=f"Download Missing Files ({missing_count})",
                 interactive=True,
@@ -442,19 +472,20 @@ def inspect_required_files(dataset: str | None, model: str | None):
 
     except Exception as exc:
         return (
-            "",
+            f"Error while inspecting required files: {exc}",
             gr.update(value="Download Missing Files", interactive=False),
             [],
             [],
         )
 
-
 def download_missing_files(
     dataset: str | None,
-    model: str | None,
+    model: str | list[str] | tuple[str, ...] | None,
     universe_targets: list[str] | None,
     market_targets: list[list[str]] | None,
 ):
+    models = _normalize_models(model)
+
     if not dataset:
         return (
             "",
@@ -463,7 +494,7 @@ def download_missing_files(
             [],
         )
 
-    if not model:
+    if not models:
         return (
             "",
             gr.update(value="Download Missing Files", interactive=False),
@@ -474,7 +505,7 @@ def download_missing_files(
     if not universe_targets and not market_targets:
         universe_targets, market_targets, _ = _targets_from_model_config(
             dataset=dataset,
-            model=model,
+            model=models,
         )
 
     universe_targets = universe_targets or []
@@ -505,10 +536,15 @@ def download_missing_files(
             )
 
     except Exception as exc:
-        (report, button, universe_state, market_state) = inspect_required_files(
+        report, button, universe_state, market_state = inspect_required_files(
             dataset,
-            model,
+            models,
         )
+
+        if report:
+            report = f"{report}\n\nDownload error: {exc}"
+        else:
+            report = f"Download error: {exc}"
 
         return (
             report,
@@ -517,9 +553,9 @@ def download_missing_files(
             market_state,
         )
 
-    (report, button, universe_state, market_state) = inspect_required_files(
+    report, button, universe_state, market_state = inspect_required_files(
         dataset,
-        model,
+        models,
     )
 
     return (
