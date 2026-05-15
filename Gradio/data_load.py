@@ -590,10 +590,13 @@ def _path_signature(path: str) -> int:
 
 
 @lru_cache(maxsize=256)
+@lru_cache(maxsize=256)
 def _load_preview_file_page_cached(
     path: str,
+    signature: int,
     page: int,
     page_size: int,
+    start_year=None,
 ) -> tuple[str, str, bool, bool, int]:
     page = max(0, int(page))
 
@@ -602,6 +605,7 @@ def _load_preview_file_page_cached(
             path=path,
             page=page,
             page_size=page_size,
+            start_year=start_year,
         )
 
     elif path.endswith(".json"):
@@ -633,6 +637,15 @@ def _load_preview_file_page_cached(
 
     total_pages = max(math.ceil(total_items / page_size), 1)
     page = max(0, min(page, total_pages - 1))
+
+    if df is None or df.empty:
+        return (
+            empty_preview_table_html("No rows available for this selection."),
+            "<span>0 / 0</span>",
+            False,
+            False,
+            0,
+        )
 
     return (
         preview_table_html(df),
@@ -729,24 +742,82 @@ def _csv_total_rows_cached(path: str, signature: int) -> int:
         return max(sum(1 for _ in f) - 1, 0)
 
 
+# def _csv_preview_page_df(
+#     path: str,
+#     page: int,
+#     page_size: int,
+# ) -> tuple[pd.DataFrame, int]:
+#     signature = _path_signature(path)
+#
+#     total_items = _csv_total_rows_cached(path, signature)
+#
+#     start = page * page_size
+#
+#     df = pd.read_csv(
+#         path,
+#         skiprows=range(1, start + 1),
+#         nrows=page_size,
+#     )
+#
+#     return df, total_items
 def _csv_preview_page_df(
     path: str,
     page: int,
     page_size: int,
+    start_year=None,
 ) -> tuple[pd.DataFrame, int]:
     signature = _path_signature(path)
+    start_year = _normalize_start_year(start_year)
 
-    total_items = _csv_total_rows_cached(path, signature)
+    columns = _csv_columns_cached(path, signature)
+    date_col = _date_column_name(columns)
 
-    start = page * page_size
+    # Caso normale: nessun filtro anno oppure CSV senza colonna DATE
+    if start_year is None or date_col is None:
+        total_items = _csv_total_rows_cached(path, signature)
+        start = page * page_size
 
-    df = pd.read_csv(
-        path,
-        skiprows=range(1, start + 1),
-        nrows=page_size,
-    )
+        df = pd.read_csv(
+            path,
+            skiprows=range(1, start + 1),
+            nrows=page_size,
+        )
 
-    return df, total_items
+        return df, total_items
+
+    # Caso filtrato: DATE >= start_year
+    target_start = page * page_size
+    target_end = target_start + page_size
+
+    total_filtered = 0
+    page_chunks = []
+
+    for chunk in pd.read_csv(path, chunksize=50_000):
+        parsed_dates = pd.to_datetime(chunk[date_col], errors="coerce")
+        mask = parsed_dates.dt.year >= start_year
+
+        filtered_chunk = chunk.loc[mask]
+        chunk_count = len(filtered_chunk)
+
+        if chunk_count == 0:
+            continue
+
+        chunk_global_start = total_filtered
+        chunk_global_end = total_filtered + chunk_count
+
+        if chunk_global_end > target_start and chunk_global_start < target_end:
+            local_start = max(target_start - chunk_global_start, 0)
+            local_end = max(target_end - chunk_global_start, 0)
+            page_chunks.append(filtered_chunk.iloc[local_start:local_end])
+
+        total_filtered += chunk_count
+
+    if page_chunks:
+        df = pd.concat(page_chunks, ignore_index=True).head(page_size)
+    else:
+        df = pd.DataFrame(columns=columns)
+
+    return df, total_filtered
 
 def _safe_json_load(path: str):
     try:
@@ -919,11 +990,82 @@ def _npz_preview_page_df(path: str) -> tuple[pd.DataFrame, int]:
 
     return pd.DataFrame(rows), len(rows)
 
+def _normalize_start_year(start_year):
+    if start_year in [None, "", "All Years"]:
+        return None
+
+    try:
+        return int(start_year)
+    except Exception:
+        return None
+
+
+def _date_column_name(columns) -> str | None:
+    for col in columns:
+        if str(col).strip().upper() == "DATE":
+            return col
+    return None
+
+
+@lru_cache(maxsize=128)
+def _csv_columns_cached(path: str, signature: int) -> tuple[str, ...]:
+    return tuple(pd.read_csv(path, nrows=0).columns)
+
+
+@lru_cache(maxsize=128)
+def _csv_available_years_cached(path: str, signature: int) -> tuple[int, ...]:
+    columns = _csv_columns_cached(path, signature)
+    date_col = _date_column_name(columns)
+
+    if date_col is None:
+        return tuple()
+
+    try:
+        date_series = pd.read_csv(path, usecols=[date_col])[date_col]
+        parsed_dates = pd.to_datetime(date_series, errors="coerce")
+        years = sorted(parsed_dates.dropna().dt.year.unique().astype(int).tolist())
+        return tuple(years)
+    except Exception:
+        return tuple()
+
+
+def refresh_preview_year_filter(universe: str, preview_name: str):
+    if not universe or not preview_name:
+        return gr.update(choices=[], value=None, visible=False, interactive=False)
+
+    file_map = _build_file_map(universe)
+    path = file_map.get(preview_name)
+
+    if not path or not Path(path).exists():
+        return gr.update(choices=[], value=None, visible=False, interactive=False)
+
+    path_obj = Path(path)
+
+    if path_obj.suffix.lower() != ".csv":
+        return gr.update(choices=[], value=None, visible=False, interactive=False)
+
+    path = str(path_obj.resolve())
+    signature = _path_signature(path)
+
+    years = list(_csv_available_years_cached(path, signature))
+
+    if not years:
+        return gr.update(choices=[], value=None, visible=False, interactive=False)
+
+    choices = ["All Years"] + [str(year) for year in years]
+
+    return gr.update(
+        choices=choices,
+        value="All Years",
+        visible=True,
+        interactive=True,
+    )
 
 def load_preview_file_page(
     universe: str,
     preview_name: str,
     page: int = 0,
+    start_year=None,
     page_size: int = PREVIEW_PAGE_SIZE,
 ):
     if not universe or not preview_name:
@@ -948,11 +1090,15 @@ def load_preview_file_page(
         )
 
     path = str(Path(path).resolve())
+    signature = _path_signature(path)
+    start_year = _normalize_start_year(start_year)
 
     html, label, can_prev, can_next, page = _load_preview_file_page_cached(
         path=path,
+        signature=signature,
         page=int(page),
         page_size=int(page_size),
+        start_year=start_year,
     )
 
     return (
@@ -963,29 +1109,31 @@ def load_preview_file_page(
         page,
     )
 
-def reset_preview_page(universe: str, preview_name: str):
+def reset_preview_page(universe: str, preview_name: str, start_year=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=0,
+        start_year=start_year,
     )
 
 
-def next_preview_page(universe: str, preview_name: str, current_page: int):
+def next_preview_page(universe: str, preview_name: str, current_page: int, start_year=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=int(current_page) + 1,
+        start_year=start_year,
     )
 
 
-def prev_preview_page(universe: str, preview_name: str, current_page: int):
+def prev_preview_page(universe: str, preview_name: str, current_page: int, start_year=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=int(current_page) - 1,
+        start_year=start_year,
     )
-
 
 
 def refresh_preview_controls(

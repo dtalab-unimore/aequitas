@@ -256,13 +256,10 @@ button:hover {
     min-width: 0 !important;
 }
 
-.preview-header-row > div:last-child {
-    flex: 0 0 auto !important;
-}
-
 
 .preview-header-row #preview-selector {
     min-width: 200px !important;
+    max-width: 200px !important;
     flex-shrink: 0 !important;
 }
 
@@ -295,6 +292,23 @@ button:hover {
     display: none !important;
 }
 
+.preview-header-controls {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+.preview-header-controls > .gap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    width: auto !important;
+}
 
 /* ── Preview HTML table ─────────────────────────────────────── */
 
