@@ -89,6 +89,7 @@ def empty_evaluation_table_html(message: str = "No evaluation output yet.") -> s
 
 
 def dataframe_to_metrics_html(df) -> str:
+    df = df.dropna(axis=1, how='all')
     pretty_df = prettify_output_dataframe(df)
 
     if pretty_df.empty:
