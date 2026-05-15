@@ -16,15 +16,18 @@ import pandas as pd
 
 from Gradio.eval_config import EVAL_MODES
 from Gradio.eval_form import update_eval_form
-from Gradio.eval_output import empty_evaluation_table_html
+from Gradio.eval_output import (
+    explain_evaluation_with_chatgpt,
+    empty_evaluation_table_html
+)
 from Gradio.eval_run import (
     run_evaluation,
     show_evaluation_loading,
     hide_evaluation_loading,
     show_chatgpt_explanation_loading,
     hide_chatgpt_explanation_loading,
-    explain_evaluation_with_chatgpt,
 )
+
 
 
 def build_tab():

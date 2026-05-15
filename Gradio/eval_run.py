@@ -3,6 +3,7 @@ Evaluation runner: build subprocess commands, execute them, read and filter
 the output CSVs, and expose the Gradio loading-state helpers.
 """
 import os
+import re
 import shlex
 import subprocess
 import sys
