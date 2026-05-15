@@ -213,8 +213,8 @@ def _build_file_map(universe: str) -> dict[str, str]:
     out_dir = DATA_DIR / universe
 
     return {
-        "Dataset": str(out_dir / f"{universe}.csv"),
-        "Info": str(out_dir / f"{universe}_info.csv"),
+        "OHLCV": str(out_dir / f"{universe}.csv"),
+        "Ticker Info": str(out_dir / f"{universe}_info.csv"),
         "Market Cap": str(out_dir / f"{universe}_market_cap.csv"),
         "Alpha158": str(out_dir / f"{universe}_alpha158.csv"),
         "Alpha360": str(out_dir / f"{universe}_alpha360.csv"),
@@ -223,12 +223,12 @@ def _build_file_map(universe: str) -> dict[str, str]:
         "EU Indexes": str(DATA_DIR / "eu_indexes.csv"),
         "US Market Info": str(DATA_DIR / "us_market.csv"),
         "EU Market Info": str(DATA_DIR / "eu_market.csv"),
-        "CNNPred Market Features": str(DATA_DIR / "cnnpred_market.csv"),
+        "Global Market Feature": str(DATA_DIR / "cnnpred_market.csv"),
         "News Relations": str(DATA_DIR / "news"),
         "Incidence Matrix": str(out_dir / f"{universe}_inc_matrix.npz"),
         "Correlation Matrix": str(out_dir / f"{universe}_corr_matrix.npz"),
         "Wikidata Matrix": str(out_dir / f"{universe}_wikidata_matrix.npz"),
-        "Sector and Industry Relations": str(out_dir / f"{universe}_sector_industry_matrix.npz"),
+        "Sector-Industry Relations": str(out_dir / f"{universe}_sector_industry_matrix.npz"),
     }
 
 

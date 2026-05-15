@@ -85,15 +85,6 @@ def build_tab():
                                 interactive=False,
                                 elem_classes=['dropdown-single-compact']
                             )
-                            universe = gr.Dropdown(
-                                choices=[],
-                                value=None,
-                                label="Universe",
-                                interactive=False,
-                                elem_classes=['dropdown-single-compact']
-                            )
-
-                        with gr.Row():
                             model = gr.Dropdown(
                                 choices=[],
                                 value=[],
@@ -103,6 +94,15 @@ def build_tab():
                                 elem_classes=["dropdown-multiselect-compact"],
                             )
 
+                        with gr.Row():
+
+                            universe = gr.Dropdown(
+                                choices=[],
+                                value=None,
+                                label="Universe",
+                                interactive=False,
+                                elem_classes=['dropdown-single-compact']
+                            )
                             configuration = gr.Dropdown(
                                 choices=[],
                                 value=[],
@@ -283,6 +283,7 @@ def build_tab():
                             chatgpt_explanation = gr.Markdown(
                                 value="",
                                 elem_id="evaluation-chatgpt-explanation",
+                                buttons="copy",
                             )
 
                     with gr.Group(
