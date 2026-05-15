@@ -408,6 +408,72 @@ def _format_required_files_report(
 
     return "\n".join(lines)
 
+def _format_required_files_report_by_model(
+    model_reports: list[dict],
+) -> str:
+    if not model_reports:
+        return "No required files found."
+
+    lines = []
+
+    selected_models = [report["model"] for report in model_reports]
+    lines.append(f"Models: {', '.join(selected_models)}")
+    lines.append("")
+
+    all_rows = [
+        row
+        for report in model_reports
+        for row in report.get("rows", [])
+    ]
+
+    unique_paths = {str(Path(row["path"]).resolve()) for row in all_rows}
+    unique_missing_paths = {
+        str(Path(row["path"]).resolve())
+        for row in all_rows
+        if not row["exists"]
+    }
+
+    lines.append(
+        f"ℹ️ Required files: {len(unique_paths)} | "
+        f"Available: {len(unique_paths) - len(unique_missing_paths)} | "
+        f"Missing: {len(unique_missing_paths)}"
+    )
+    lines.append("")
+
+    for report in model_reports:
+        model_name = report["model"]
+        rows = report.get("rows", [])
+        unsupported_files = report.get("unsupported_files", [])
+
+        existing = sum(1 for row in rows if row["exists"])
+        missing = len(rows) - existing
+
+        lines.append("=" * 80)
+        lines.append(f"MODEL: {model_name}")
+        lines.append(f"Required files: {len(rows)} | Available: {existing} | Missing: {missing}")
+        lines.append("=" * 80)
+
+        if rows:
+            for row in rows:
+                status = "✅ OK" if row["exists"] else "⛔ MISSING"
+                path = _relative_path(row["path"])
+
+                lines.append(
+                    f"[{status}] {row['target']} -> {path}"
+                )
+        else:
+            lines.append("No linked files found for this model.")
+
+        if unsupported_files:
+            lines.append("")
+            lines.append("Files configured for this model but not linked to a download target:")
+
+            for file_name in unsupported_files:
+                lines.append(f"[UNSUPPORTED] {file_name}")
+
+        lines.append("")
+
+    return "\n".join(lines).strip()
 
 def inspect_required_files(
     dataset: str | None,
@@ -432,24 +498,47 @@ def inspect_required_files(
         )
 
     try:
-        universe_targets, market_targets, unsupported_files = _targets_from_model_config(
-            dataset=dataset,
-            model=models,
-        )
+        model_reports = []
 
-        rows = _collect_required_files(
-            dataset=dataset,
-            universe_targets=universe_targets,
-            market_targets=market_targets,
-        )
+        all_universe_targets = []
+        all_market_targets = []
 
-        report = _format_required_files_report(
-            rows=rows,
-            unsupported_files=unsupported_files,
-            selected_models=models,
-        )
+        for model_name in models:
+            universe_targets, market_targets, unsupported_files = _targets_from_model_config(
+                dataset=dataset,
+                model=model_name,
+            )
 
-        missing_count = sum(1 for row in rows if not row["exists"])
+            rows = _collect_required_files(
+                dataset=dataset,
+                universe_targets=universe_targets,
+                market_targets=market_targets,
+            )
+
+            model_reports.append(
+                {
+                    "model": model_name,
+                    "rows": rows,
+                    "unsupported_files": unsupported_files,
+                }
+            )
+
+            all_universe_targets.extend(universe_targets)
+            all_market_targets.extend(market_targets)
+
+        all_universe_targets = _dedupe_keep_order(all_universe_targets)
+        all_market_targets = _dedupe_keep_order(all_market_targets)
+
+        report = _format_required_files_report_by_model(model_reports)
+
+        unique_missing_paths = {
+            str(Path(row["path"]).resolve())
+            for model_report in model_reports
+            for row in model_report["rows"]
+            if not row["exists"]
+        }
+
+        missing_count = len(unique_missing_paths)
 
         if missing_count == 0:
             button = gr.update(
@@ -465,8 +554,8 @@ def inspect_required_files(
         return (
             report,
             button,
-            universe_targets,
-            market_targets,
+            all_universe_targets,
+            all_market_targets,
         )
 
     except Exception as exc:
