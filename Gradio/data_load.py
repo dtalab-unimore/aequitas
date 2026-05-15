@@ -1,5 +1,4 @@
 from __future__ import annotations
-import math
 import json
 import math
 import os
@@ -590,7 +589,6 @@ def _path_signature(path: str) -> int:
 
 
 @lru_cache(maxsize=256)
-@lru_cache(maxsize=256)
 def _load_preview_file_page_cached(
     path: str,
     signature: int,
@@ -742,24 +740,6 @@ def _csv_total_rows_cached(path: str, signature: int) -> int:
         return max(sum(1 for _ in f) - 1, 0)
 
 
-# def _csv_preview_page_df(
-#     path: str,
-#     page: int,
-#     page_size: int,
-# ) -> tuple[pd.DataFrame, int]:
-#     signature = _path_signature(path)
-#
-#     total_items = _csv_total_rows_cached(path, signature)
-#
-#     start = page * page_size
-#
-#     df = pd.read_csv(
-#         path,
-#         skiprows=range(1, start + 1),
-#         nrows=page_size,
-#     )
-#
-#     return df, total_items
 def _csv_preview_page_df(
     path: str,
     page: int,
@@ -772,7 +752,7 @@ def _csv_preview_page_df(
     columns = _csv_columns_cached(path, signature)
     date_col = _date_column_name(columns)
 
-    # Caso normale: nessun filtro anno oppure CSV senza colonna DATE
+    # Normal case: no date filter or no date column -> simple skiprows + nrows
     if start_year is None or date_col is None:
         total_items = _csv_total_rows_cached(path, signature)
         start = page * page_size
@@ -785,7 +765,7 @@ def _csv_preview_page_df(
 
         return df, total_items
 
-    # Caso filtrato: DATE >= start_year
+    # Filtering case: need to read chunks and count filtered rows to find the target page
     target_start = page * page_size
     target_end = target_start + page_size
 
