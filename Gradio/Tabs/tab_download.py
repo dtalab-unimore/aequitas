@@ -33,7 +33,7 @@ def build_tab():
                     with gr.Row():
                         dataset = gr.Dropdown(
                             choices=DATASETS,
-                            label="Dataset",
+                            label="Universe",
                             value=None,
                             elem_classes=['dropdown-single-compact']
                         )
