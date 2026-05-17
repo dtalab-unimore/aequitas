@@ -3,6 +3,8 @@ import sys
 
 from pathlib import Path
 
+from Gradio.Tabs.tab_train import build_train_tab
+
 GRADIO_TMP_DIR = Path("./.gradio_tmp").resolve()
 GRADIO_TMP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -48,6 +50,7 @@ with gr.Blocks() as demo:
         """)
 
     build_download_tab()
+    build_train_tab()
     build_test_tab()
     build_evaluation_tab()
     build_metrics_tab()

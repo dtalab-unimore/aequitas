@@ -51,7 +51,7 @@ def build_tab():
     with gr.Tab("Test Model", elem_id="main-tabs"):
         gr.Markdown("## Test Model")
         gr.Markdown(
-            "Select the model configuration, choose the test period, and run the evaluation."
+            "Select the desidered model and the test period."
         )
 
         universe_options = get_universe_options()
