@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import sys
 from collections import defaultdict
 from functools import lru_cache
@@ -20,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EVALUATION_DIR = PROJECT_ROOT / "Evaluation"
 DATA_DIR = EVALUATION_DIR / "data"
 CONFIG_PATH = PROJECT_ROOT / "Gradio" / "configs" / "model_to_data.json"
+TICKER_RE = re.compile(r"^[A-Za-z0-9.\-]{1,12}$")
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -684,6 +686,7 @@ def _load_preview_file_page_cached(
     page: int,
     page_size: int,
     start_year=None,
+    ticker=None,
 ) -> tuple[str, str, bool, bool, int]:
     page = max(0, int(page))
 
@@ -693,6 +696,7 @@ def _load_preview_file_page_cached(
             page=page,
             page_size=page_size,
             start_year=start_year,
+            ticker=ticker,
         )
 
     elif path.endswith(".json"):
@@ -828,21 +832,38 @@ def _csv_total_rows_cached(path: str, signature: int) -> int:
         # -1 per header
         return max(sum(1 for _ in f) - 1, 0)
 
+def _ticker_base_series(series: pd.Series) -> pd.Series:
+    return (
+        series
+        .astype("string")
+        .str.strip()
+        .str.upper()
+        .str.split(".", n=1)
+        .str[0]
+    )
 
 def _csv_preview_page_df(
     path: str,
     page: int,
     page_size: int,
     start_year=None,
+    ticker=None,
 ) -> tuple[pd.DataFrame, int]:
     signature = _path_signature(path)
     start_year = _normalize_start_year(start_year)
 
+    if ticker is not None:
+        ticker = str(ticker).strip()
+        if ticker == "":
+            ticker = None
+
     columns = _csv_columns_cached(path, signature)
     date_col = _date_column_name(columns)
 
-    # Normal case: no date filter or no date column -> simple skiprows + nrows
-    if start_year is None or date_col is None:
+    has_date_filter = start_year is not None and date_col is not None
+    has_ticker_filter = ticker is not None and "instrument" in columns
+
+    if start_year is None and ticker is None:
         total_items = _csv_total_rows_cached(path, signature)
         start = page * page_size
 
@@ -854,7 +875,9 @@ def _csv_preview_page_df(
 
         return df, total_items
 
-    # Filtering case: need to read chunks and count filtered rows to find the target page
+    if not has_date_filter and not has_ticker_filter:
+        return pd.DataFrame(columns=columns), 0
+
     target_start = page * page_size
     target_end = target_start + page_size
 
@@ -862,8 +885,25 @@ def _csv_preview_page_df(
     page_chunks = []
 
     for chunk in pd.read_csv(path, chunksize=50_000):
-        parsed_dates = pd.to_datetime(chunk[date_col], errors="coerce")
-        mask = parsed_dates.dt.year >= start_year
+        mask = pd.Series(True, index=chunk.index)
+
+        if has_date_filter:
+            parsed_dates = pd.to_datetime(chunk[date_col], errors="coerce")
+            mask &= parsed_dates.dt.year >= start_year
+
+        if has_ticker_filter:
+            ticker_query = ticker.strip().upper()
+            ticker_base = _ticker_base_series(chunk["instrument"])
+
+            exact_mask = ticker_base == ticker_query
+
+            if len(ticker_query) >= 1 and exact_mask.any():
+                mask &= exact_mask
+            else:
+                mask &= ticker_base.str.startswith(
+                    ticker_query,
+                    na=False,
+                )
 
         filtered_chunk = chunk.loc[mask]
         chunk_count = len(filtered_chunk)
@@ -876,8 +916,11 @@ def _csv_preview_page_df(
 
         if chunk_global_end > target_start and chunk_global_start < target_end:
             local_start = max(target_start - chunk_global_start, 0)
-            local_end = max(target_end - chunk_global_start, 0)
-            page_chunks.append(filtered_chunk.iloc[local_start:local_end])
+            local_end = min(target_end - chunk_global_start, chunk_count)
+
+            page_chunks.append(
+                filtered_chunk.iloc[local_start:local_end]
+            )
 
         total_filtered += chunk_count
 
@@ -1145,6 +1188,7 @@ def load_preview_file_page(
     preview_name: str,
     page: int = 0,
     start_year=None,
+    ticker=None,
     page_size: int = PREVIEW_PAGE_SIZE,
 ):
     if not universe or not preview_name:
@@ -1178,6 +1222,7 @@ def load_preview_file_page(
         page=int(page),
         page_size=int(page_size),
         start_year=start_year,
+        ticker=ticker,
     )
 
     return (
@@ -1188,30 +1233,94 @@ def load_preview_file_page(
         page,
     )
 
-def reset_preview_page(universe: str, preview_name: str, start_year=None):
+def prepare_ticker_preview(ticker):
+    ticker = (ticker or "").strip()
+
+    # Campo vuoto: ok, significa "nessun filtro ticker"
+    if ticker == "":
+        return (
+            {"run": True, "ticker": None},
+            gr.update(visible=True),
+        )
+
+    # Caratteri non validi: non lanciare la preview
+    if not TICKER_RE.match(ticker):
+        return (
+            {"run": False, "ticker": None},
+            gr.update(visible=False),
+        )
+
+    # Se vuoi evitare che parta già con "A", usa una lunghezza minima
+    if len(ticker) < 1:
+        return (
+            {"run": False, "ticker": None},
+            gr.update(visible=False),
+        )
+
+    # Ticker accettabile: lancia la preview
+    return (
+        {"run": True, "ticker": ticker.upper()},
+        gr.update(visible=True),
+    )
+
+
+def reset_preview_page_from_ticker_state(
+    ticker_state,
+    dataset,
+    preview_name,
+    start_year,
+):
+    ticker_state = ticker_state or {}
+    should_run = ticker_state.get("run", False)
+    ticker = ticker_state.get("ticker", None)
+
+    if not should_run:
+        return (
+            gr.skip(),  # preview
+            gr.skip(),  # preview_page_label
+            gr.skip(),  # btn_prev_preview
+            gr.skip(),  # btn_next_preview
+            gr.skip(),  # preview_page_state
+            gr.update(visible=False),  # preview_loading
+        )
+
+    result = reset_preview_page(
+        dataset,
+        preview_name,
+        start_year,
+        ticker,
+    )
+
+    return (*result, gr.update(visible=False))
+
+
+def reset_preview_page(universe: str, preview_name: str, start_year=None, ticker=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=0,
         start_year=start_year,
+        ticker=ticker,
     )
 
 
-def next_preview_page(universe: str, preview_name: str, current_page: int, start_year=None):
+def next_preview_page(universe: str, preview_name: str, current_page: int, start_year=None, ticker=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=int(current_page) + 1,
         start_year=start_year,
+        ticker=ticker,
     )
 
 
-def prev_preview_page(universe: str, preview_name: str, current_page: int, start_year=None):
+def prev_preview_page(universe: str, preview_name: str, current_page: int, start_year=None, ticker=None):
     return load_preview_file_page(
         universe=universe,
         preview_name=preview_name,
         page=int(current_page) - 1,
         start_year=start_year,
+        ticker=ticker,
     )
 
 

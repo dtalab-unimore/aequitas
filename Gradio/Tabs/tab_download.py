@@ -10,7 +10,7 @@ from Gradio.data_load import (
     next_preview_page,
     prev_preview_page,
     empty_preview_table_html,
-    refresh_preview_year_filter,
+    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state,
 )
 
 
@@ -133,7 +133,9 @@ def build_tab():
                                 scale=0,
                                 min_width=130,
                             )
+
                     preview_page_state = gr.State(0)
+                    ticker_preview_state = gr.State({"run": True, "ticker": None})
 
                     preview_loading = gr.HTML(
                         visible=False,
@@ -194,7 +196,7 @@ def build_tab():
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year],
+            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
@@ -216,7 +218,7 @@ def build_tab():
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year],
+            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
@@ -246,7 +248,7 @@ def build_tab():
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year],
+            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         )
@@ -262,21 +264,7 @@ def build_tab():
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
-        ).then(
-            fn=lambda: gr.update(visible=False),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
-        )
-        preview_start_year.change(
-            fn=lambda: gr.update(visible=True),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
-        ).then(
-            fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year],
+            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
             show_progress="hidden", queue=False,
         ).then(
@@ -285,9 +273,51 @@ def build_tab():
             show_progress="hidden", queue=False,
         )
 
+        preview_start_year.change(
+            fn=lambda: gr.update(visible=True),
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=reset_preview_page,
+            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
+            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+            show_progress="hidden", queue=False,
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[preview_loading],
+            show_progress="hidden", queue=False,
+        )
+
+        ticker_input.change(
+            fn=prepare_ticker_preview,
+            inputs=[ticker_input],
+            outputs=[ticker_preview_state, preview_loading],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=reset_preview_page_from_ticker_state,
+            inputs=[
+                ticker_preview_state,
+                dataset,
+                preview_selector,
+                preview_start_year,
+            ],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+                preview_loading,
+            ],
+            show_progress="hidden",
+            queue=False,
+            trigger_mode="always_last",
+        )
+
         btn_next_preview.click(
             fn=next_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state,preview_start_year],
+            inputs=[dataset, preview_selector, preview_page_state,preview_start_year, ticker_input],
             outputs=[
                 preview,
                 preview_page_label,
@@ -301,7 +331,7 @@ def build_tab():
 
         btn_prev_preview.click(
             fn=prev_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state,preview_start_year],
+            inputs=[dataset, preview_selector, preview_page_state,preview_start_year, ticker_input],
             outputs=[
                 preview,
                 preview_page_label,
