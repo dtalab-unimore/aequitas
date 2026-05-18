@@ -1,4 +1,8 @@
 {
+  "Adv-ALSTM": [
+    "{universe}.csv",
+    "{universe}_tech.csv"
+  ],
   "HGTAN": [
     "{universe}.csv",
     "{universe}_sector_industry_matrix.npz"
@@ -11,6 +15,25 @@
     "{universe}.csv",
     "{universe}_tech.csv",
     "cnnpred_market.csv"
+  ],
+  "CNNPred3D": [
+    "{universe}.csv",
+    "{universe}_tech.csv",
+    "cnnpred_market.csv"
+  ],
+  "DGDNN": [
+    "{universe}.csv"
+  ],
+  "MAN-SF": [
+    "{universe}.csv",
+    "{universe}_wikidata_matrix.npz"
+  ],
+  "D-Va": [
+    "{universe}.csv"
+  ],
+  "ESTIMATE": [
+    "{args.universe}.csv",
+    "{args.universe}_info.csv"
   ],
   "MATCC": [
     "{universe}.csv",
@@ -39,11 +62,27 @@
     "{universe}_alpha360.csv",
     "{universe}_sector_industry_matrix.npz"
   ],
+  "FactorVAE": [
+    "{args.universe}.csv",
+    "{args.universe}_alpha158.csv"
+  ],
+  "SAMBA": [
+    "{universe}.csv",
+    "{universe}_tech.csv",
+    "cnnpred_market.csv"
+  ],
   "RTGCN":[
+    "{universe}.csv"
+  ],
+  "StockMixer": [
     "{universe}.csv"
   ],
   "STHAN-SR": [
     "{universe}.csv",
     "{universe}_inc_matrix.npz"
+  ],
+  "SVAT": [
+    "{universe}.csv",
+    "{args.universe}_inc_matrix.npz"
   ]
 }
