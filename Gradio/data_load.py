@@ -68,22 +68,22 @@ CONFIGS = read_configs()
 # =============================================================================
 
 UNIVERSE_FILE_TO_TARGET = {
-    "{universe}.csv": "prices",
-    "{universe}_info.csv": "info",
-    "{universe}_market_cap.csv": "market_cap",
-    "{universe}_alpha158.csv": "alpha158",
-    "{universe}_alpha360.csv": "alpha360",
-    "{universe}_tech.csv": "technicals",
-    "{universe}_sector_industry_matrix.npz": "sector_industry_matrix",
-    "{universe}_corr_matrix.npz": "corr_matrix",
-    "{universe}_wikidata_matrix.npz": "wikidata_matrix",
-    "{universe}_inc_matrix.npz": "inc_matrix",
+    "{universe}.csv": "OHLCV",
+    "{universe}_info.csv": "Ticker Info",
+    "{universe}_market_cap.csv": "Market Cap",
+    "{universe}_alpha158.csv": "Alpha158",
+    "{universe}_alpha360.csv": "Alpha360",
+    "{universe}_tech.csv": "Technical Indicators",
+    "{universe}_sector_industry_matrix.npz": "Sector-Industry Relations",
+    "{universe}_corr_matrix.npz": "Correlation Matrix",
+    "{universe}_wikidata_matrix.npz": "Wikidata Relation Matrix",
+    "{universe}_inc_matrix.npz": "Incidence Matrix",
 }
 
 MARKET_FILE_TO_TARGET = {
-    "{nation}_indexes.csv": ("auto", "indexes"),
-    "{nation}_market.csv": ("auto", "market"),
-    "cnnpred_market.csv": ("global", "cnnpred_market"),
+    "{nation}_indexes.csv": ("auto", "Indexes"),
+    "{nation}_market.csv": ("auto", "Market Info"),
+    "cnnpred_market.csv": ("global", "Global Market Feature"),
 }
 
 
@@ -161,7 +161,7 @@ def _targets_from_model_config(
     models = _normalize_models(model)
 
     if not models:
-        return ["prices"], [], []
+        return ["OHLCV"], [], []
 
     universe_targets = []
     market_targets = []
@@ -200,7 +200,7 @@ def _targets_from_model_config(
             unsupported_files.append(f"{model_name} -> {resolved_name}")
 
     if not universe_targets and not market_targets and not unsupported_files:
-        universe_targets = ["prices"]
+        universe_targets = ["OHLCV"]
 
     return (
         _dedupe_keep_order(universe_targets),
@@ -220,7 +220,7 @@ def _build_file_map(universe: str) -> dict[str, str]:
         "Market Cap": str(out_dir / f"{universe}_market_cap.csv"),
         "Alpha158": str(out_dir / f"{universe}_alpha158.csv"),
         "Alpha360": str(out_dir / f"{universe}_alpha360.csv"),
-        "Technicals": str(out_dir / f"{universe}_tech.csv"),
+        "Technical Indicators": str(out_dir / f"{universe}_tech.csv"),
         "US Indexes": str(DATA_DIR / "us_indexes.csv"),
         "EU Indexes": str(DATA_DIR / "eu_indexes.csv"),
         "US Market Info": str(DATA_DIR / "us_market.csv"),
@@ -229,7 +229,7 @@ def _build_file_map(universe: str) -> dict[str, str]:
         "News Relations": str(DATA_DIR / "news"),
         "Incidence Matrix": str(out_dir / f"{universe}_inc_matrix.npz"),
         "Correlation Matrix": str(out_dir / f"{universe}_corr_matrix.npz"),
-        "Wikidata Matrix": str(out_dir / f"{universe}_wikidata_matrix.npz"),
+        "Wikidata Relation Matrix": str(out_dir / f"{universe}_wikidata_matrix.npz"),
         "Sector-Industry Relations": str(out_dir / f"{universe}_sector_industry_matrix.npz"),
     }
 
@@ -370,45 +370,45 @@ def _collect_required_files(
     return unique_rows
 
 
-def _format_required_files_report(
-    rows: list[dict],
-    unsupported_files: list[str] | None = None,
-    selected_models: list[str] | None = None,
-) -> str:
-    unsupported_files = unsupported_files or []
-    selected_models = selected_models or []
-
-    if not rows and not unsupported_files:
-        return "No required files found."
-
-    lines = []
-
-    if selected_models:
-        lines.append(f"Models: {', '.join(selected_models)}")
-        lines.append("")
-
-    existing = sum(1 for row in rows if row["exists"])
-    missing = len(rows) - existing
-
-    lines.append(f"ℹ️ Required files: {len(rows)} | Available: {existing} | Missing: {missing}")
-    lines.append("")
-
-    for row in rows:
-        status = "✅ OK" if row["exists"] else "⛔ MISSING"
-        path = _relative_path(row["path"])
-
-        lines.append(
-            f"[{status}] {row['target']} -> {path}"
-        )
-
-    if unsupported_files:
-        lines.append("")
-        lines.append("Files configured for the selected model(s) but not linked to a download target:")
-
-        for file_name in unsupported_files:
-            lines.append(f"[UNSUPPORTED] {file_name}")
-
-    return "\n".join(lines)
+# def _format_required_files_report(
+#     rows: list[dict],
+#     unsupported_files: list[str] | None = None,
+#     selected_models: list[str] | None = None,
+# ) -> str:
+#     unsupported_files = unsupported_files or []
+#     selected_models = selected_models or []
+#
+#     if not rows and not unsupported_files:
+#         return "No required files found."
+#
+#     lines = []
+#
+#     if selected_models:
+#         lines.append(f"Models: {', '.join(selected_models)}")
+#         lines.append("")
+#
+#     existing = sum(1 for row in rows if row["exists"])
+#     missing = len(rows) - existing
+#
+#     lines.append(f"ℹ️ Required files: {len(rows)} | Available: {existing} | Missing: {missing}")
+#     lines.append("")
+#
+#     for row in rows:
+#         status = "✅ OK" if row["exists"] else "⛔ MISSING"
+#         path = _relative_path(row["path"])
+#
+#         lines.append(
+#             f"[{status}] {row['target']} -> {path}"
+#         )
+#
+#     if unsupported_files:
+#         lines.append("")
+#         lines.append("Files configured for the selected model(s) but not linked to a download target:")
+#
+#         for file_name in unsupported_files:
+#             lines.append(f"[UNSUPPORTED] {file_name}")
+#
+#     return "\n".join(lines)
 
 def _format_required_files_report_by_model(
     model_reports: list[dict],

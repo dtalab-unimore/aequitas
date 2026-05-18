@@ -423,59 +423,59 @@ class Target:
 
 
 TARGETS: dict[str, Target] = {
-    "prices": Target(
+    "OHLCV": Target(
         outputs=lambda ctx: [prices_path(ctx)],
         deps=(),
         build=build_prices,
     ),
-    "info": Target(
+    "Ticker Info": Target(
         outputs=lambda ctx: [info_path(ctx)],
         deps=(),
         build=build_info,
     ),
-    "market_cap": Target(
+    "Market Cap": Target(
         outputs=lambda ctx: [market_cap_path(ctx)],
         deps=(),
         build=build_market_cap,
     ),
-    "alpha158": Target(
+    "Alpha158": Target(
         outputs=lambda ctx: [alpha158_path(ctx)],
-        deps=("prices",),
+        deps=("OHLCV",),
         build=build_alpha158,
     ),
-    "alpha360": Target(
+    "Alpha360": Target(
         outputs=lambda ctx: [alpha360_path(ctx)],
-        deps=("prices",),
+        deps=("OHLCV",),
         build=build_alpha360,
     ),
-    "technicals": Target(
+    "Technical Indicators": Target(
         outputs=lambda ctx: [technicals_path(ctx)],
-        deps=("prices",),
+        deps=("OHLCV",),
         build=build_technicals,
     ),
-    "sector_industry_matrix": Target(
+    "Sector-Industry Relations": Target(
         outputs=lambda ctx: [sector_industry_matrix_path(ctx)],
-        deps=("prices", "info"),
+        deps=("OHLCV", "Ticker Info"),
         build=build_sector_industry_matrix,
     ),
-    "corr_matrix": Target(
+    "Correlation Matrix": Target(
         outputs=lambda ctx: [corr_matrix_path(ctx)],
-        deps=("prices",),
+        deps=("OHLCV",),
         build=build_corr_matrix,
     ),
     "wikidata_json": Target(
         outputs=lambda ctx: [wikidata_json_path(ctx)],
-        deps=("info",),
+        deps=("Ticker Info",),
         build=build_wikidata_json,
     ),
-    "wikidata_matrix": Target(
+    "Wikidata Relation Matrix": Target(
         outputs=lambda ctx: [wikidata_matrix_path(ctx)],
-        deps=("prices", "wikidata_json"),
+        deps=("OHLCV", "wikidata_json"),
         build=build_wikidata_matrix,
     ),
-    "inc_matrix": Target(
+    "Incidence Matrix": Target(
         outputs=lambda ctx: [incidence_matrix_path(ctx)],
-        deps=("sector_industry_matrix", "wikidata_matrix"),
+        deps=("Sector-Industry Relations", "Wikidata Relation Matrix"),
         build=build_incidence_matrix,
     ),
 }
@@ -705,17 +705,17 @@ class MarketTarget:
 
 
 MARKET_TARGETS: dict[str, MarketTarget] = {
-    "indexes": MarketTarget(
+    "Indexes": MarketTarget(
         outputs=lambda ctx: [nation_indexes_path(ctx)],
         deps=(),
         build=build_nation_indexes,
     ),
-    "market": MarketTarget(
+    "Market Info": MarketTarget(
         outputs=lambda ctx: [nation_market_path(ctx)],
-        deps=("indexes",),
+        deps=("Indexes",),
         build=build_nation_market,
     ),
-    "cnnpred_market": MarketTarget(
+    "Global Market Feature": MarketTarget(
         outputs=lambda ctx: [cnnpred_market_path(ctx)],
         deps=(),
         build=build_cnnpred_market,
