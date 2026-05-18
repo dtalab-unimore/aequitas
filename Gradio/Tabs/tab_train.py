@@ -1,8 +1,8 @@
 import gradio as gr
 
-from Gradio.test_models import (
-    get_universe_options
-)
+from Gradio.data_load import get_models
+from Gradio.train_models import toggle_train_button
+
 
 def build_train_tab():
 
@@ -30,72 +30,72 @@ def build_train_tab():
                             label="Universe",
                         )
                         train_task = gr.Dropdown(
-                            choices=[],
+                            choices=['Classification', 'Regression', 'Ranking'],
                             value=None,
                             label="Task Type",
-                            interactive=False,
+                            interactive=True,
                         )
 
                     with gr.Row():
                         train_model = gr.Dropdown(
-                            choices=[],
+                            choices=get_models(),
                             value=None,
                             label="Model",
-                            interactive=False,
+                            interactive=True,
                         )
-                        train_config = gr.Dropdown(
-                            choices=[],
+                        train_config = gr.Textbox(
                             value=None,
                             label="Configuration",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the configuration name",
                         )
 
                 with gr.Group():
                     gr.Markdown("### 2. Sequence settings")
 
                     with gr.Row():
-                        sl = gr.Dropdown(
-                            choices=[],
+                        sl = gr.Textbox(
                             value=None,
                             label="Sequence length",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the sequence length",
                         )
-                        pl = gr.Dropdown(
-                            choices=[],
+                        pl = gr.Textbox(
                             value=None,
                             label="Prediction length",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the prediction length",
                         )
 
                 with gr.Group():
                     gr.Markdown("### 3. Periods")
 
                     with gr.Row():
-                        start_train = gr.Dropdown(
-                            choices=[],
+                        start_train = gr.Textbox(
                             value=None,
                             label="Start Train Year",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the start train year",
                         )
-                        end_train = gr.Dropdown(
-                            choices=[],
+                        end_train = gr.Textbox(
                             value=None,
                             label="End Train Year",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the end train year",
                         )
 
                     with gr.Row():
-                        start_valid = gr.Dropdown(
-                            choices=[],
+                        start_valid = gr.Textbox(
                             value=None,
                             label="Start Validation Year",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the start validation year",
                         )
-                        end_valid = gr.Dropdown(
-                            choices=[],
+                        end_valid = gr.Textbox(
                             value=None,
                             label="End Validation Year",
-                            interactive=False,
+                            interactive=True,
+                            placeholder="Insert the end validation year",
                         )
 
             # Right side: config preview
@@ -186,3 +186,51 @@ def build_train_tab():
                         elem_id="test-result-code",
                         buttons=['download'],
                     )
+
+        required_train_inputs = [
+            train_universe,
+            train_task,
+            train_model,
+            train_config,
+            sl,
+            pl,
+            start_train,
+            end_train,
+            start_valid,
+            end_valid,
+        ]
+
+        dropdown_inputs = [
+            train_universe,
+            train_task,
+            train_model,
+        ]
+
+        textbox_inputs = [
+            train_config,
+            sl,
+            pl,
+            start_train,
+            end_train,
+            start_valid,
+            end_valid,
+        ]
+
+        for component in dropdown_inputs:
+            component.change(
+                fn=toggle_train_button,
+                inputs=required_train_inputs,
+                outputs=train_button,
+                show_progress="hidden",
+                queue=False,
+            )
+
+        for component in textbox_inputs:
+            component.change(
+                fn=toggle_train_button,
+                inputs=required_train_inputs,
+                outputs=train_button,
+                show_progress="hidden",
+                queue=False,
+            )
+
