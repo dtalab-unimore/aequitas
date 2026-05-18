@@ -134,11 +134,27 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
             return None, f"config_params.json vuoto: {config_path}"
 
         params = json.loads(raw_text)
-        keys_to_remove = ["start_test_date", "end_date"]
-        for key in keys_to_remove:
-            params.pop(key, None)
 
-        return params, json.dumps(params, indent=2, ensure_ascii=False)
+        keys_to_keep = [
+            "data_path",
+            "universe",
+            "model_name",
+            "seq_len",
+            "pred_len",
+            "start_date",
+            "end_train_date",
+            "start_valid_date",
+            "end_valid_date",
+            "lr",
+        ]
+
+        filtered_params = {
+            key: params[key]
+            for key in keys_to_keep
+            if key in params
+        }
+
+        return filtered_params, json.dumps(filtered_params, indent=2, ensure_ascii=False)
 
     except Exception as e:
         preview = raw_text[:200] if "raw_text" in locals() else ""
