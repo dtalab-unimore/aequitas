@@ -832,6 +832,19 @@ def _csv_total_rows_cached(path: str, signature: int) -> int:
         # -1 per header
         return max(sum(1 for _ in f) - 1, 0)
 
+def _round_numeric_columns(df: pd.DataFrame, decimals: int = 4) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    df = df.copy()
+
+    numeric_cols = df.select_dtypes(include="number").columns
+
+    if len(numeric_cols) > 0:
+        df[numeric_cols] = df[numeric_cols].round(decimals)
+
+    return df
+
 def _ticker_base_series(series: pd.Series) -> pd.Series:
     return (
         series
@@ -872,6 +885,8 @@ def _csv_preview_page_df(
             skiprows=range(1, start + 1),
             nrows=page_size,
         )
+
+        df = _round_numeric_columns(df, decimals=4)
 
         return df, total_items
 
@@ -928,6 +943,8 @@ def _csv_preview_page_df(
         df = pd.concat(page_chunks, ignore_index=True).head(page_size)
     else:
         df = pd.DataFrame(columns=columns)
+
+    df = _round_numeric_columns(df, decimals=4)
 
     return df, total_filtered
 
