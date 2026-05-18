@@ -108,14 +108,30 @@ def build_tab():
                                 value=None,
                                 show_label=False,
                                 elem_id="preview-selector",
+                                scale=1,
+                                min_width=180,
                             )
+
+                            ticker_input = gr.Textbox(
+                                label=None,
+                                show_label=False,
+                                visible=False,
+                                interactive=True,
+                                placeholder="Insert Ticker",
+                                elem_id="ticker-input",
+                                scale=1,
+                                min_width=180,
+                            )
+
                             preview_start_year = gr.Dropdown(
                                 label=None,
                                 choices=[],
                                 value=None,
                                 show_label=False,
                                 visible=False,
-                                elem_id="preview-selector",
+                                elem_id="preview-start-year",
+                                scale=0,
+                                min_width=130,
                             )
                     preview_page_state = gr.State(0)
 
@@ -174,7 +190,7 @@ def build_tab():
         ).then(
             fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
-            outputs=[preview_start_year],
+            outputs=[preview_start_year, ticker_input],
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
@@ -196,7 +212,7 @@ def build_tab():
         ).then(
             fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
-            outputs=[preview_start_year],
+            outputs=[preview_start_year, ticker_input],
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
@@ -226,7 +242,7 @@ def build_tab():
         ).then(
             fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
-            outputs=[preview_start_year],
+            outputs=[preview_start_year, ticker_input],
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,
@@ -242,7 +258,7 @@ def build_tab():
         ).then(
             fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
-            outputs=[preview_start_year],
+            outputs=[preview_start_year, ticker_input],
             show_progress="hidden", queue=False,
         ).then(
             fn=reset_preview_page,

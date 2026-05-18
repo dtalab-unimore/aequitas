@@ -1100,18 +1100,27 @@ def _csv_available_years_cached(path: str, signature: int) -> tuple[int, ...]:
 
 def refresh_preview_year_filter(universe: str, preview_name: str):
     if not universe or not preview_name:
-        return gr.update(choices=[], value=None, visible=False, interactive=False)
+        return (
+            gr.update(choices=[], value=None, visible=False, interactive=False),
+            gr.update(visible=False, interactive=False),
+        )
 
     file_map = _build_file_map(universe)
     path = file_map.get(preview_name)
 
     if not path or not Path(path).exists():
-        return gr.update(choices=[], value=None, visible=False, interactive=False)
+        return (
+            gr.update(choices=[], value=None, visible=False, interactive=False),
+            gr.update(visible=False, interactive=False),
+        )
 
     path_obj = Path(path)
 
     if path_obj.suffix.lower() != ".csv":
-        return gr.update(choices=[], value=None, visible=False, interactive=False)
+        return(
+            gr.update(choices=[], value=None, visible=False, interactive=False),
+            gr.update(visible=False, interactive=False),
+        )
 
     path = str(path_obj.resolve())
     signature = _path_signature(path)
@@ -1119,15 +1128,16 @@ def refresh_preview_year_filter(universe: str, preview_name: str):
     years = list(_csv_available_years_cached(path, signature))
 
     if not years:
-        return gr.update(choices=[], value=None, visible=False, interactive=False)
+        return (
+            gr.update(choices=[], value=None, visible=False, interactive=False),
+            gr.update(visible=False, interactive=False),
+        )
 
     choices = ["All Years"] + [str(year) for year in years]
 
-    return gr.update(
-        choices=choices,
-        value="All Years",
-        visible=True,
-        interactive=True,
+    return (
+        gr.update(choices=choices, value="All Years", visible=True, interactive=True),
+        gr.update(visible=True, interactive=True),
     )
 
 def load_preview_file_page(

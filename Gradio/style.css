@@ -266,16 +266,18 @@ button:hover {
 
 #preview-selector .block,
 #preview-selector fieldset,
-.preview-header-row #preview-selector > div,
-.preview-header-row #preview-selector > div > div {
+#ticker-input .block,
+#ticker-input textarea,
+#preview-start-year .block,
+#preview-start-year fieldset {
     background: #f8faff !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 13px !important;
-    /*padding: 2px 6px !important;*/
     box-shadow: none !important;
 }
 
-#preview-selector .wrap {
+#preview-selector .wrap,
+#preview-start-year .wrap {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
@@ -284,7 +286,9 @@ button:hover {
 
 /* Hover sul wrapper */
 #preview-selector .block:hover,
-#preview-selector fieldset:hover {
+#preview-selector fieldset:hover,
+#preview-start-year .block:hover,
+#preview-start-year fieldset:hover {
     border-color: #a5b4fc !important;
 }
 
@@ -294,11 +298,11 @@ button:hover {
 
 .preview-header-controls {
     display: flex !important;
-    flex: 0 0 auto !important;
+    flex: 1 1 auto !important;
     align-items: center !important;
     justify-content: flex-end !important;
     gap: 8px !important;
-    width: auto !important;
+    width: 100% !important;
     min-width: 0 !important;
 }
 
@@ -307,7 +311,21 @@ button:hover {
     align-items: center !important;
     justify-content: flex-end !important;
     gap: 8px !important;
-    width: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+#preview-selector,
+#ticker-input,
+#preview-start-year {
+    flex: 0 0 200px !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+}
+
+#preview-start-year {
+    flex: 0 0 130px !important;
 }
 
 /* ── Preview HTML table ─────────────────────────────────────── */
@@ -321,6 +339,14 @@ button:hover {
     margin-bottom: -20px !important;
     height:360px;
     max-height: 360px !important;
+}
+
+#preview-selector,
+#ticker-input,
+#preview-start-year {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
 }
 
 /* Wrapper */
