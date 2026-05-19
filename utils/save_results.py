@@ -17,12 +17,12 @@ def save_results(
 ):
     metrics = {k: float(v) for k, v in metrics.items()}
     results = {
-        'metrics': metrics,
-        'preds': preds,
-        'labels': labels,
-        'pred_date': output_dates,
-        'last_date': input_dates,
-        'tickers': tickers_to_date
+        "metrics": metrics,
+        "preds": preds,
+        "labels": labels,
+        "pred_date": output_dates,
+        "last_date": input_dates,
+        "tickers": tickers_to_date
     }
 
     results_pkl = f"{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl"

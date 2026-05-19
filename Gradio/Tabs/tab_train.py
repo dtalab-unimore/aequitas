@@ -1,10 +1,14 @@
 import gradio as gr
 
 from Gradio.data_load import get_models
-from Gradio.train_models import toggle_train_button
+from Gradio.train_models import toggle_train_button, train_model_with_logs
 
 
 def build_train_tab():
+    UI_EVENT = dict(
+        show_progress="hidden",
+        queue=False,
+    )
 
     with gr.Tab("Train Model", elem_id="main-tabs"):
         gr.Markdown("## Train Model")
@@ -234,3 +238,37 @@ def build_train_tab():
                 queue=False,
             )
 
+        train_button.click(
+            fn=lambda: (
+                gr.update(visible=True),
+                gr.update(value=""),
+                gr.update(value=None),
+            ),
+            inputs=[],
+            outputs=[
+                train_output_section,
+                train_logs,
+                train_result,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=train_model_with_logs,
+            inputs=[
+                train_universe,
+                train_task,
+                train_model,
+                train_config,
+                sl,
+                pl,
+                start_train,
+                end_train,
+                start_valid,
+                end_valid
+            ],
+            outputs=[
+                train_logs,
+                train_result
+            ],
+            show_progress="hidden",
+        )

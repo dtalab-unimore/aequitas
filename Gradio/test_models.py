@@ -472,7 +472,7 @@ def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, p
             status, payload = done_queue.get()
 
             if status == "ok":
-                logs.append("[OK] Test completato.")
+                logs.append("[OK] Test completed.")
                 result_text = json.dumps(payload, indent=2, ensure_ascii=False)
             else:
                 result_text = payload
