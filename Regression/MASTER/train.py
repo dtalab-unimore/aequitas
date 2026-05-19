@@ -61,7 +61,7 @@ if __name__ == '__main__':
     args.add_argument('--model_name', type=str, default='MASTER')
     args.add_argument('--universe', type=str, default='sx5e')
     args.add_argument('--data_path', type=str, default='./Evaluation/data')
-    args.add_argument('--data_preprocessing', action='store_true', default=False)
+    args.add_argument('--data_preprocessing', action='store_true', default=True)
 
     # Prediction Parameters
     args.add_argument('--seq_len', type=int, default=8)

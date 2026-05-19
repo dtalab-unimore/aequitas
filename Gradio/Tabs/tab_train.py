@@ -1,10 +1,14 @@
 import gradio as gr
 
 from Gradio.data_load import get_models
-from Gradio.train_models import toggle_train_button
+from Gradio.train_models import toggle_train_button, train_model_with_logs
 
 
 def build_train_tab():
+    UI_EVENT = dict(
+        show_progress="hidden",
+        queue=False,
+    )
 
     with gr.Tab("Train Model", elem_id="main-tabs"):
         gr.Markdown("## Train Model")
@@ -18,7 +22,7 @@ def build_train_tab():
         with gr.Row(equal_height=False):
 
             # Left side: controls
-            with gr.Column(scale=3, min_width=480):
+            with gr.Column(scale=2):
 
                 with gr.Group():
                     gr.Markdown("### 1. Model configuration")
@@ -50,23 +54,24 @@ def build_train_tab():
                             placeholder="Insert the configuration name",
                         )
 
+            with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### 2. Sequence settings")
 
-                    with gr.Row():
-                        sl = gr.Textbox(
-                            value=None,
-                            label="Sequence length",
-                            interactive=True,
-                            placeholder="Insert the sequence length",
-                        )
-                        pl = gr.Textbox(
-                            value=None,
-                            label="Prediction length",
-                            interactive=True,
-                            placeholder="Insert the prediction length",
-                        )
+                    sl = gr.Textbox(
+                        value=None,
+                        label="Sequence length",
+                        interactive=True,
+                        placeholder="Insert the sequence length",
+                    )
+                    pl = gr.Textbox(
+                        value=None,
+                        label="Prediction length",
+                        interactive=True,
+                        placeholder="Insert the prediction length",
+                    )
 
+            with gr.Column(scale=2):
                 with gr.Group():
                     gr.Markdown("### 3. Periods")
 
@@ -97,16 +102,6 @@ def build_train_tab():
                             interactive=True,
                             placeholder="Insert the end validation year",
                         )
-
-            # Right side: config preview
-            with gr.Column(scale=2, min_width=420):
-                config_info = gr.Code(
-                    label="Configuration Parameters",
-                    language="json",
-                    value=None,
-                    interactive=False,
-                    elem_id="config-code-box",
-                )
 
         # ─────────────────────────────────────────────────────────────
         # TEST button
@@ -234,3 +229,37 @@ def build_train_tab():
                 queue=False,
             )
 
+        train_button.click(
+            fn=lambda: (
+                gr.update(visible=True),
+                gr.update(value=""),
+                gr.update(value=None),
+            ),
+            inputs=[],
+            outputs=[
+                train_output_section,
+                train_logs,
+                train_result,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=train_model_with_logs,
+            inputs=[
+                train_universe,
+                train_task,
+                train_model,
+                train_config,
+                sl,
+                pl,
+                start_train,
+                end_train,
+                start_valid,
+                end_valid
+            ],
+            outputs=[
+                train_logs,
+                train_result
+            ],
+            show_progress="hidden",
+        )

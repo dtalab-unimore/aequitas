@@ -29,7 +29,7 @@ def dispatch_test(
         "--model_name", test_model,
     ]
 
-    log_fn(f"Esecuzione: {' '.join(cmd)}")
+    log_fn(f"Execution: {' '.join(cmd)}")
 
     process = subprocess.Popen(
         cmd,
