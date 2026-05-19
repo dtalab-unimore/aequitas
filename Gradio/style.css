@@ -2,7 +2,7 @@
 .gradio-container { background-color: #f7f9fb; }
 
 /* Main container */
-.main-shell {
+.main-shell .main-tabs{
     max-width: 1250px;
     margin: 0 auto;
     padding-top: 0px;
@@ -105,7 +105,7 @@ button:hover {
     max-width: 100% !important;
     margin: 0 !important;
     padding: 12px 2px 24px !important;
-    gap: 0px !important;
+    gap: 0 !important;
     box-sizing: border-box !important;
 }
 
@@ -230,16 +230,11 @@ button:hover {
     gap: 0px !important;
     margin-bottom: -12px !important;
     width: 100% !important;
+    height: 50px !important;
+    padding: 2px !important;
+    margin: 0px !important;
 }
 
-.preview-header-row > *,
-.preview-header-row > * > * {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
 
 .preview-header-row .block,
 .preview-header-row .form,
@@ -247,8 +242,8 @@ button:hover {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    padding: 2px !important;
+    margin: 0px !important;
 }
 
 .preview-header-row > div:first-child {
@@ -272,16 +267,14 @@ button:hover {
 #preview-start-year fieldset {
     background: #f8faff !important;
     border: 1px solid #c7d2fe !important;
-    border-radius: 13px !important;
+    border-radius: 14px !important;
     box-shadow: none !important;
 }
 
 #preview-selector .wrap,
 #preview-start-year .wrap {
-    border: none !important;
-    box-shadow: none !important;
     background: transparent !important;
-    border-radius: 10px !important;
+    border-radius: 14px !important;
 }
 
 /* Hover sul wrapper */
@@ -337,6 +330,7 @@ button:hover {
     box-shadow: none !important;
     padding: 0 !important;
     margin-bottom: -20px !important;
+    margin-top: 25px !important;
     height:360px;
     max-height: 360px !important;
 }
@@ -564,6 +558,8 @@ button:hover {
     .preview-header-row {
         flex-direction: column !important;
         align-items: flex-start !important;
+        padding: 2px !important;
+        margin: 0px !important;
     }
     .preview-header-row #preview-selector {
         min-width: 100% !important;
@@ -1323,11 +1319,9 @@ table.mpt td.missing {
     max-width: 100% !important;
     margin: 0 !important;
     padding: 12px 2px 24px !important;
-    gap: 14px !important;
+    gap: 0 !important;
     box-sizing: border-box !important;
 }
-
-
 
 .evaluation-main-layout {
     width: 100% !important;
@@ -1784,13 +1778,62 @@ table.mpt td.missing {
     display: none !important;
 }
 
+/* Root del dropdown */
+.dropdown-single-compact {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* Tutti i contenitori interni devono poter restringersi */
+.dropdown-single-compact,
+.dropdown-single-compact *,
+.dropdown-single-compact .wrap,
+.dropdown-single-compact .wrap *,
+.dropdown-single-compact [data-testid],
+.dropdown-single-compact label,
+.dropdown-single-compact div {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Box */
 .dropdown-single-compact .wrap {
     height: 42px !important;
     min-height: 42px !important;
     max-height: 42px !important;
 
+    width: 100% !important;
+    max-width: 100% !important;
+
     overflow: hidden !important;
     border-radius: 14px !important;
+}
+
+/* internal row */
+.dropdown-single-compact .wrap > div {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    overflow: hidden !important;
+}
+
+/* selected input */
+.dropdown-single-compact input {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    flex: 1 1 auto !important;
+
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+
+    padding-right: 28px !important;
 }
 /* ── Compact multiselect ───────────────────────────────────── */
 

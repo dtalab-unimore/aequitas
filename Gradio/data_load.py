@@ -370,46 +370,6 @@ def _collect_required_files(
     return unique_rows
 
 
-# def _format_required_files_report(
-#     rows: list[dict],
-#     unsupported_files: list[str] | None = None,
-#     selected_models: list[str] | None = None,
-# ) -> str:
-#     unsupported_files = unsupported_files or []
-#     selected_models = selected_models or []
-#
-#     if not rows and not unsupported_files:
-#         return "No required files found."
-#
-#     lines = []
-#
-#     if selected_models:
-#         lines.append(f"Models: {', '.join(selected_models)}")
-#         lines.append("")
-#
-#     existing = sum(1 for row in rows if row["exists"])
-#     missing = len(rows) - existing
-#
-#     lines.append(f"ℹ️ Required files: {len(rows)} | Available: {existing} | Missing: {missing}")
-#     lines.append("")
-#
-#     for row in rows:
-#         status = "✅ OK" if row["exists"] else "⛔ MISSING"
-#         path = _relative_path(row["path"])
-#
-#         lines.append(
-#             f"[{status}] {row['target']} -> {path}"
-#         )
-#
-#     if unsupported_files:
-#         lines.append("")
-#         lines.append("Files configured for the selected model(s) but not linked to a download target:")
-#
-#         for file_name in unsupported_files:
-#             lines.append(f"[UNSUPPORTED] {file_name}")
-#
-#     return "\n".join(lines)
-
 def _format_required_files_report_by_model(
     model_reports: list[dict],
 ) -> str:
@@ -872,11 +832,12 @@ def _csv_preview_page_df(
 
     columns = _csv_columns_cached(path, signature)
     date_col = _date_column_name(columns)
+    instrument_col = _instrument_column_name(columns)
 
     has_date_filter = start_year is not None and date_col is not None
-    has_ticker_filter = ticker is not None and "instrument" in columns
+    has_ticker_filter = ticker is not None and instrument_col is not None
 
-    if start_year is None and ticker is None:
+    if not has_date_filter and not has_ticker_filter:
         total_items = _csv_total_rows_cached(path, signature)
         start = page * page_size
 
@@ -887,14 +848,67 @@ def _csv_preview_page_df(
         )
 
         df = _round_numeric_columns(df, decimals=4)
-
         return df, total_items
 
-    if not has_date_filter and not has_ticker_filter:
+    if start_year is not None and date_col is None:
+        return pd.DataFrame(columns=columns), 0
+
+    if ticker is not None and instrument_col is None:
         return pd.DataFrame(columns=columns), 0
 
     target_start = page * page_size
     target_end = target_start + page_size
+
+    if has_date_filter:
+        filtered_chunks = []
+
+        for chunk in pd.read_csv(path, chunksize=50_000):
+            mask = pd.Series(True, index=chunk.index)
+
+            parsed_dates = pd.to_datetime(chunk[date_col], errors="coerce")
+            mask &= parsed_dates.dt.year >= start_year
+
+            if has_ticker_filter:
+                ticker_query = ticker.strip().upper()
+                ticker_base = _ticker_base_series(chunk[instrument_col])
+
+                exact_mask = ticker_base == ticker_query
+
+                if exact_mask.any():
+                    mask &= exact_mask
+                else:
+                    mask &= ticker_base.str.startswith(ticker_query, na=False)
+
+            filtered_chunk = chunk.loc[mask].copy()
+
+            if not filtered_chunk.empty:
+                filtered_chunk["_preview_sort_date"] = pd.to_datetime(
+                    filtered_chunk[date_col],
+                    errors="coerce",
+                )
+                filtered_chunks.append(filtered_chunk)
+
+        if not filtered_chunks:
+            return pd.DataFrame(columns=columns), 0
+
+        filtered_df = pd.concat(filtered_chunks, ignore_index=True)
+
+        filtered_df = filtered_df.sort_values(
+            "_preview_sort_date",
+            ascending=True,
+            kind="mergesort",
+            na_position="last",
+        )
+
+        total_filtered = len(filtered_df)
+
+        df = filtered_df.iloc[target_start:target_end].drop(
+            columns=["_preview_sort_date"],
+            errors="ignore",
+        )
+
+        df = _round_numeric_columns(df, decimals=4)
+        return df, total_filtered
 
     total_filtered = 0
     page_chunks = []
@@ -902,23 +916,16 @@ def _csv_preview_page_df(
     for chunk in pd.read_csv(path, chunksize=50_000):
         mask = pd.Series(True, index=chunk.index)
 
-        if has_date_filter:
-            parsed_dates = pd.to_datetime(chunk[date_col], errors="coerce")
-            mask &= parsed_dates.dt.year >= start_year
-
         if has_ticker_filter:
             ticker_query = ticker.strip().upper()
-            ticker_base = _ticker_base_series(chunk["instrument"])
+            ticker_base = _ticker_base_series(chunk[instrument_col])
 
             exact_mask = ticker_base == ticker_query
 
-            if len(ticker_query) >= 1 and exact_mask.any():
+            if exact_mask.any():
                 mask &= exact_mask
             else:
-                mask &= ticker_base.str.startswith(
-                    ticker_query,
-                    na=False,
-                )
+                mask &= ticker_base.str.startswith(ticker_query, na=False)
 
         filtered_chunk = chunk.loc[mask]
         chunk_count = len(filtered_chunk)
@@ -945,7 +952,6 @@ def _csv_preview_page_df(
         df = pd.DataFrame(columns=columns)
 
     df = _round_numeric_columns(df, decimals=4)
-
     return df, total_filtered
 
 def _safe_json_load(path: str):
@@ -1129,11 +1135,22 @@ def _normalize_start_year(start_year):
         return None
 
 
-def _date_column_name(columns) -> str | None:
+def _column_name(columns, target: str) -> str | None:
+    target = target.strip().lower()
+
     for col in columns:
-        if str(col).strip().upper() == "DATE":
+        if str(col).strip().lower() == target:
             return col
+
     return None
+
+
+def _date_column_name(columns) -> str | None:
+    return _column_name(columns, "date")
+
+
+def _instrument_column_name(columns) -> str | None:
+    return _column_name(columns, "instrument")
 
 
 @lru_cache(maxsize=128)
@@ -1157,48 +1174,88 @@ def _csv_available_years_cached(path: str, signature: int) -> tuple[int, ...]:
     except Exception:
         return tuple()
 
+def refresh_preview_selector_and_filters(
+    universe: str,
+    universe_targets: list[str] | None = None,
+    market_targets: list[list[str]] | None = None,
+):
+    preview_update = refresh_preview_controls(
+        universe=universe,
+        universe_targets=universe_targets,
+        market_targets=market_targets,
+    )
+
+    preview_name = preview_update.get("value") if isinstance(preview_update, dict) else None
+
+    year_update, ticker_update = refresh_preview_year_filter(
+        universe=universe,
+        preview_name=preview_name,
+    )
+
+    return preview_update, year_update, ticker_update
 
 def refresh_preview_year_filter(universe: str, preview_name: str):
+    hidden_year = gr.update(
+        choices=[],
+        value=None,
+        visible=False,
+        interactive=False,
+    )
+
+    hidden_ticker = gr.update(
+        value="",
+        visible=False,
+        interactive=False,
+    )
+
     if not universe or not preview_name:
-        return (
-            gr.update(choices=[], value=None, visible=False, interactive=False),
-            gr.update(visible=False, interactive=False),
-        )
+        return hidden_year, hidden_ticker
 
     file_map = _build_file_map(universe)
     path = file_map.get(preview_name)
 
     if not path or not Path(path).exists():
-        return (
-            gr.update(choices=[], value=None, visible=False, interactive=False),
-            gr.update(visible=False, interactive=False),
-        )
+        return hidden_year, hidden_ticker
 
     path_obj = Path(path)
 
     if path_obj.suffix.lower() != ".csv":
-        return(
-            gr.update(choices=[], value=None, visible=False, interactive=False),
-            gr.update(visible=False, interactive=False),
-        )
+        return hidden_year, hidden_ticker
 
     path = str(path_obj.resolve())
     signature = _path_signature(path)
 
-    years = list(_csv_available_years_cached(path, signature))
+    columns = _csv_columns_cached(path, signature)
 
-    if not years:
-        return (
-            gr.update(choices=[], value=None, visible=False, interactive=False),
-            gr.update(visible=False, interactive=False),
+    date_col = _date_column_name(columns)
+    instrument_col = _instrument_column_name(columns)
+
+    if date_col is not None:
+        years = list(_csv_available_years_cached(path, signature))
+
+        if years:
+            year_update = gr.update(
+                choices=["All Years"] + [str(y) for y in years],
+                value="All Years",
+                visible=True,
+                interactive=True,
+            )
+        else:
+            year_update = hidden_year
+    else:
+        year_update = hidden_year
+
+    if instrument_col is not None:
+        ticker_update = gr.update(
+            value="",
+            visible=True,
+            interactive=True,
+            placeholder="Insert Ticker",
         )
+    else:
+        ticker_update = hidden_ticker
 
-    choices = ["All Years"] + [str(year) for year in years]
-
-    return (
-        gr.update(choices=choices, value="All Years", visible=True, interactive=True),
-        gr.update(visible=True, interactive=True),
-    )
+    return year_update, ticker_update
 
 def load_preview_file_page(
     universe: str,

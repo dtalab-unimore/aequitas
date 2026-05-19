@@ -27,6 +27,14 @@ def _safe_filename(value: str) -> str:
     return value.strip("_") or "universe"
 
 def get_universe_options():
+    DATASET_LABELS = {
+        "sp500": "[sp500] Standard & Poor's 500",
+        "dji": "[dji] Dow Jones Industrial Average",
+        "nasdaq100": "[nasdaq100] NASDAQ-100",
+        "sxxp": "[sxxp] STOXX Europe 600",
+        "sx5e": "[sx5e] EURO STOXX 50",
+    }
+
     universes = set()
 
     for task in ALL_TASKS:
@@ -45,7 +53,10 @@ def get_universe_options():
                 if os.path.isdir(universe_dir):
                     universes.add(universe)
 
-    return sorted(universes)
+    return [
+        (DATASET_LABELS.get(universe, universe), universe)
+        for universe in sorted(universes)
+    ]
 
 
 def get_model_params_base_dir(universe: str, task_type: str, model_name: str) -> str:
@@ -159,8 +170,8 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
     except Exception as e:
         preview = raw_text[:200] if "raw_text" in locals() else ""
         return None, (
-            f"Errore nella lettura di {config_path}: {e}\n\n"
-            f"Prime 200 chars lette:\n{repr(preview)}"
+            f"Error reading {config_path}: {e}\n\n"
+            f"First 200 characters read:\n{repr(preview)}"
         )
 
 def on_universe_change(universe: str):
@@ -361,8 +372,8 @@ def get_tickers(universe: str, start_test_year: str):
     tickers = filter_constituents_by_date(constituents, start_test_date)
     ticker_list = tickers["EODHD"].tolist()
 
-    # CSV scaricabile: contiene tutte le colonne del CSV originale,
-    # filtrate sui tickers effettivamente usati nel test.
+    # Downloadable CSV: contains all the columns from the original CSV,
+    # filtered to show only the tickers actually used in the test.
     export_df = tickers.copy()
     export_df["selected_universe"] = universe
     export_df["selected_start_test_date"] = start_test_date
@@ -472,7 +483,7 @@ def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, p
             status, payload = done_queue.get()
 
             if status == "ok":
-                logs.append("[OK] Test completato.")
+                logs.append("[OK] Test completed.")
                 result_text = json.dumps(payload, indent=2, ensure_ascii=False)
             else:
                 result_text = payload

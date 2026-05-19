@@ -178,7 +178,7 @@ def build_tab():
                         elem_id="download-tickers-button",
                     )
 
-            # Riga logs + results affiancati
+            # Riga logs + results
             with gr.Row(equal_height=True, elem_classes="test-results-row"):
                 with gr.Column(scale=1, elem_classes="test-output-card"):
                     gr.HTML("""
@@ -220,8 +220,8 @@ def build_tab():
         # ─────────────────────────────────────────────────────────────
         # Wiring
         # IMPORTANT:
-        # - queue=False sulle callback leggere evita il lag.
-        # - input() evita callback scatenate da update programmatici.
+        # - queue=False on read callbacks prevents lag.
+        # - input() prevents callbacks triggered by programmatic updates.
         # ─────────────────────────────────────────────────────────────
 
         test_universe.input(
