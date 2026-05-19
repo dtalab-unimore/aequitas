@@ -22,7 +22,7 @@ def build_train_tab():
         with gr.Row(equal_height=False):
 
             # Left side: controls
-            with gr.Column(scale=3, min_width=480):
+            with gr.Column(scale=2):
 
                 with gr.Group():
                     gr.Markdown("### 1. Model configuration")
@@ -54,23 +54,24 @@ def build_train_tab():
                             placeholder="Insert the configuration name",
                         )
 
+            with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### 2. Sequence settings")
 
-                    with gr.Row():
-                        sl = gr.Textbox(
-                            value=None,
-                            label="Sequence length",
-                            interactive=True,
-                            placeholder="Insert the sequence length",
-                        )
-                        pl = gr.Textbox(
-                            value=None,
-                            label="Prediction length",
-                            interactive=True,
-                            placeholder="Insert the prediction length",
-                        )
+                    sl = gr.Textbox(
+                        value=None,
+                        label="Sequence length",
+                        interactive=True,
+                        placeholder="Insert the sequence length",
+                    )
+                    pl = gr.Textbox(
+                        value=None,
+                        label="Prediction length",
+                        interactive=True,
+                        placeholder="Insert the prediction length",
+                    )
 
+            with gr.Column(scale=2):
                 with gr.Group():
                     gr.Markdown("### 3. Periods")
 
@@ -101,16 +102,6 @@ def build_train_tab():
                             interactive=True,
                             placeholder="Insert the end validation year",
                         )
-
-            # Right side: config preview
-            with gr.Column(scale=2, min_width=420):
-                config_info = gr.Code(
-                    label="Configuration Parameters",
-                    language="json",
-                    value=None,
-                    interactive=False,
-                    elem_id="config-code-box",
-                )
 
         # ─────────────────────────────────────────────────────────────
         # TEST button
