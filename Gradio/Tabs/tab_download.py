@@ -10,12 +10,17 @@ from Gradio.data_load import (
     next_preview_page,
     prev_preview_page,
     empty_preview_table_html,
-    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state,
+    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state, refresh_preview_selector_and_filters
 )
 
 
-DATASETS = ["sp500", "dji", "nasdaq100", "sxxp", "sx5e"]
-
+DATASETS = [
+    ("[sp500] Standard & Poor's 500", "sp500"),
+    ("[dji] Dow Jones Industrial Average", "dji"),
+    ("[nasdaq100] NASDAQ-100", "nasdaq100"),
+    ("[sxxp] STOXX Europe 600", "sxxp"),
+    ("[sx5e] EURO STOXX 50", "sx5e"),
+]
 
 def build_tab():
     with gr.Tab("Download Data", elem_id="main-tabs"):
@@ -108,6 +113,7 @@ def build_tab():
                                 value=None,
                                 show_label=False,
                                 elem_id="preview-selector",
+                                elem_classes=["dropdown-single-compact"],
                                 scale=1,
                                 min_width=180,
                             )
@@ -130,6 +136,7 @@ def build_tab():
                                 show_label=False,
                                 visible=False,
                                 elem_id="preview-start-year",
+                                elem_classes=["dropdown-single-compact"],
                                 scale=0,
                                 min_width=130,
                             )
@@ -183,44 +190,40 @@ def build_tab():
             fn=inspect_required_files,
             inputs=[dataset, models],
             outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         ).then(
-            fn=refresh_preview_controls,
+            fn=refresh_preview_selector_and_filters,
             inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector],
-            show_progress="hidden", queue=False,
-        ).then(
-            fn=refresh_preview_year_filter,
-            inputs=[dataset, preview_selector],
-            outputs=[preview_start_year, ticker_input],
-            show_progress="hidden", queue=False,
+            outputs=[preview_selector, preview_start_year, ticker_input],
+            show_progress="hidden",
+            queue=False,
         ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         )
 
         models.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
             outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         ).then(
-            fn=refresh_preview_controls,
+            fn=refresh_preview_selector_and_filters,
             inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector],
-            show_progress="hidden", queue=False,
-        ).then(
-            fn=refresh_preview_year_filter,
-            inputs=[dataset, preview_selector],
-            outputs=[preview_start_year, ticker_input],
-            show_progress="hidden", queue=False,
+            outputs=[preview_selector, preview_start_year, ticker_input],
+            show_progress="hidden",
+            queue=False,
         ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         )
 
         download_evt = btn_download_missing.click(
@@ -237,20 +240,17 @@ def build_tab():
         )
 
         download_evt.then(
-            fn=refresh_preview_controls,
+            fn=refresh_preview_selector_and_filters,
             inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector],
-            show_progress="hidden", queue=False,
-        ).then(
-            fn=refresh_preview_year_filter,
-            inputs=[dataset, preview_selector],
-            outputs=[preview_start_year, ticker_input],
-            show_progress="hidden", queue=False,
+            outputs=[preview_selector, preview_start_year, ticker_input],
+            show_progress="hidden",
+            queue=False,
         ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector, preview_start_year, ticker_input],
             outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
+            show_progress="hidden",
+            queue=False,
         )
 
         preview_selector.change(
