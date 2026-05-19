@@ -1,8 +1,8 @@
 import gradio as gr
 
-from Gradio.data_load import get_models
-from Gradio.train_models import toggle_train_button, train_model_with_logs, validate_train_inputs_soft, \
-    train_model_with_logs_if_valid
+from Gradio.data_load import read_configs
+from Gradio.train_models import toggle_train_button, validate_train_inputs_soft, \
+    train_model_with_logs_if_valid, get_models_train
 
 
 def build_train_tab():
@@ -41,10 +41,10 @@ def build_train_tab():
 
                     with gr.Row():
                         train_model = gr.Dropdown(
-                            choices=get_models(),
+                            choices=[],
                             value=None,
                             label="Model",
-                            interactive=True,
+                            interactive=False,
                         )
                         train_config = gr.Textbox(
                             value=None,
@@ -202,9 +202,16 @@ def build_train_tab():
             end_valid,
         ]
 
+        train_task.change(
+            fn=get_models_train,
+            inputs=[train_task],
+            outputs=[train_model, train_button],
+            show_progress="hidden",
+            queue=False,
+        )
+
         dropdown_inputs = [
             train_universe,
-            train_task,
             train_model,
         ]
 
@@ -228,6 +235,14 @@ def build_train_tab():
             )
 
         for component in textbox_inputs:
+            component.input(
+                fn=toggle_train_button,
+                inputs=required_train_inputs,
+                outputs=train_button,
+                show_progress="hidden",
+                queue=False,
+            )
+
             component.change(
                 fn=toggle_train_button,
                 inputs=required_train_inputs,

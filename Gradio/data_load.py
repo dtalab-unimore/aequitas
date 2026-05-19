@@ -52,12 +52,22 @@ DATASET_TO_NATION = {
 }
 
 
-def read_configs() -> dict:
+def read_configs(type: str | None = None) -> dict:
     if not CONFIG_PATH.exists():
         return {}
 
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+        grouped_configs = json.load(f)
+
+    if type is not None:
+        return grouped_configs.get(type, {})
+
+    all_model_configs = {}
+
+    for task_configs in grouped_configs.values():
+        all_model_configs.update(task_configs)
+
+    return all_model_configs
 
 
 CONFIGS = read_configs()

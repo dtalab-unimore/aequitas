@@ -8,15 +8,23 @@ from datetime import datetime
 import gradio as gr
 import json
 
+from Gradio.data_load import read_configs
 from Gradio.train_model_dispatcher import dispatch_train
 
 YEAR_RE = re.compile(r"^\d{4}$")
 
-def get_models():
-    with open('./Gradio/configs/model_to_data.json', 'r') as f:
-        config = json.load(f)
+def get_models_train(task):
+    config = read_configs(task)
+    models = list(config.keys())
 
-    return config.keys()
+    return (
+        gr.Dropdown(
+            choices=models,
+            value=None,
+            interactive=bool(models),
+        ),
+        gr.update(interactive=False),
+    )
 
 def _has_value(value):
     if value is None:
