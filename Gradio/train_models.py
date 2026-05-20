@@ -181,7 +181,11 @@ def train_model_with_logs(
         required_values.append(sl_value)
 
     if any(_is_empty(value) for value in required_values):
-        yield gr.update(value="Missing parameters."), ""
+        yield (
+            gr.update(value="Missing parameters."),
+            "",
+            gr.update(visible=False),
+        )
         return
 
     start_train_date = f"{int(start_train_year)}-01-01"
@@ -189,22 +193,27 @@ def train_model_with_logs(
     start_valid_date = f"{int(start_valid_year)}-01-01"
     end_valid_date = f"{int(end_valid_year)}-12-31"
 
-    def worker(sl_value):
+    def worker(sl_value_for_worker):
         try:
             push_log("Start training...")
-            sl_value = normalize_sequence_length_for_model(model_name, sl_value)
+
+            sl_value_for_worker = normalize_sequence_length_for_model(
+                model_name,
+                sl_value_for_worker,
+            )
+
             output = dispatch_train(
                 universe=universe,
                 task_type=task_type,
                 model_name=model_name,
                 config_name=config_name,
-                sl_value=sl_value,
+                sl_value=sl_value_for_worker,
                 pl_value=pl_value,
                 start_train_date=start_train_date,
                 end_train_date=end_train_date,
                 start_valid_date=start_valid_date,
                 end_valid_date=end_valid_date,
-                log_fn=push_log
+                log_fn=push_log,
             )
 
             done_queue.put(("ok", output))
@@ -213,28 +222,39 @@ def train_model_with_logs(
             push_log("Error during the training.")
             done_queue.put(("error", traceback.format_exc()))
 
-    thread = threading.Thread(target=worker(sl_value), daemon=True)
+    thread = threading.Thread(
+        target=worker,
+        args=(sl_value,),
+        daemon=True,
+    )
     thread.start()
 
     result_text = ""
 
     while True:
-
-        if not log_queue.empty():
+        while not log_queue.empty():
             logs.append(log_queue.get())
 
-        yield gr.update(value=current_logs()), result_text
+        yield (
+            gr.update(value=current_logs()),
+            result_text,
+            gr.update(visible=True),
+        )
 
         if not done_queue.empty() and log_queue.empty():
             status, payload = done_queue.get()
 
             if status == "ok":
-                logs.append("[OK] Train completed.")
+                logs.append("\n[ OK ✅ ] Train completed with success.")
                 result_text = json.dumps(payload, indent=2, ensure_ascii=False)
             else:
                 result_text = payload
 
-            yield gr.update(value=current_logs()), result_text
+            yield (
+                gr.update(value=current_logs()),
+                result_text,
+                gr.update(visible=False),
+            )
             break
 
         time.sleep(0.10)
@@ -413,7 +433,11 @@ def train_model_with_logs_if_valid(
     end_valid,
 ):
     if not is_valid:
-        yield gr.skip(), gr.skip()
+        yield (
+            gr.skip(),
+            gr.skip(),
+            gr.update(visible=False),
+        )
         return
 
     result = train_model_with_logs(
@@ -429,7 +453,4 @@ def train_model_with_logs_if_valid(
         end_valid,
     )
 
-    if hasattr(result, "__iter__") and not isinstance(result, (tuple, list, dict, str)):
-        yield from result
-    else:
-        yield result
+    yield from result

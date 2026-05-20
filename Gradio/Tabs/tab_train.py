@@ -15,6 +15,9 @@ def build_train_tab():
 
         return get_tickers(universe, end_valid)
 
+    def show_train_loading_if_valid(is_valid):
+        return gr.update(visible=bool(is_valid))
+
     with gr.Tab("Train Model", elem_id="main-tabs"):
         train_validation_state = gr.State(False)
 
@@ -140,9 +143,17 @@ def build_train_tab():
         # Hidden outputs, shown after TRAIN click
         # ─────────────────────────────────────────────────────────────
         with gr.Column(visible=False) as train_output_section:
-            # Riga tickers + download CSV
-            with gr.Row(equal_height=False, elem_classes="tickers-row"):
-                with gr.Column(elem_classes="tickers-card-wrap"):
+
+            with gr.Row(equal_height=True, elem_classes="test-results-row train-results-row"):
+
+                with gr.Column(scale=1, elem_classes="test-output-card tickers-card-wrap"):
+                    gr.HTML("""
+                    <div class="test-output-header">
+                        <span class="test-output-icon">▦</span>
+                        <span>Tickers Used</span>
+                    </div>
+                    """)
+
                     tickers_info = gr.HTML(
                         value="",
                         visible=False,
@@ -154,18 +165,32 @@ def build_train_tab():
                         value=None,
                         visible=False,
                         variant="secondary",
-                        elem_id="download-tickers-button",
+                        elem_id="download-train-tickers-button",
                     )
 
-            # Riga logs + results affiancati
-            with gr.Row(equal_height=True, elem_classes="test-results-row"):
-                with gr.Column(scale=1, elem_classes="test-output-card"):
+                # Colonna destra: progress
+                with gr.Column(
+                        scale=1,
+                        elem_classes="test-output-card",
+                        elem_id="train-progress-card",
+                ):
                     gr.HTML("""
                     <div class="test-output-header">
                         <span class="test-output-icon">▶</span>
-                        <span>Trein Progress</span>
+                        <span>Train Progress</span>
                     </div>
                     """)
+
+                    train_loading = gr.HTML(
+                        value="""
+                        <div class="train-header-loading">
+                            <div class="train-header-spinner"></div>
+                            <span>Training...</span>
+                        </div>
+                        """,
+                        visible=False,
+                        elem_id="train-header-loading-box",
+                    )
 
                     train_logs = gr.Textbox(
                         label=None,
@@ -178,23 +203,15 @@ def build_train_tab():
                         elem_id="test-logs-box",
                     )
 
-                with gr.Column(scale=1, elem_classes="test-output-card"):
-                    gr.HTML("""
-                    <div class="test-output-header">
-                        <span class="test-output-icon">{ }</span>
-                        <span>Train Result</span>
-                    </div>
-                    """)
-
-                    train_result = gr.Code(
-                        label=None,
-                        language="json",
-                        value=None,
-                        interactive=False,
-                        show_label=False,
-                        elem_id="test-result-code",
-                        buttons=['download'],
-                    )
+            train_result = gr.Code(
+                label=None,
+                language="json",
+                value=None,
+                interactive=False,
+                visible=False,
+                show_label=False,
+                elem_id="test-result-code-hidden",
+            )
 
         required_train_inputs = [
             train_universe,
@@ -313,7 +330,36 @@ def build_train_tab():
             queue=False,
         )
 
-        show_train_tickers_evt.then(
+        # show_train_tickers_evt.then(
+        #     fn=train_model_with_logs_if_valid,
+        #     inputs=[
+        #         train_validation_state,
+        #         train_universe,
+        #         train_task,
+        #         train_model,
+        #         train_config,
+        #         sl,
+        #         pl,
+        #         start_train,
+        #         end_train,
+        #         start_valid,
+        #         end_valid,
+        #     ],
+        #     outputs=[
+        #         train_logs,
+        #         train_result,
+        #     ],
+        #     show_progress="hidden",
+        # )
+        show_train_loading_evt = show_train_tickers_evt.then(
+            fn=show_train_loading_if_valid,
+            inputs=[train_validation_state],
+            outputs=[train_loading],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        show_train_loading_evt.then(
             fn=train_model_with_logs_if_valid,
             inputs=[
                 train_validation_state,
@@ -331,6 +377,7 @@ def build_train_tab():
             outputs=[
                 train_logs,
                 train_result,
+                train_loading,
             ],
             show_progress="hidden",
         )

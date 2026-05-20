@@ -856,7 +856,7 @@ button:hover {
 }
 
 /* Download button= equal to .ticker-count */
-#download-tickers-button {
+#download-tickers-button, #download-train-tickers-button{
     position: absolute !important;
     left: 205px !important;
     top: 100px !important;
@@ -890,11 +890,14 @@ button:hover {
     cursor: pointer !important;
     transform: none !important;
 }
-
 #download-tickers-button button,
+#download-train-tickers-button button,
 #download-tickers-button a,
+#download-train-tickers-button a,
 #download-tickers-button span,
-#download-tickers-button div {
+#download-train-tickers-button span,
+#download-tickers-button div,
+#download-train-tickers-button div {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -921,14 +924,26 @@ button:hover {
 }
 
 #download-tickers-button:hover,
+#download-train-tickers-button:hover,
 #download-tickers-button:hover button,
+#download-train-tickers-button:hover button,
 #download-tickers-button:hover a,
+#download-train-tickers-button:hover a,
 #download-tickers-button:hover span,
-#download-tickers-button:hover div {
+#download-train-tickers-button:hover span,
+#download-tickers-button:hover div,
+#download-train-tickers-button:hover div {
     background: #e0e7ff !important;
     color: #4338ca !important;
     border-color: #a5b4fc !important;
     transform: none !important;
+}
+
+#download-tickers-button {
+    top: 120px !important;
+}
+#download-train-tickers-button{
+    top: 174px !important;
 }
 
 :root {
@@ -2067,4 +2082,66 @@ table.mpt td.missing {
 .preview-table-wrap {
     position: relative !important;
     z-index: 1 !important;
+}
+
+#train-progress-card {
+    position: relative !important;
+}
+
+#train-header-loading-box {
+    position: absolute !important;
+    top: 14px !important;
+    right: 16px !important;
+    z-index: 10 !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.train-header-loading {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+
+    padding: 5px 10px !important;
+    border-radius: 999px !important;
+
+    background: #fffbee !important;
+    border: 1px solid #fce6bd !important;
+    color: #a37130 !important;
+
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+
+    box-shadow: none !important;
+}
+
+.train-header-spinner {
+    width: 13px !important;
+    height: 13px !important;
+    border-radius: 999px !important;
+
+    border: 2px solid #c7d2fe !important;
+    border-top-color: #4f46e5 !important;
+
+    animation: train-header-spin 0.75s linear infinite !important;
+}
+
+@keyframes train-header-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
