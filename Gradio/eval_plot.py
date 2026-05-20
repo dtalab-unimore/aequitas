@@ -2,7 +2,6 @@
 Matplotlib plot builders for EOY, METRICS and QUINTILE evaluation modes.
 """
 import re
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -42,6 +41,7 @@ def sort_mixed(values) -> list:
             return (0, float(v))
         except Exception:
             return (1, str(v))
+
     return sorted(values, key=sort_key)
 
 
@@ -67,7 +67,7 @@ def find_plot_column(df, aliases):
 
 def style_evaluation_axis(ax):
     ax.set_facecolor("#fbfdff")
-    ax.grid(True,  axis="y", color="#e0e7ff", linewidth=0.8, alpha=0.75)
+    ax.grid(True, axis="y", color="#e0e7ff", linewidth=0.8, alpha=0.75)
     ax.grid(False, axis="x")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -136,49 +136,106 @@ def collect_unique_legend_items(axes):
 # -------------------------------------------------
 # Base dataframe builder
 # -------------------------------------------------
-
 def build_plot_base_dataframe(df):
-    universe_col  = find_plot_column(df, ["selected_universe", "universe"])
-    model_col     = find_plot_column(df, ["selected_model", "model"])
-    config_col    = find_plot_column(df, ["selected_configuration", "configuration", "config"])
-    task_type_col = find_plot_column(df, ["selected_task_type", "task_type", "type"])
-    sl_col        = find_plot_column(df, ["selected_sequence_length", "sequence_length", "sl"])
-    pl_col        = find_plot_column(df, ["selected_prediction_length", "prediction_length", "pl"])
+    universe_col = find_plot_column(df, ["selected_universe", "universe"])
+
+    model_col = find_plot_column(df, ["model", "selected_model"])
+
+    config_col = find_plot_column(df, ["config", "configuration", "selected_configuration"])
+    task_type_col = find_plot_column(df, ["task_type", "type", "selected_task_type"])
+    sl_col = find_plot_column(df, ["sl", "sequence_length", "selected_sequence_length"])
+    pl_col = find_plot_column(df, ["pl", "prediction_length", "selected_prediction_length"])
+
+    selected_model_col = find_plot_column(df, ["selected_model"])
 
     if universe_col is None or model_col is None:
         return None
 
     plot_df = pd.DataFrame({
         "universe": get_first_column(df, universe_col).astype(str),
-        "model":    get_first_column(df, model_col).astype(str),
+        "model": get_first_column(df, model_col).astype(str),
     })
 
-    plot_df["config"]    = get_first_column(df, config_col).astype(str)    if config_col    is not None else ""
-    plot_df["task_type"] = get_first_column(df, task_type_col).astype(str) if task_type_col is not None else ""
-    plot_df["sl"]        = get_first_column(df, sl_col)                    if sl_col        is not None else ""
-    plot_df["pl"]        = get_first_column(df, pl_col)                    if pl_col        is not None else ""
+    plot_df["config"] = (
+        get_first_column(df, config_col).astype(str)
+        if config_col is not None else ""
+    )
+
+    plot_df["task_type"] = (
+        get_first_column(df, task_type_col).astype(str)
+        if task_type_col is not None else ""
+    )
+
+    plot_df["sl"] = (
+        get_first_column(df, sl_col)
+        if sl_col is not None else ""
+    )
+
+    plot_df["pl"] = (
+        get_first_column(df, pl_col)
+        if pl_col is not None else ""
+    )
+
+    plot_df["selected_model"] = (
+        get_first_column(df, selected_model_col).astype(str)
+        if selected_model_col is not None else plot_df["model"]
+    )
+
+    if "row_type" in df.columns:
+        plot_df["row_type"] = get_first_column(df, "row_type").astype(str)
+    else:
+        benchmark_mask = pd.Series(False, index=plot_df.index)
+
+        for col in ["model", "config", "task_type"]:
+            benchmark_mask |= (
+                plot_df[col]
+                .astype(str)
+                .str.lower()
+                .str.contains("benchmark|bench|market", regex=True, na=False)
+            )
+
+        plot_df["row_type"] = np.where(
+            benchmark_mask,
+            "benchmark",
+            "strategy",
+        )
 
     plot_df["length_label"] = [
         make_length_label(sl, pl)
         for sl, pl in zip(plot_df["sl"], plot_df["pl"])
     ]
 
+    strategy_only = plot_df[
+        plot_df["row_type"].astype(str).str.lower().ne("benchmark")
+    ].copy()
+
+    if strategy_only.empty:
+        strategy_only = plot_df.copy()
+
     model_config_counts = (
-        plot_df[["model", "config"]]
+        strategy_only[["model", "config"]]
         .drop_duplicates()
         .groupby("model")
         .size()
     )
+
     show_config = (
-        "config" in plot_df.columns
-        and not model_config_counts.empty
-        and model_config_counts.max() > 1
+            "config" in strategy_only.columns
+            and not model_config_counts.empty
+            and model_config_counts.max() > 1
     )
 
-    plot_df["facet_model"] = (
-        plot_df["model"] + "\n" + plot_df["config"]
-        if show_config else plot_df["model"]
-    )
+    if show_config:
+        plot_df["facet_model"] = plot_df["model"] + "\n" + plot_df["config"]
+    else:
+        plot_df["facet_model"] = plot_df["model"]
+
+    benchmark_mask = plot_df["row_type"].astype(str).str.lower().eq("benchmark")
+
+    plot_df.loc[benchmark_mask, "facet_model"] = plot_df.loc[
+        benchmark_mask,
+        "selected_model"
+    ]
 
     return plot_df
 
@@ -189,25 +246,25 @@ def build_plot_base_dataframe(df):
 
 def build_plot_facets(plot_df) -> list:
     universes = sort_mixed(plot_df["universe"].dropna().unique())
-    models    = sort_mixed(plot_df["facet_model"].dropna().unique())
+    models = sort_mixed(plot_df["facet_model"].dropna().unique())
     facets = []
     for universe in universes:
         for model_name in models:
             subset = plot_df[
                 (plot_df["universe"] == universe)
                 & (plot_df["facet_model"] == model_name)
-            ]
+                ]
             if not subset.empty:
                 facets.append((universe, model_name))
     return facets
 
 
 def create_fixed_facet_grid(facets, subplot_width, subplot_height,
-                             max_columns=MAX_PLOT_COLUMNS, dpi=130):
+                            max_columns=MAX_PLOT_COLUMNS, dpi=130):
     n_facets = max(len(facets), 1)
-    n_cols   = min(max_columns, n_facets)
-    n_rows   = int(np.ceil(n_facets / n_cols))
-    fig_width  = subplot_width * n_cols
+    n_cols = min(max_columns, n_facets)
+    n_rows = int(np.ceil(n_facets / n_cols))
+    fig_width = subplot_width * n_cols
     fig_height = subplot_height * n_rows + 1.25
     fig, axes = plt.subplots(n_rows, n_cols,
                              figsize=(fig_width, fig_height),
@@ -250,7 +307,7 @@ def build_quintile_plot(df):
     if not facets:
         return None
 
-    length_labels   = sort_mixed(plot_df["length_label"].dropna().unique())
+    length_labels = sort_mixed(plot_df["length_label"].dropna().unique())
     length_color_map = build_label_color_map(length_labels)
 
     fig, axes, n_rows, n_cols = create_fixed_facet_grid(
@@ -269,7 +326,7 @@ def build_quintile_plot(df):
         subset = plot_df[
             (plot_df["universe"] == universe)
             & (plot_df["facet_model"] == model_name)
-        ]
+            ]
 
         for length_label in length_labels:
             length_subset = subset[subset["length_label"].astype(str) == str(length_label)]
@@ -344,18 +401,30 @@ def build_eoy_plot(df):
         return None
 
     # Split benchmark vs strategy rows
-    benchmark_mask = pd.Series(False, index=plot_df.index)
-    for col in ["model", "config", "task_type"]:
-        benchmark_mask |= (
-            plot_df[col].astype(str).str.lower()
-            .str.contains("benchmark|bench|market", regex=True, na=False)
+    if "row_type" in plot_df.columns:
+        benchmark_mask = (
+            plot_df["row_type"]
+            .astype(str)
+            .str.lower()
+            .eq("benchmark")
         )
+    else:
+        benchmark_mask = pd.Series(False, index=plot_df.index)
+
+        for col in ["model", "config", "task_type"]:
+            if col in plot_df.columns:
+                benchmark_mask |= (
+                    plot_df[col]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains("benchmark|bench|market", regex=True, na=False)
+                )
 
     benchmark_df = plot_df[benchmark_mask].copy()
-    strategy_df  = plot_df[~benchmark_mask].copy()
+    strategy_df = plot_df[~benchmark_mask].copy()
 
     if strategy_df.empty:
-        strategy_df  = plot_df.copy()
+        strategy_df = plot_df.copy()
         benchmark_df = pd.DataFrame()
 
     id_vars = ["universe", "model", "config", "task_type",
@@ -393,8 +462,8 @@ def build_eoy_plot(df):
     if not facets:
         return None
 
-    horizons  = sort_mixed(long_strategy["length_label"].dropna().unique())
-    years     = [str(c) for c in year_columns]
+    horizons = sort_mixed(long_strategy["length_label"].dropna().unique())
+    years = [str(c) for c in year_columns]
     horizon_color_map = build_label_color_map(horizons)
 
     fig, axes, n_rows, n_cols = create_fixed_facet_grid(
@@ -403,9 +472,9 @@ def build_eoy_plot(df):
     )
     fig.patch.set_facecolor("#ffffff")
 
-    x          = np.arange(len(years))
+    x = np.arange(len(years))
     n_horizons = max(len(horizons), 1)
-    bar_width  = min(0.75 / n_horizons, 0.22)
+    bar_width = min(0.75 / n_horizons, 0.22)
 
     for facet_idx, (universe, model_name) in enumerate(facets):
         row_idx, col_idx = divmod(facet_idx, n_cols)
@@ -414,7 +483,7 @@ def build_eoy_plot(df):
         subset = long_strategy[
             (long_strategy["universe"] == universe)
             & (long_strategy["facet_model"] == model_name)
-        ]
+            ]
 
         for horizon_idx, horizon in enumerate(horizons):
             horizon_subset = subset[subset["length_label"].astype(str) == str(horizon)]
@@ -436,7 +505,7 @@ def build_eoy_plot(df):
                 )
                 ax.plot(x, benchmark_by_year.values,
                         marker="o", linewidth=1.35, markersize=3.4,
-                        label="Benchmark", color="#111827",
+                        label="Benchmark", color="#addb21",
                         linestyle="--", zorder=4)
 
         style_evaluation_axis(ax)

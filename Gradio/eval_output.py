@@ -4,12 +4,22 @@ and LLM-based explanation via OpenAI.
 """
 import re
 from html import escape
-
+import numpy as np
 import pandas as pd
 from openai import OpenAI
 
 from Gradio.eval_config import EVALUATION_DIR, OPENAI_API_KEY, OPENAI_EXPLANATION_MODEL
 from Gradio.eval_scan import normalize_column_name
+
+TARGET_METRICS = [
+    "Cumulative Return",
+    "CAGR﹪",
+    "Sharpe",
+    "Max Drawdown",
+    "Volatility (ann.)",
+    "Sortino/√2",
+    "Avg. Drawdown"
+]
 
 # -------------------------------------------------
 # Column-name humanization
@@ -64,15 +74,11 @@ def prettify_output_dataframe(df) -> pd.DataFrame:
 
     pretty_df = df.copy()
     pretty_df.columns = [humanize_column_name(col) for col in pretty_df.columns]
-
-    # Keep first occurrence of each human-readable column name.
-    # selected_* columns are inserted first, so their version wins over
-    # duplicated metadata columns coming from the generated CSV.
     pretty_df = pretty_df.loc[
         :, ~pd.Index(pretty_df.columns).duplicated(keep="first")
     ]
-    return pretty_df
 
+    return pretty_df
 
 # -------------------------------------------------
 # HTML rendering
@@ -89,15 +95,126 @@ def empty_evaluation_table_html(message: str = "No evaluation output yet.") -> s
 
 
 def dataframe_to_metrics_html(df) -> str:
-    df = df.dropna(axis=1, how='all')
-    pretty_df = prettify_output_dataframe(df)
-
-    if pretty_df.empty:
+    if df is None or df.empty:
         return empty_evaluation_table_html("No rows to display for this selection.")
 
-    table_html = pretty_df.to_html(
-        index=False, border=0, classes="mpt", escape=True, na_rep=""
-    )
+    df = df.copy()
+    df = df.dropna(axis=1, how="all")
+
+    # 1.  Collapse the duplicate benchmark rows.
+    df = collapse_benchmark_rows_for_display(df)
+
+    if df.empty:
+        return empty_evaluation_table_html("No rows to display for this selection.")
+
+    # 2. Find columns of data to compare: years or metrics.
+    value_cols = _comparison_value_columns(df)
+
+    # 3. Create a benchmark lookup.
+    benchmark_mask = _benchmark_mask(df)
+    benchmark_df = df[benchmark_mask].copy()
+    benchmark_key_cols = []
+
+    for alternatives in [
+        ["universe", "selected_universe"],
+        ["task_type", "type", "selected_task_type"],
+        ["period"],
+    ]:
+        for col in alternatives:
+            if col in df.columns:
+                benchmark_key_cols.append(col)
+                break
+
+    benchmark_lookup = {}
+
+    for _, bench_row in benchmark_df.iterrows():
+        key = tuple(bench_row.get(col) for col in benchmark_key_cols)
+        benchmark_lookup[key] = bench_row
+
+    # 4. Format the columns, retaining the raw-to-formatted mapping.
+    raw_cols = list(df.columns)
+    pretty_cols = [humanize_column_name(col) for col in raw_cols]
+
+    kept_raw_cols = []
+    kept_pretty_cols = []
+    seen = set()
+
+    hidden_display_cols = {"row_type", "source_model"}
+
+    for raw_col, pretty_col in zip(raw_cols, pretty_cols):
+        if str(raw_col) in hidden_display_cols:
+            continue
+
+        if pretty_col in seen:
+            continue
+
+        seen.add(pretty_col)
+        kept_raw_cols.append(raw_col)
+        kept_pretty_cols.append(pretty_col)
+
+    # 5.  Build the HTML manually.
+    html = []
+    html.append('<table class="mpt evaluation-output-table">')
+
+    html.append("<thead><tr>")
+    for pretty_col in kept_pretty_cols:
+        html.append(f"<th>{escape(str(pretty_col))}</th>")
+    html.append("</tr></thead>")
+
+    html.append("<tbody>")
+
+    for _, row in df.iterrows():
+        is_benchmark = str(row.get("row_type", "")).lower() == "benchmark"
+
+        row_classes = []
+        if is_benchmark:
+            row_classes.append("benchmark-row")
+
+        tr_class = " ".join(row_classes)
+        html.append(f'<tr class="{tr_class}">')
+
+        row_key = tuple(row.get(col) for col in benchmark_key_cols)
+        benchmark_row = benchmark_lookup.get(row_key)
+
+        for raw_col in kept_raw_cols:
+            value = row.get(raw_col, "")
+
+            td_classes = []
+
+            if (
+                not is_benchmark
+                and benchmark_row is not None
+                and raw_col in value_cols
+            ):
+                current_value = pd.to_numeric(value, errors="coerce")
+                benchmark_value = pd.to_numeric(
+                    benchmark_row.get(raw_col),
+                    errors="coerce"
+                )
+
+                if (
+                    pd.notna(current_value)
+                    and pd.notna(benchmark_value)
+                    and current_value > benchmark_value
+                ):
+                    td_classes.append("better-than-benchmark")
+
+            td_class = " ".join(td_classes)
+
+            if pd.isna(value):
+                value = "-"
+
+            html.append(
+                f'<td class="{td_class}">{escape(str(value))}</td>'
+            )
+
+        html.append("</tr>")
+
+    html.append("</tbody>")
+    html.append("</table>")
+
+    table_html = "\n".join(html)
+
     return f"""
     <div class="metrics-table-wrap evaluation-metrics-table-wrap">
         <div class="metrics-outer metrics-scroll">
@@ -105,6 +222,147 @@ def dataframe_to_metrics_html(df) -> str:
         </div>
     </div>
     """
+
+
+def _benchmark_mask(df: pd.DataFrame) -> pd.Series:
+    if df is None or df.empty:
+        return pd.Series(False, index=df.index)
+
+    if "row_type" in df.columns:
+        return (
+            df["row_type"]
+            .astype(str)
+            .str.lower()
+            .eq("benchmark")
+        )
+
+    mask = pd.Series(False, index=df.index)
+
+    for col in ["model", "config", "configuration", "task_type", "type"]:
+        if col in df.columns:
+            mask |= (
+                df[col]
+                .astype(str)
+                .str.lower()
+                .str.contains("benchmark|bench|market", regex=True, na=False)
+            )
+
+    return mask
+
+
+def _comparison_value_columns(df: pd.DataFrame) -> list:
+    cols = []
+
+    for col in df.columns:
+        col_str = str(col)
+
+        # EOY columns: 2021, 2022, ...
+        if re.match(r"^\d{4}$", col_str):
+            cols.append(col)
+            continue
+
+        # Metrics columns
+        if "TARGET_METRICS" in globals() and col in TARGET_METRICS:
+            cols.append(col)
+
+    return cols
+
+
+def collapse_benchmark_rows_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    bench_mask = _benchmark_mask(df)
+
+    if "row_type" not in df.columns:
+        df.insert(
+            0,
+            "row_type",
+            np.where(bench_mask, "benchmark", "strategy")
+        )
+    else:
+        df["row_type"] = np.where(bench_mask, "benchmark", "strategy")
+
+    strategy_df = df[~bench_mask].copy()
+    benchmark_df = df[bench_mask].copy()
+
+    if benchmark_df.empty:
+        return df
+
+    value_cols = _comparison_value_columns(df)
+
+    def first_existing_col(columns):
+        for col in columns:
+            if col in benchmark_df.columns:
+                return col
+        return None
+
+    universe_col = first_existing_col(["universe", "selected_universe"])
+    task_col = first_existing_col(["task_type", "type", "selected_task_type"])
+    period_col = first_existing_col(["period"])
+
+    group_cols = [
+        col for col in [universe_col, task_col, period_col]
+        if col is not None
+    ]
+
+    if not group_cols:
+        return df
+
+    agg_dict = {col: "mean" for col in value_cols}
+
+    if agg_dict:
+        benchmark_grouped = (
+            benchmark_df
+            .groupby(group_cols, as_index=False, dropna=False)
+            .agg(agg_dict)
+        )
+    else:
+        benchmark_grouped = benchmark_df[group_cols].drop_duplicates()
+
+    benchmark_rows = []
+
+    for _, bench in benchmark_grouped.iterrows():
+        row = {col: np.nan for col in df.columns}
+
+        universe_value = bench.get(universe_col, "") if universe_col else ""
+        task_value = bench.get(task_col, "") if task_col else ""
+        period_value = bench.get(period_col, "") if period_col else ""
+
+        # Keep only this metadata on the benchmark line
+        for col in ["universe", "selected_universe"]:
+            if col in row:
+                row[col] = universe_value
+
+        for col in ["task_type", "type", "selected_task_type"]:
+            if col in row:
+                row[col] = task_value
+
+        for col in ["model", "selected_model"]:
+            if col in row:
+                row[col] = "benchmark"
+
+        if "period" in row:
+            row["period"] = period_value
+
+        if "row_type" in row:
+            row["row_type"] = "benchmark"
+
+        # Benchmark figures: years or metrics
+        for col in value_cols:
+            row[col] = bench.get(col, np.nan)
+
+        benchmark_rows.append(row)
+
+    benchmark_collapsed_df = pd.DataFrame(benchmark_rows, columns=df.columns)
+
+    return (
+        pd.concat([strategy_df, benchmark_collapsed_df], ignore_index=True)
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
 
 
 # -------------------------------------------------
@@ -130,12 +388,12 @@ def dataframe_to_llm_text(df, max_rows: int = 80) -> str:
         return ""
 
     truncated = pretty_df.head(max_rows).copy()
-    csv_text  = truncated.to_csv(index=False)
+    csv_text = truncated.to_csv(index=False)
 
     if len(pretty_df) > max_rows:
         csv_text += (
-            f"\n\n[Nota: la tabella originale contiene {len(pretty_df)} righe; "
-            f"qui sono mostrate solo le prime {max_rows}.]"
+            f"\n\n[Note: the original table contains {len(pretty_df)} rows; "
+            f"Only the first ones are shown here {max_rows}.]"
         )
     return csv_text
 
