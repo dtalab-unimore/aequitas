@@ -176,6 +176,9 @@ class Finformer_Model:
         pprint('best score:', best_score, '@', best_epoch)
         torch.save(best_param, f'{model_save_path}/model.pth')
 
+        return {
+            "Model:": f"{args.model_name} saved to {model_save_path}",
+        }
 
 
 

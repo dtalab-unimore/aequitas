@@ -13,6 +13,23 @@ from Gradio.train_model_dispatcher import dispatch_train
 
 YEAR_RE = re.compile(r"^\d{4}$")
 
+MODELS_WITHOUT_SEQUENCE_LENGTH = {"hist", "finformer"}
+
+
+def _normalize_model_name(model_name):
+    return str(model_name or "").strip().lower()
+
+
+def model_uses_sequence_length(model_name) -> bool:
+    return _normalize_model_name(model_name) not in MODELS_WITHOUT_SEQUENCE_LENGTH
+
+
+def normalize_sequence_length_for_model(model_name, sl_value):
+    if not model_uses_sequence_length(model_name):
+        return None
+
+    return sl_value
+
 def get_models_train(task):
     config = read_configs(task)
     models = list(config.keys())
@@ -22,6 +39,11 @@ def get_models_train(task):
             choices=models,
             value=None,
             interactive=bool(models),
+        ),
+        gr.update(
+            value=None,
+            interactive=False,
+            placeholder="Select a model first",
         ),
         gr.update(interactive=False),
     )
@@ -53,7 +75,6 @@ def toggle_train_button(
         train_task,
         train_model,
         train_config,
-        sl,
         pl,
         start_train,
         end_train,
@@ -61,9 +82,65 @@ def toggle_train_button(
         end_valid,
     ]
 
+    if model_uses_sequence_length(train_model):
+        required_values.append(sl)
+
     all_filled = all(_has_value(value) for value in required_values)
 
     return gr.update(interactive=all_filled)
+
+
+def on_train_model_change(
+    train_universe,
+    train_task,
+    train_model,
+    train_config,
+    sl,
+    pl,
+    start_train,
+    end_train,
+    start_valid,
+    end_valid,
+):
+    if _is_empty(train_model):
+        sl_update = gr.update(
+            value=None,
+            interactive=False,
+            placeholder="Select a model first",
+        )
+
+    elif not model_uses_sequence_length(train_model):
+        sl_update = gr.update(
+            value=None,
+            interactive=False,
+            placeholder="Not used by this model",
+        )
+
+    else:
+        sl_update = gr.update(
+            value=None,
+            interactive=True,
+            placeholder="Insert the sequence length",
+        )
+
+    # Dopo il cambio modello, il valore effettivo di sl è None.
+    effective_sl = None
+
+    button_update = toggle_train_button(
+        train_universe,
+        train_task,
+        train_model,
+        train_config,
+        effective_sl,
+        pl,
+        start_train,
+        end_train,
+        start_valid,
+        end_valid,
+    )
+
+    return sl_update, button_update
+
 
 def train_model_with_logs(
     universe,
@@ -88,7 +165,22 @@ def train_model_with_logs(
     def current_logs():
         return "\n".join(logs)
 
-    if None in [universe, task_type, model_name, config_name, sl_value, pl_value, start_train_year, end_train_year, start_valid_year, end_valid_year]:
+    required_values = [
+        universe,
+        task_type,
+        model_name,
+        config_name,
+        pl_value,
+        start_train_year,
+        end_train_year,
+        start_valid_year,
+        end_valid_year,
+    ]
+
+    if model_uses_sequence_length(model_name):
+        required_values.append(sl_value)
+
+    if any(_is_empty(value) for value in required_values):
         yield gr.update(value="Missing parameters."), ""
         return
 
@@ -97,10 +189,10 @@ def train_model_with_logs(
     start_valid_date = f"{int(start_valid_year)}-01-01"
     end_valid_date = f"{int(end_valid_year)}-12-31"
 
-    def worker():
+    def worker(sl_value):
         try:
             push_log("Start training...")
-
+            sl_value = normalize_sequence_length_for_model(model_name, sl_value)
             output = dispatch_train(
                 universe=universe,
                 task_type=task_type,
@@ -121,7 +213,7 @@ def train_model_with_logs(
             push_log("Error during the training.")
             done_queue.put(("error", traceback.format_exc()))
 
-    thread = threading.Thread(target=worker, daemon=True)
+    thread = threading.Thread(target=worker(sl_value), daemon=True)
     thread.start()
 
     result_text = ""
@@ -193,9 +285,17 @@ def validate_train_inputs_soft(
         if _is_empty(value):
             errors.append(f"{field_name} is required.")
 
-    if not _is_positive_int(sl):
-        errors.append("Sequence length must be a positive integer.")
-        sl_update = gr.update(value="")
+    if model_uses_sequence_length(train_model):
+        if not _is_positive_int(sl):
+            errors.append("Sequence length must be a positive integer.")
+            sl_update = gr.update(value="")
+    else:
+        sl = None
+        sl_update = gr.update(
+            value=sl,
+            interactive=False,
+            placeholder="Not used by this model",
+        )
 
     if not _is_positive_int(pl):
         errors.append("Prediction length must be a positive integer.")

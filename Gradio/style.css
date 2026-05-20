@@ -11,6 +11,10 @@
     margin-bottom: -20px !important;
 }
 
+/* Removes the default min-width of Gradio's form wrapper */
+.gradio-container .form {
+    min-width: 0 !important;
+}
 /* ── Hero ───────────────────────────────────────────────────── */
 .hero {
     padding: 4px 10px 0;

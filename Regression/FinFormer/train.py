@@ -137,7 +137,12 @@ if __name__ == '__main__':
                             snum_head=args.snum_head,
                             device=device)
 
-    model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
+    out = model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
 
     print(f"Training completed. Metrics saved to {metrics_path}")
+
+    print("__TRAIN_JSON_START__", flush=True)
+    print(json.dumps(out, ensure_ascii=False), flush=True)
+    print("__TRAIN_JSON_END__", flush=True)
+
 

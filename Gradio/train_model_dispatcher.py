@@ -6,6 +6,28 @@ import sys
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
+def _normalize_model_name(model_name):
+    return str(model_name or "").strip().lower()
+
+
+def model_accepts_seq_len_arg(model_name) -> bool:
+    """
+    HIST non ha proprio il parametro --seq_len.
+    """
+    return _normalize_model_name(model_name) not in {"hist"}
+
+
+def normalize_seq_len_for_model(model_name, sl_value):
+    model_key = _normalize_model_name(model_name)
+
+    if model_key == "hist":
+        return None
+
+    if model_key == "finformer":
+        return None
+
+    return sl_value
+
 def dispatch_train(
     universe,
     task_type,
@@ -19,17 +41,25 @@ def dispatch_train(
     end_valid_date,
     log_fn,
 ):
+    seq_len_value = normalize_seq_len_for_model(model_name, sl_value)
+
     cmd = [
         sys.executable, "-u", "-m", f"{task_type}.{model_name}.train",
         "--universe", universe,
         "--model_name", config_name,
-        "--seq_len", str(sl_value),
         "--pred_len", str(pl_value),
         "--start_date", start_train_date,
         "--end_train_date", end_train_date,
         "--start_valid_date", start_valid_date,
         "--end_valid_date", end_valid_date,
     ]
+
+    if model_accepts_seq_len_arg(model_name) and seq_len_value is not None:
+        cmd.extend(["--seq_len", str(seq_len_value)])
+
+    if model_name.lower() == "hist":
+        cmd.extend(["--model_name", "HIST"])
+        cmd.extend(["--run_name", config_name])
 
     log_fn(f"Execution: {' '.join(cmd)}")
 

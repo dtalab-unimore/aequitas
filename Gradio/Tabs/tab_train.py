@@ -1,11 +1,19 @@
 import gradio as gr
-
-from Gradio.data_load import read_configs
+from Gradio.test_models import get_tickers
 from Gradio.train_models import toggle_train_button, validate_train_inputs_soft, \
-    train_model_with_logs_if_valid, get_models_train
+    train_model_with_logs_if_valid, get_models_train,on_train_model_change
 
 
 def build_train_tab():
+
+    def get_train_tickers_if_valid(is_valid, universe, end_valid):
+        if not is_valid:
+            return (
+                gr.update(value="", visible=False),
+                gr.update(value=None, visible=False),
+            )
+
+        return get_tickers(universe, end_valid)
 
     with gr.Tab("Train Model", elem_id="main-tabs"):
         train_validation_state = gr.State(False)
@@ -109,7 +117,6 @@ def build_train_tab():
                 elem_id="train-validation-msg",
             )
 
-
         # ─────────────────────────────────────────────────────────────
         # TRAIN button
         # ─────────────────────────────────────────────────────────────
@@ -130,7 +137,7 @@ def build_train_tab():
                 gr.HTML("")
 
         # ─────────────────────────────────────────────────────────────
-        # Hidden outputs, shown after TEST click
+        # Hidden outputs, shown after TRAIN click
         # ─────────────────────────────────────────────────────────────
         with gr.Column(visible=False) as train_output_section:
             # Riga tickers + download CSV
@@ -156,7 +163,7 @@ def build_train_tab():
                     gr.HTML("""
                     <div class="test-output-header">
                         <span class="test-output-icon">▶</span>
-                        <span>Test Progress</span>
+                        <span>Trein Progress</span>
                     </div>
                     """)
 
@@ -175,7 +182,7 @@ def build_train_tab():
                     gr.HTML("""
                     <div class="test-output-header">
                         <span class="test-output-icon">{ }</span>
-                        <span>Test Result</span>
+                        <span>Train Result</span>
                     </div>
                     """)
 
@@ -205,14 +212,22 @@ def build_train_tab():
         train_task.change(
             fn=get_models_train,
             inputs=[train_task],
-            outputs=[train_model, train_button],
+            outputs=[train_model, sl, train_button],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        train_model.change(
+            fn=on_train_model_change,
+            inputs=required_train_inputs,
+            outputs=[sl, train_button],
             show_progress="hidden",
             queue=False,
         )
 
         dropdown_inputs = [
             train_universe,
-            train_model,
+
         ]
 
         textbox_inputs = [
@@ -251,7 +266,7 @@ def build_train_tab():
                 queue=False,
             )
 
-        train_button.click(
+        validate_train_evt = train_button.click(
             fn=validate_train_inputs_soft,
             inputs=[
                 train_universe,
@@ -281,7 +296,24 @@ def build_train_tab():
             ],
             show_progress="hidden",
             queue=False,
-        ).then(
+        )
+
+        show_train_tickers_evt = validate_train_evt.then(
+            fn=get_train_tickers_if_valid,
+            inputs=[
+                train_validation_state,
+                train_universe,
+                end_valid,
+            ],
+            outputs=[
+                tickers_info,
+                tickers_download,
+            ],
+            show_progress="hidden",
+            queue=False,
+        )
+
+        show_train_tickers_evt.then(
             fn=train_model_with_logs_if_valid,
             inputs=[
                 train_validation_state,

@@ -189,7 +189,7 @@ def inference(model, data_loader, stock2concept_matrix=None):
 def create_loaders(args):
 
     df_alpha = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha360.csv')
-    tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_constituents.csv'), args.start_test_date)
+    tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
     df_alpha = df_alpha[df_alpha['instrument'].isin(tickers['EODHD'].tolist())]
 
     # Extract labels
@@ -381,6 +381,9 @@ def main(args):
 
     pprint('best score:', best_score, '@', best_epoch)
     torch.save(best_param, f'{model_save_path}/model.pth')
+    return {
+        "Model:": f"{args.model_name} saved to {model_save_path}",
+    }
 
 
 def parse_args():
@@ -431,4 +434,9 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    main(args)
+    out = main(args)
+
+    print("__TRAIN_JSON_START__", flush=True)
+    print(json.dumps(out, ensure_ascii=False), flush=True)
+    print("__TRAIN_JSON_END__", flush=True)
+
