@@ -939,9 +939,6 @@ button:hover {
     transform: none !important;
 }
 
-#download-tickers-button {
-    top: 120px !important;
-}
 #download-train-tickers-button{
     top: 174px !important;
 }
