@@ -36,7 +36,6 @@ from Evaluation.main_demo_dataload import (
     run_market_pipeline,
 )
 
-
 # =============================================================================
 # Config
 # =============================================================================
@@ -94,6 +93,25 @@ MARKET_FILE_TO_TARGET = {
     "{nation}_indexes.csv": ("auto", "Indexes"),
     "{nation}_market.csv": ("auto", "Market Info"),
     "cnnpred_market.csv": ("global", "Global Market Feature"),
+}
+
+
+FILE_DESCRIPTIONS = {
+    "OHLCV": "Daily stock prices and volumes: open, high, low, close, adjusted close, volume, and ticker.",
+    "Ticker Info": "Metadata for each ticker, such as company name, sector, industry, exchange, and other static information.",
+    "Market Cap": "Market capitalization data for each stock over time.",
+    "Alpha158": "Precomputed Alpha158 quantitative features used by several stock prediction models.",
+    "Alpha360": "Precomputed Alpha360 quantitative features, usually richer than Alpha158.",
+    "Technical Indicators": "Technical-analysis indicators computed from price and volume series.",
+    "US Indexes": "US market index time series used as macro/market context.",
+    "EU Indexes": "European market index time series used as macro/market context.",
+    "US Market Info": "Additional US market-level features.",
+    "EU Market Info": "Additional European market-level features.",
+    "Global Market Feature": "Global market features used by CNNPred-style models.",
+    "Incidence Matrix": "Stock-to-group incidence matrix, often used for hypergraph-based models.",
+    "Correlation Matrix": "Pairwise stock correlation matrix computed from historical prices.",
+    "Wikidata Relation Matrix": "Relation matrix derived from Wikidata company relationships.",
+    "Sector-Industry Relations": "Matrix encoding sector and industry relationships between stocks.",
 }
 
 
@@ -1487,3 +1505,20 @@ def refresh_preview_controls(
     return gr.update(choices=options, value=default_preview)
 
 
+def get_preview_file_tooltip(preview_name: str | None):
+    if not preview_name:
+        return ""
+
+    description = FILE_DESCRIPTIONS.get(
+        preview_name,
+        "No description available for this file.",
+    )
+
+    return f"""
+    <div class="preview-tooltip-inline">
+        <div class="preview-tooltip-icon">i</div>
+        <div class="preview-tooltip-content">
+            <b>{escape(str(preview_name))}</b>: {escape(str(description))}
+        </div>
+    </div>
+    """

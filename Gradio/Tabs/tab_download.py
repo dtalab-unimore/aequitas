@@ -10,7 +10,8 @@ from Gradio.data_load import (
     next_preview_page,
     prev_preview_page,
     empty_preview_table_html,
-    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state, refresh_preview_selector_and_filters
+    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state,
+    refresh_preview_selector_and_filters, get_preview_file_tooltip
 )
 
 
@@ -23,7 +24,7 @@ DATASETS = [
 ]
 
 def build_tab():
-    with gr.Tab("Download Data", elem_id="main-tabs"):
+    with (gr.Tab("Download Data", elem_id="main-tabs")):
         with gr.Column(elem_classes=["download-shell"]):
 
             # ── Top row: controls + required files ────────────────────────
@@ -107,6 +108,7 @@ def build_tab():
                         )
 
                         with gr.Row(elem_classes=["preview-header-controls"]):
+
                             preview_selector = gr.Dropdown(
                                 label=None,
                                 choices=[],
@@ -114,8 +116,6 @@ def build_tab():
                                 show_label=False,
                                 elem_id="preview-selector",
                                 elem_classes=["dropdown-single-compact"],
-                                scale=1,
-                                min_width=180,
                             )
 
                             ticker_input = gr.Textbox(
@@ -125,8 +125,6 @@ def build_tab():
                                 interactive=True,
                                 placeholder="Insert Ticker",
                                 elem_id="ticker-input",
-                                scale=1,
-                                min_width=180,
                             )
 
                             preview_start_year = gr.Dropdown(
@@ -137,9 +135,17 @@ def build_tab():
                                 visible=False,
                                 elem_id="preview-start-year",
                                 elem_classes=["dropdown-single-compact"],
-                                scale=0,
-                                min_width=130,
                             )
+
+                            with gr.Column(
+                                scale=0,
+                                elem_classes=["preview-tooltip-slot"],
+                            ):
+                                preview_file_tooltip = gr.HTML(
+                                    value="",
+                                    visible=True,
+                                    elem_id="preview-file-tooltip-inline",
+                                )
 
                     preview_page_state = gr.State(0)
                     ticker_preview_state = gr.State({"run": True, "ticker": None})
@@ -189,19 +195,49 @@ def build_tab():
         dataset.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
-            outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
+            outputs=[
+                files,
+                btn_download_missing,
+                universe_targets_state,
+                market_targets_state,
+            ],
             show_progress="hidden",
             queue=False,
         ).then(
             fn=refresh_preview_selector_and_filters,
-            inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector, preview_start_year, ticker_input],
+            inputs=[
+                dataset,
+                universe_targets_state,
+                market_targets_state,
+            ],
+            outputs=[
+                preview_selector,
+                preview_start_year,
+                ticker_input,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=get_preview_file_tooltip,
+            inputs=[preview_selector],
+            outputs=[preview_file_tooltip],
             show_progress="hidden",
             queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+            inputs=[
+                dataset,
+                preview_selector,
+                preview_start_year,
+                ticker_input,
+            ],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
             show_progress="hidden",
             queue=False,
         )
@@ -209,19 +245,49 @@ def build_tab():
         models.change(
             fn=inspect_required_files,
             inputs=[dataset, models],
-            outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
+            outputs=[
+                files,
+                btn_download_missing,
+                universe_targets_state,
+                market_targets_state,
+            ],
             show_progress="hidden",
             queue=False,
         ).then(
             fn=refresh_preview_selector_and_filters,
-            inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector, preview_start_year, ticker_input],
+            inputs=[
+                dataset,
+                universe_targets_state,
+                market_targets_state,
+            ],
+            outputs=[
+                preview_selector,
+                preview_start_year,
+                ticker_input,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=get_preview_file_tooltip,
+            inputs=[preview_selector],
+            outputs=[preview_file_tooltip],
             show_progress="hidden",
             queue=False,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
+            inputs=[
+                dataset,
+                preview_selector,
+                preview_start_year,
+                ticker_input,
+            ],
+            outputs=[
+                preview,
+                preview_page_label,
+                btn_prev_preview,
+                btn_next_preview,
+                preview_page_state,
+            ],
             show_progress="hidden",
             queue=False,
         )
@@ -262,6 +328,12 @@ def build_tab():
             inputs=[dataset, preview_selector],
             outputs=[preview_start_year, ticker_input],
             show_progress="hidden", queue=False,
+        ).then(
+            fn=get_preview_file_tooltip,
+            inputs=[preview_selector],
+            outputs=[preview_file_tooltip],
+            show_progress="hidden",
+            queue=False,
         ).then(
             fn=reset_preview_page,
             inputs=[dataset, preview_selector, preview_start_year, ticker_input],

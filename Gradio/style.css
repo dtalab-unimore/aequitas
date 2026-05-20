@@ -291,21 +291,30 @@ button:hover {
 
 .preview-header-controls {
     display: flex !important;
-    flex: 1 1 auto !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 8px !important;
-    width: 100% !important;
+    flex: 0 0 auto !important;
+    width: fit-content !important;
+    max-width: fit-content !important;
     min-width: 0 !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    overflow: visible !important;
 }
 
 .preview-header-controls > .gap {
     display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 8px !important;
-    width: 100% !important;
+    flex: 0 0 auto !important;
+    width: fit-content !important;
+    max-width: fit-content !important;
     min-width: 0 !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    overflow: visible !important;
+}
+
+.preview-header-controls > .gap > * {
+    flex: 0 0 auto !important;
 }
 
 #preview-selector,
@@ -1919,4 +1928,123 @@ table.mpt td.missing {
     border: none !important;
     box-shadow: none !important;
     outline: none !important;
+}
+
+.preview-header-row {
+    position: relative !important;
+    z-index: 50 !important;
+    overflow: visible !important;
+}
+
+.preview-header-controls,
+.preview-header-controls > .gap {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+
+/* Quando Gradio nasconde ticker/year, non devono occupare spazio */
+.preview-header-controls .hide,
+.preview-header-controls > .gap > .hide,
+.preview-header-controls > .gap > *:has(.hide) {
+    display: none !important;
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Slot fisso per la i */
+.preview-tooltip-slot {
+    flex: 0 0 34px !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 46px !important;
+    overflow: visible !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.preview-tooltip-slot > .gap,
+.preview-tooltip-slot .block,
+.preview-tooltip-slot .form,
+#preview-file-tooltip-inline {
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 46px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+}
+
+.preview-tooltip-inline {
+    position: relative;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 46px;
+    overflow: visible;
+}
+
+.preview-tooltip-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: help;
+    line-height: 1;
+    transform: translate(-20px, -10px)
+}
+
+.preview-tooltip-content {
+    display: none;
+    position: absolute;
+    top: 42px;
+    left: 0;
+    z-index: 9999;
+    width: max-content;
+    max-width: 420px;
+    padding: 9px 12px;
+    border: 1px solid #c7d2fe;
+    background: #f8faff;
+    color: #0f172a;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    font-size: 14px;
+    line-height: 1.35;
+    white-space: normal;
+    text-align: left;
+}
+
+.preview-tooltip-inline:hover .preview-tooltip-content {
+    display: block;
+}
+
+.preview-table-wrap {
+    position: relative !important;
+    z-index: 1 !important;
 }
