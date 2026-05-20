@@ -75,6 +75,7 @@ def hide_evaluation_loading():
         gr.update(visible=False),                  # plot_loading
         gr.update(interactive=True),               # run_btn
         gr.update(visible=True, interactive=True), # explain_evaluation_button
+        gr.update(visible=True, interactive=True),  # download_evaluation_button
     )
 
 

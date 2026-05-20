@@ -1147,10 +1147,10 @@ button:hover {
 /* ── left control panel ─────────────────────────────────────── */
 .metrics-controls-col {
     background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
     padding: 1.25rem 1rem !important;
-    box-shadow: var(--shadow-sm);
 }
 .metrics-controls-col label {
     font-size: .72rem !important;
@@ -1163,9 +1163,9 @@ button:hover {
 /* ── table wrapper ──────────────────────────────────────────── */
 .metrics-table-wrap {
     background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
     overflow: hidden;
     margin-bottom: 0 !important;
     padding-bottom: 6px !important;
@@ -1237,9 +1237,9 @@ table.mpt td.missing {
 /* ── plot panel ─────────────────────────────────────────────── */
 .metrics-plot-panel-wrap {
     background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid #c7d2fe !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.08) !important;
     padding: 1rem;
 }
 .metrics-plot-controls label {

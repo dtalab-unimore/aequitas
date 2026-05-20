@@ -388,7 +388,7 @@ def build_tab():
             fn=hide_evaluation_loading,
             inputs=[],
             outputs=[table_loading, plot_loading, run_btn,
-                     explain_evaluation_button],
+                     explain_evaluation_button, download_evaluation_button],
             show_progress="hidden",
             queue=False,
         )
