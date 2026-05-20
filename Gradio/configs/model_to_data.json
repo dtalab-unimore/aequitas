@@ -1,88 +1,94 @@
 {
-  "Adv-ALSTM": [
-    "{universe}.csv",
-    "{universe}_tech.csv"
-  ],
-  "HGTAN": [
-    "{universe}.csv",
-    "{universe}_sector_industry_matrix.npz"
-  ],
-  "THGNN": [
-    "{universe}.csv",
-    "{universe}_corr_matrix.npz"
-  ],
-  "CNNPred2D": [
-    "{universe}.csv",
-    "{universe}_tech.csv",
-    "cnnpred_market.csv"
-  ],
-  "CNNPred3D": [
-    "{universe}.csv",
-    "{universe}_tech.csv",
-    "cnnpred_market.csv"
-  ],
-  "DGDNN": [
-    "{universe}.csv"
-  ],
-  "MAN-SF": [
-    "{universe}.csv",
-    "{universe}_wikidata_matrix.npz"
-  ],
-  "D-Va": [
-    "{universe}.csv"
-  ],
-  "ESTIMATE": [
-    "{args.universe}.csv",
-    "{args.universe}_info.csv"
-  ],
-  "MATCC": [
-    "{universe}.csv",
-    "{universe}_alpha158.csv",
-    "{nation}_market.csv"
-  ],
-  "MASTER": [
-    "{universe}.csv",
-    "{universe}_alpha158.csv",
-    "{nation}_market.csv"
-  ],
-  "HIST": [
-    "{universe}.csv",
-    "{universe}_alpha360.csv",
-    "{universe}_inc_matrix.npz",
-    "{universe}_market_cap.csv"
-  ],
-  "DiscoverPLF": [
-    "{universe}.csv",
-    "{universe}_alpha360.csv",
-    "{universe}_inc_matrix.npz",
-    "{universe}_market_cap.csv"
-  ],
-  "FinFormer": [
-    "{universe}.csv",
-    "{universe}_alpha360.csv",
-    "{universe}_sector_industry_matrix.npz"
-  ],
-  "FactorVAE": [
-    "{args.universe}.csv",
-    "{args.universe}_alpha158.csv"
-  ],
-  "SAMBA": [
-    "{universe}.csv",
-    "{universe}_tech.csv",
-    "cnnpred_market.csv"
-  ],
-  "RTGCN":[
-    "{universe}.csv"
-  ],
-  "StockMixer": [
-    "{universe}.csv"
-  ],
-  "STHAN-SR": [
-    "{universe}.csv",
-    "{universe}_inc_matrix.npz"
-  ],
-  "SVAT": [
-    "{universe}.csv",
-    "{args.universe}_inc_matrix.npz"
-  ]
+  "Classification": {
+    "Adv-ALSTM": [
+      "{universe}.csv",
+      "{universe}_tech.csv"
+    ],
+    "HGTAN": [
+      "{universe}.csv",
+      "{universe}_sector_industry_matrix.npz"
+    ],
+    "THGNN": [
+      "{universe}.csv",
+      "{universe}_corr_matrix.npz"
+    ],
+    "CNNPred2D": [
+      "{universe}.csv",
+      "{universe}_tech.csv",
+      "cnnpred_market.csv"
+    ],
+    "CNNPred3D": [
+      "{universe}.csv",
+      "{universe}_tech.csv",
+      "cnnpred_market.csv"
+    ],
+    "DGDNN": [
+      "{universe}.csv"
+    ],
+    "MAN-SF": [
+      "{universe}.csv",
+      "{universe}_wikidata_matrix.npz"
+    ]
+  },
+  "Regression": {
+    "D-Va": [
+      "{universe}.csv"
+    ],
+    "ESTIMATE": [
+      "{universe}.csv",
+      "{universe}_info.csv"
+    ],
+    "MATCC": [
+      "{universe}.csv",
+      "{universe}_alpha158.csv",
+      "{nation}_market.csv"
+    ],
+    "MASTER": [
+      "{universe}.csv",
+      "{universe}_alpha158.csv",
+      "{nation}_market.csv"
+    ],
+    "HIST": [
+      "{universe}.csv",
+      "{universe}_alpha360.csv",
+      "{universe}_inc_matrix.npz",
+      "{universe}_market_cap.csv"
+    ],
+    "DiscoverPLF": [
+      "{universe}.csv",
+      "{universe}_alpha360.csv",
+      "{universe}_inc_matrix.npz",
+      "{universe}_market_cap.csv"
+    ],
+    "FinFormer": [
+      "{universe}.csv",
+      "{universe}_alpha360.csv",
+      "{universe}_sector_industry_matrix.npz"
+    ],
+    "FactorVAE": [
+      "{universe}.csv",
+      "{universe}_alpha158.csv"
+    ],
+    "SAMBA": [
+      "{universe}.csv",
+      "{universe}_tech.csv",
+      "cnnpred_market.csv"
+    ],
+    "StockMixer": [
+      "{universe}.csv"
+    ]
+  },
+  "Ranking": {
+    "RTGCN": [
+      "{universe}.csv"
+    ],
+    "STHAN-SR": [
+      "{universe}.csv",
+      "{universe}_inc_matrix.npz"
+    ],
+    "SVAT": [
+      "{universe}.csv",
+      "{universe}_inc_matrix.npz"
+    ]
+  }
 }

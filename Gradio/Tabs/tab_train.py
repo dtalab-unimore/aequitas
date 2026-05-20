@@ -1,16 +1,15 @@
 import gradio as gr
 
-from Gradio.data_load import get_models
-from Gradio.train_models import toggle_train_button, train_model_with_logs
+from Gradio.data_load import read_configs
+from Gradio.train_models import toggle_train_button, validate_train_inputs_soft, \
+    train_model_with_logs_if_valid, get_models_train
 
 
 def build_train_tab():
-    UI_EVENT = dict(
-        show_progress="hidden",
-        queue=False,
-    )
 
     with gr.Tab("Train Model", elem_id="main-tabs"):
+        train_validation_state = gr.State(False)
+
         gr.Markdown("## Train Model")
         gr.Markdown(
             "Select the model hyperparameters and choose the training period."
@@ -42,10 +41,10 @@ def build_train_tab():
 
                     with gr.Row():
                         train_model = gr.Dropdown(
-                            choices=get_models(),
+                            choices=[],
                             value=None,
                             label="Model",
-                            interactive=True,
+                            interactive=False,
                         )
                         train_config = gr.Textbox(
                             value=None,
@@ -103,8 +102,16 @@ def build_train_tab():
                             placeholder="Insert the end validation year",
                         )
 
+        with gr.Row():
+            train_validation_msg = gr.HTML(
+                value="",
+                visible=False,
+                elem_id="train-validation-msg",
+            )
+
+
         # ─────────────────────────────────────────────────────────────
-        # TEST button
+        # TRAIN button
         # ─────────────────────────────────────────────────────────────
         with gr.Row():
             with gr.Column(scale=2):
@@ -195,9 +202,16 @@ def build_train_tab():
             end_valid,
         ]
 
+        train_task.change(
+            fn=get_models_train,
+            inputs=[train_task],
+            outputs=[train_model, train_button],
+            show_progress="hidden",
+            queue=False,
+        )
+
         dropdown_inputs = [
             train_universe,
-            train_task,
             train_model,
         ]
 
@@ -221,6 +235,14 @@ def build_train_tab():
             )
 
         for component in textbox_inputs:
+            component.input(
+                fn=toggle_train_button,
+                inputs=required_train_inputs,
+                outputs=train_button,
+                show_progress="hidden",
+                queue=False,
+            )
+
             component.change(
                 fn=toggle_train_button,
                 inputs=required_train_inputs,
@@ -230,21 +252,7 @@ def build_train_tab():
             )
 
         train_button.click(
-            fn=lambda: (
-                gr.update(visible=True),
-                gr.update(value=""),
-                gr.update(value=None),
-            ),
-            inputs=[],
-            outputs=[
-                train_output_section,
-                train_logs,
-                train_result,
-            ],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=train_model_with_logs,
+            fn=validate_train_inputs_soft,
             inputs=[
                 train_universe,
                 train_task,
@@ -255,11 +263,42 @@ def build_train_tab():
                 start_train,
                 end_train,
                 start_valid,
-                end_valid
+                end_valid,
+            ],
+            outputs=[
+                train_validation_state,
+                train_output_section,
+                train_logs,
+                train_result,
+                sl,
+                pl,
+                start_train,
+                end_train,
+                start_valid,
+                end_valid,
+                train_validation_msg,
+                train_button,
+            ],
+            show_progress="hidden",
+            queue=False,
+        ).then(
+            fn=train_model_with_logs_if_valid,
+            inputs=[
+                train_validation_state,
+                train_universe,
+                train_task,
+                train_model,
+                train_config,
+                sl,
+                pl,
+                start_train,
+                end_train,
+                start_valid,
+                end_valid,
             ],
             outputs=[
                 train_logs,
-                train_result
+                train_result,
             ],
             show_progress="hidden",
         )
