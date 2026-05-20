@@ -7,9 +7,9 @@ import re
 import shlex
 import subprocess
 import sys
-
 import gradio as gr
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from Gradio.eval_config import (
@@ -32,6 +32,16 @@ from Gradio.eval_output import (
     empty_evaluation_table_html,
     write_evaluation_download_file,
 )
+
+TARGET_METRICS = [
+    "Cumulative Return",
+    "CAGR﹪",
+    "Sharpe",
+    "Max Drawdown",
+    "Volatility (ann.)",
+    "Sortino/√2",
+    "Avg. Drawdown"
+]
 
 # -------------------------------------------------
 # Gradio loading-state helpers
@@ -177,22 +187,63 @@ def filter_output_dataframe(
     applied  = []
     missing  = []
 
+
+    def is_benchmark_row(dataframe):
+        mask = pd.Series(False, index=dataframe.index)
+
+        for aliases in [["model"], ["configuration", "config"], ["task_type", "type"]]:
+            col = find_column(dataframe, aliases)
+            if col is not None:
+                mask |= (
+                    dataframe[col]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains("benchmark|bench|market", regex=True, na=False)
+                )
+
+        return mask
+
+
+    def build_filter_mask(series, value):
+        values = value if isinstance(value, list) else [value]
+        values = [v for v in values if v is not None and v != ""]
+
+        if not values:
+            return pd.Series(True, index=series.index)
+
+        numeric_values = []
+
+        all_numeric = True
+        for v in values:
+            try:
+                numeric_values.append(int(v))
+            except Exception:
+                all_numeric = False
+                break
+
+        if all_numeric:
+            return pd.to_numeric(series, errors="coerce").isin(numeric_values)
+
+        values_str = {str(v).strip() for v in values}
+
+        return series.astype(str).str.strip().isin(values_str)
+
     for value, aliases in filters:
-        if value is None or value == "":
+        if value is None or value == "" or value == []:
             continue
+
         col = find_column(filtered, aliases)
+
         if col is None:
             missing.append("/".join(aliases))
             continue
-        try:
-            numeric_value = int(value)
-        except Exception:
-            numeric_value = None
 
-        if numeric_value is not None:
-            mask = pd.to_numeric(filtered[col], errors="coerce") == numeric_value
+        normal_mask = build_filter_mask(filtered[col], value)
+
+        if aliases == ["model"]:
+            mask = normal_mask | is_benchmark_row(filtered)
         else:
-            mask = filtered[col].astype(str).str.strip() == str(value).strip()
+            mask = normal_mask
 
         filtered = filtered[mask]
         applied.append(f"{col}={value}")
@@ -213,6 +264,33 @@ def filter_output_dataframe(
 
 def add_selection_context(df, record, eval_mode, top_k=None, short_k=None):
     enriched = df.copy()
+
+    def detect_benchmark_rows(dataframe):
+        mask = pd.Series(False, index=dataframe.index)
+
+        for aliases in [["model"], ["configuration", "config"], ["task_type", "type"]]:
+            col = find_column(dataframe, aliases)
+            if col is not None:
+                mask |= (
+                    dataframe[col]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains("benchmark|bench|market", regex=True, na=False)
+                )
+
+        return mask
+
+    benchmark_mask = detect_benchmark_rows(enriched)
+
+    if "row_type" not in enriched.columns:
+        enriched.insert(
+            0,
+            "row_type",
+            np.where(benchmark_mask, "benchmark", "strategy")
+        )
+    else:
+        enriched["row_type"] = np.where(benchmark_mask, "benchmark", "strategy")
+
     context = {
         "selected_task_type":         record["task_type"],
         "selected_model":             record["model"],
@@ -223,8 +301,9 @@ def add_selection_context(df, record, eval_mode, top_k=None, short_k=None):
         "selected_sequence_length":   record["sequence_length"],
         "selected_prediction_length": record["prediction_length"],
     }
+
     if eval_mode in ["EOY", "METRICS"]:
-        context["selected_top_k"]   = top_k
+        context["selected_top_k"] = top_k
         context["selected_short_k"] = short_k
 
     for col, value in reversed(list(context.items())):
@@ -241,7 +320,7 @@ def selected_records_for_form(
     task_type, model, universe, configuration,
     year_start, year_end, length_pair,
 ) -> list:
-    records  = scan_available_pkls()
+    records = scan_available_pkls()
     filtered = filter_records(
         records,
         task_type=task_type, model=model,
@@ -285,18 +364,80 @@ def build_eval_command(eval_mode: str, record: dict,
             "--top_k",       str(int(top_k)),
             "--short_k",     str(int(short_k)),
             "--root_dir",    str(EVALUATION_DIR / "evaluation_result"),
-            "--mean_output", str(EVALUATION_DIR /
-                                 "evaluation_result_summary_metrics_mean_over_seeds.csv"),
+            "--mean_output", str(EVALUATION_DIR / "evaluation_result_summary_metrics_mean_over_seeds.csv"),
         ])
     elif eval_mode == "QUINTILE":
         cmd.extend([
             "--root_dir",    str(EVALUATION_DIR / "evaluation_result_quintile"),
-            "--mean_output", str(EVALUATION_DIR /
-                                 "evaluation_result_summary_metrics_quintile_mean_over_seeds.csv"),
+            "--mean_output", str(EVALUATION_DIR / "evaluation_result_summary_metrics_quintile_mean_over_seeds.csv"),
         ])
 
     return cmd
 
+
+def collapse_benchmark_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "row_type" not in df.columns:
+        return df
+
+    benchmark_mask = (
+        df["row_type"]
+        .astype(str)
+        .str.lower()
+        .eq("benchmark")
+    )
+
+    strategy_df = df[~benchmark_mask].copy()
+    benchmark_df = df[benchmark_mask].copy()
+
+    if benchmark_df.empty:
+        return df
+
+    value_cols = [
+        col for col in benchmark_df.columns
+        if re.match(r"^\d{4}$", str(col)) or col in TARGET_METRICS
+    ]
+
+    group_cols = [
+        col for col in [
+            "selected_task_type",
+            "selected_model",
+            "selected_universe",
+            "selected_configuration",
+            "selected_year_start",
+            "selected_year_end",
+            "selected_top_k",
+            "selected_short_k",
+            "universe",
+            "task_type",
+            "model",
+            "config",
+            "row_type",
+        ]
+        if col in benchmark_df.columns
+    ]
+
+    agg_dict = {}
+
+    for col in benchmark_df.columns:
+        if col in group_cols:
+            continue
+
+        if col in value_cols:
+            agg_dict[col] = "mean"
+        else:
+            agg_dict[col] = "first"
+
+    benchmark_df = (
+        benchmark_df
+        .groupby(group_cols, as_index=False, dropna=False)
+        .agg(agg_dict)
+    )
+
+    return (
+        pd.concat([strategy_df, benchmark_df], ignore_index=True)
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
 
 # -------------------------------------------------
 # Main runner
@@ -330,7 +471,7 @@ def run_evaluation(
     jobs = [
         {
             "record": rec,
-            "top_k":   top_k   if eval_mode in ["EOY", "METRICS"] else None,
+            "top_k":   top_k if eval_mode in ["EOY", "METRICS"] else None,
             "short_k": short_k if eval_mode in ["EOY", "METRICS"] else None,
         }
         for rec in selected_records
@@ -349,15 +490,15 @@ def run_evaluation(
         f"Evaluation jobs to process: {len(jobs)}",
     ]
 
-    frames        = []
+    frames = []
     command_cache = {}
 
     for job_idx, job in enumerate(jobs, start=1):
-        record     = job["record"]
-        job_top_k  = job["top_k"]
+        record = job["record"]
+        job_top_k = job["top_k"]
         job_short_k = job["short_k"]
 
-        cmd         = build_eval_command(eval_mode, record, job_top_k, job_short_k)
+        cmd = build_eval_command(eval_mode, record, job_top_k, job_short_k)
         command_key = tuple(cmd)
 
         logs.append(
@@ -367,8 +508,7 @@ def run_evaluation(
         )
 
         if command_key not in command_cache:
-            completed   = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env=env,
-                                         capture_output=True, text=True)
+            completed = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env=env, capture_output=True, text=True)
             command_str = " ".join(shlex.quote(x) for x in cmd)
             logs.append(f"\nCommand executed:\n{command_str}")
 
@@ -404,7 +544,7 @@ def run_evaluation(
         if not cached["ok"]:
             continue
 
-        df       = cached["df"]
+        df = cached["df"]
         csv_path = cached["csv_path"]
 
         filtered_df, applied, missing = filter_output_dataframe(
@@ -440,22 +580,24 @@ def run_evaluation(
     else:
         output_df = pd.DataFrame()
 
+    output_df = collapse_benchmark_rows(output_df)
+
     logs.append("\n" + "=" * 80)
     logs.append(f"Unique commands executed: {len(command_cache)}")
     logs.append(f"Final rows shown: {len(output_df)}")
 
     plt.close("all")
 
-    fig          = build_evaluation_plot(output_df, eval_mode)
-    plot_update  = matplotlib_plot_update(fig)
-    table_html   = dataframe_to_metrics_html(output_df)
+    fig = build_evaluation_plot(output_df, eval_mode)
+    plot_update = matplotlib_plot_update(fig)
+    table_html = dataframe_to_metrics_html(output_df)
     download_file = write_evaluation_download_file(output_df, eval_mode)
 
     if download_file is None:
-        download_update  = gr.update(value=None, visible=False)
+        download_update = gr.update(value=None, visible=False)
         gpt_button_update = gr.update(visible=False, interactive=False)
     else:
-        download_update  = gr.update(value=download_file, visible=True)
+        download_update = gr.update(value=download_file, visible=True)
         gpt_button_update = gr.update(value="Explain with ChatGPT",
                                       visible=True, interactive=True)
 

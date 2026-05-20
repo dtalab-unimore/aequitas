@@ -15,6 +15,21 @@ from Gradio.eval_scan import (
     as_list,
 )
 
+DATASET_LABELS = {
+    "sp500": "[sp500] Standard & Poor's 500",
+    "dji": "[dji] Dow Jones Industrial Average",
+    "nasdaq100": "[nasdaq100] NASDAQ-100",
+    "sxxp": "[sxxp] STOXX Europe 600",
+    "sx5e": "[sx5e] EURO STOXX 50",
+}
+
+
+def universe_dropdown_choices(universes):
+    return [
+        (DATASET_LABELS.get(str(u).lower(), str(u)), u)
+        for u in universes
+    ]
+
 # -------------------------------------------------
 # Field metadata
 # -------------------------------------------------
@@ -157,7 +172,10 @@ def update_eval_form(
         unique_values(universe_records, "universe")
         if is_not_empty(values["model"]) else []
     )
+
     values["universe"] = value_if_valid(values["universe"], universe_choices)
+
+    universe_choices_display = universe_dropdown_choices(universe_choices)
 
     # 4. Configuration
     configuration_records = filter_records(records,
@@ -251,9 +269,11 @@ def update_eval_form(
         gr.update(choices=model_choices,
                   value=values["model"],
                   interactive=is_not_empty(values["task_type"]) and bool(model_choices)),
-        gr.update(choices=universe_choices,
-                  value=values["universe"],
-                  interactive=is_not_empty(values["model"]) and bool(universe_choices)),
+        gr.update(
+            choices=universe_choices_display,
+            value=values["universe"],
+            interactive=is_not_empty(values["model"]) and bool(universe_choices),
+        ),
         gr.update(choices=configuration_choices,
                   value=values["configuration"],
                   interactive=is_not_empty(values["universe"]) and bool(configuration_choices)),

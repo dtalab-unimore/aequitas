@@ -1623,6 +1623,22 @@ table.mpt td.missing {
     font-weight: normal !important;
 }
 
+.evaluation-output-table tbody tr:not(.benchmark-row) td {
+    background: #ffffff !important;
+}
+
+.evaluation-output-table tr.benchmark-row td {
+    background: #f5ffee !important;
+    font-weight: 800 !important;
+    color: #1e1b4b !important;
+    border-top: 2px solid #6366f1 !important;
+    border-bottom: 2px solid #6366f1 !important;
+}
+
+.evaluation-output-table td.better-than-benchmark {
+    font-weight: 900 !important;
+    color: #065f46 !important;
+}
 /* ── Button ─────────────────────────────────── */
 
 .evaluation-download-row {
@@ -1716,7 +1732,7 @@ table.mpt td.missing {
     height: 34px !important;
     margin: 14px auto 4px auto !important;
 
-    background: transparent !important;
+    background: white !important;
     border: 1px solid #c7d2fe !important;
     border-radius: 999px !important;
 
