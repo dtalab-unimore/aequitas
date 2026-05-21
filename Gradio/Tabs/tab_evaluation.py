@@ -80,10 +80,11 @@ def build_tab():
                         with gr.Row():
                             task_type = gr.Dropdown(
                                 choices=[],
-                                value=None,
+                                value=[],
                                 label="Task type",
                                 interactive=False,
-                                elem_classes=['dropdown-single-compact']
+                                multiselect=True,
+                                elem_classes=['dropdown-multiselect-compact']
                             )
                             model = gr.Dropdown(
                                 choices=[],

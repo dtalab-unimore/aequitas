@@ -192,6 +192,6 @@ class Processor(IO):
         parser.add_argument('--strategy', type=str, default='uniform')
         parser.add_argument('--edge_importance_weighting', type=str, default='Time-aware', help='whether to use edge importance weighting')
         parser.add_argument('--seed', type=int, default=42, help='Random seed of the model')
-        parser.add_argument('--alpha', type=float, default=0.1, help='loss weight between classification loss and contrastive loss')
+        parser.add_argument('--alpha', type=float, default=0.5, help='loss weight between classification loss and contrastive loss')
 
         return parser

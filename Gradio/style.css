@@ -1728,9 +1728,10 @@ table.mpt td.missing {
     border-bottom: 2px solid #6366f1 !important;
 }
 
-.evaluation-output-table td.better-than-benchmark {
+#evaluation-output-table table.evaluation-output-table tbody tr:not(.benchmark-row) td.better-than-benchmark {
     font-weight: 900 !important;
     color: #065f46 !important;
+    background-color: #ecfdf5 !important;
 }
 /* ── Button ─────────────────────────────────── */
 

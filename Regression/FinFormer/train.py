@@ -50,7 +50,7 @@ if __name__ == '__main__':
     args.add_argument('--model_name', type=str, default='FinFormer')
 
     # Prediction parameters
-    args.add_argument('--seq_len', type=int, default=None)
+    args.add_argument('--seq_len', type=int, default=1)
     args.add_argument('--pred_len', type=int, default=5)
     args.add_argument('--start_date', type=str, default='2019-01-01')
     args.add_argument('--end_train_date', type=str, default='2021-12-31')

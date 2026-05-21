@@ -142,7 +142,8 @@ def demo_portfolio_evaluation(args):
     print("Preds_paths:", pred_paths)
 
     # Preprocessing: filter dates with enough tickers
-    filter_valid_dates(pred_paths, args)
+    if args.model != 'FinFormer' and args.universe != 'sxxp':
+        filter_valid_dates(pred_paths, args)
 
     # Preprocessing: convert classification predictions
     if args.type == 'Classification':

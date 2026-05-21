@@ -117,7 +117,6 @@ def dataframe_to_metrics_html(df) -> str:
 
     for alternatives in [
         ["universe", "selected_universe"],
-        ["task_type", "type", "selected_task_type"],
         ["period"],
     ]:
         for col in alternatives:
@@ -267,7 +266,6 @@ def _comparison_value_columns(df: pd.DataFrame) -> list:
 
     return cols
 
-
 def collapse_benchmark_rows_for_display(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return df
@@ -300,11 +298,12 @@ def collapse_benchmark_rows_for_display(df: pd.DataFrame) -> pd.DataFrame:
         return None
 
     universe_col = first_existing_col(["universe", "selected_universe"])
-    task_col = first_existing_col(["task_type", "type", "selected_task_type"])
     period_col = first_existing_col(["period"])
 
+    # Il benchmark non dipende dal task_type:
+    # quindi NON raggruppiamo per task_type.
     group_cols = [
-        col for col in [universe_col, task_col, period_col]
+        col for col in [universe_col, period_col]
         if col is not None
     ]
 
@@ -328,38 +327,48 @@ def collapse_benchmark_rows_for_display(df: pd.DataFrame) -> pd.DataFrame:
         row = {col: np.nan for col in df.columns}
 
         universe_value = bench.get(universe_col, "") if universe_col else ""
-        task_value = bench.get(task_col, "") if task_col else ""
         period_value = bench.get(period_col, "") if period_col else ""
 
-        # Keep only this metadata on the benchmark line
+        # Universe
         for col in ["universe", "selected_universe"]:
             if col in row:
                 row[col] = universe_value
 
+        # Task type unico per benchmark
         for col in ["task_type", "type", "selected_task_type"]:
             if col in row:
-                row[col] = task_value
+                row[col] = "-"
 
+        # Model benchmark
         for col in ["model", "selected_model"]:
             if col in row:
                 row[col] = "benchmark"
 
+        # Period, se presente
         if "period" in row:
             row["period"] = period_value
 
+        # Row type
         if "row_type" in row:
             row["row_type"] = "benchmark"
 
-        # Benchmark figures: years or metrics
+        # Valori benchmark: anni o metriche
         for col in value_cols:
             row[col] = bench.get(col, np.nan)
 
         benchmark_rows.append(row)
 
-    benchmark_collapsed_df = pd.DataFrame(benchmark_rows, columns=df.columns)
+    benchmark_collapsed_df = pd.DataFrame(
+        benchmark_rows,
+        columns=df.columns,
+    )
 
+    # Benchmark in prima posizione nella tabella
     return (
-        pd.concat([strategy_df, benchmark_collapsed_df], ignore_index=True)
+        pd.concat(
+            [benchmark_collapsed_df, strategy_df],
+            ignore_index=True,
+        )
         .drop_duplicates()
         .reset_index(drop=True)
     )
