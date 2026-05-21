@@ -41,16 +41,16 @@ def run_train(
 
     metrics, preds, labels, dataset = p.start(model_save_path, metrics_path)
 
-    # metrics, results_pkl, metrics_json = save_results(
-    #     p.arg,
-    #     metrics,
-    #     preds,
-    #     labels,
-    #     dataset.dates_gt.to_list(),
-    #     dataset.last_seq_date.to_list(),
-    #     [dataset.tickers] * len(preds),
-    #     metrics_path
-    # )
+    metrics, results_pkl, metrics_json = save_results(
+        p.arg,
+        metrics,
+        preds,
+        labels,
+        dataset.dates_gt.to_list(),
+        dataset.last_seq_date.to_list(),
+        [dataset.tickers] * len(preds),
+        metrics_path
+    )
 
     return {
         "Model:": f"{model_name} saved to {model_save_path}",
