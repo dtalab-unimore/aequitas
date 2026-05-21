@@ -19,7 +19,7 @@ if __name__=='__main__':
     
     args = ArgumentParser(description='Train a relational rank lstm model')
 
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
+    args.add_argument('--data_path', type=str, default='./Evaluation/data', help='Path to the dataset')
     args.add_argument('--universe', type=str, default='sx5e', help='Universe of stocks to use')
     args.add_argument('--model_name', type=str, default='STHAN-SR', help='Name of the model to use')
 
