@@ -42,12 +42,14 @@ def build_train_tab():
                             choices=['sp500', 'sxxp', 'sx5e', 'dji', 'nasdaq100'],
                             value=None,
                             label="Universe",
+                            elem_classes=['dropdown-single-compact']
                         )
                         train_task = gr.Dropdown(
                             choices=['Classification', 'Regression', 'Ranking'],
                             value=None,
                             label="Task Type",
                             interactive=True,
+                            elem_classes=['dropdown-single-compact']
                         )
 
                     with gr.Row():
@@ -56,6 +58,7 @@ def build_train_tab():
                             value=None,
                             label="Model",
                             interactive=False,
+                            elem_classes=['dropdown-single-compact']
                         )
                         train_config = gr.Textbox(
                             value=None,

@@ -62,7 +62,7 @@ def build_tab():
         with gr.Row(equal_height=False):
 
             # Left side: controls
-            with gr.Column(scale=3, min_width=480):
+            with gr.Column(scale=3):
 
                 with gr.Group():
                     gr.Markdown("### 1. Model configuration")
@@ -72,12 +72,14 @@ def build_tab():
                             choices=universe_options,
                             value=None,
                             label="Universe",
+                            elem_classes=['dropdown-single-compact']
                         )
                         test_task = gr.Dropdown(
                             choices=[],
                             value=None,
                             label="Task Type",
                             interactive=False,
+                            elem_classes=['dropdown-single-compact']
                         )
 
                     with gr.Row():
@@ -86,56 +88,62 @@ def build_tab():
                             value=None,
                             label="Model",
                             interactive=False,
+                            elem_classes=['dropdown-single-compact']
                         )
                         test_config = gr.Dropdown(
                             choices=[],
                             value=None,
                             label="Configuration",
                             interactive=False,
+                            elem_classes=['dropdown-single-compact']
                         )
-
+            with gr.Column(scale=2):
                 with gr.Group():
                     gr.Markdown("### 2. Sequence settings")
-
-                    with gr.Row():
-                        sl = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="Sequence length",
-                            interactive=False,
-                        )
-                        pl = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="Prediction length",
-                            interactive=False,
-                        )
-
+                    sl = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Sequence length",
+                        interactive=False,
+                        elem_classes=['dropdown-single-compact']
+                    )
+                    pl = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Prediction length",
+                        interactive=False,
+                        elem_classes=['dropdown-single-compact']
+                    )
+            with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### 3. Test period")
 
-                    with gr.Row():
-                        start_test = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="Start Year",
-                            interactive=False,
-                        )
-                        end_test = gr.Dropdown(
-                            choices=[],
-                            value=None,
-                            label="End Year",
-                            interactive=False,
-                        )
+                    start_test = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Start Year",
+                        interactive=False,
+                        elem_classes=['dropdown-single-compact']
+                    )
+                    end_test = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="End Year",
+                        interactive=False,
+                        elem_classes=['dropdown-single-compact']
+                    )
 
             # Right side: config preview
-            with gr.Column(scale=2, min_width=420):
-                config_info = gr.Code(
-                    label="Configuration Parameters",
-                    language="json",
-                    value=None,
+            with gr.Column(scale=3):
+                config_info = gr.Textbox(
+                    label="Train model parameters",
+                    value="\n\nNo model parameters selected yet.",
+                    lines=20,
+                    max_lines=20,
                     interactive=False,
-                    elem_id="config-code-box",
+                    buttons=["copy"],
+                    elem_id="config-text-box",
+                    elem_classes=["model-params-textbox"]
                 )
 
         # ─────────────────────────────────────────────────────────────

@@ -122,6 +122,74 @@ def get_available_configs(universe: str, task_type: str, model_name: str):
     return sorted(configs)
 
 
+def format_config_params_text(params: dict) -> str:
+    def value(key, default="-"):
+        v = params.get(key, default)
+
+        if v is None or v == "":
+            return default
+
+        return str(v)
+
+    sections = [
+        (
+            "📁 Dataset",
+            [
+                ("Universe", "universe"),
+                ("Data path", "data_path"),
+            ],
+        ),
+        (
+            "🧠 Model",
+            [
+                ("Model name", "model_name"),
+                ("Sequence length", "seq_len"),
+                ("Prediction length", "pred_len"),
+            ],
+        ),
+        (
+            "📅 Training period",
+            [
+                ("Start date", "start_date"),
+                ("End train date", "end_train_date"),
+                ("Start valid date", "start_valid_date"),
+                ("End valid date", "end_valid_date"),
+            ],
+        ),
+        (
+            "🚀 Optimization",
+            [
+                ("Learning rate", "lr"),
+            ],
+        ),
+    ]
+
+    lines = []
+
+    for section_title, items in sections:
+        visible_items = [
+            (label, key)
+            for label, key in items
+            if key in params
+        ]
+
+        if not visible_items:
+            continue
+
+        lines.append(section_title)
+
+        max_label_len = max(len(label) for label, _ in visible_items)
+
+        for label, key in visible_items:
+            lines.append(
+                f"   {label.ljust(max_label_len)}   : {value(key)}"
+            )
+
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
 def load_config_params(universe: str, task_type: str, model_name: str, config_name: str, sl_value, pl_value):
     if (not universe or not task_type or not model_name or not config_name or sl_value is None or pl_value is None):
         return None, ""
@@ -135,7 +203,7 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
     )
 
     if not os.path.isfile(config_path):
-        return None, f"config_params.json non trovato: {config_path}"
+        return None, f"config_params.json not found: {config_path}"
 
     try:
         with open(config_path, "r", encoding="utf-8-sig") as f:
@@ -165,7 +233,7 @@ def load_config_params(universe: str, task_type: str, model_name: str, config_na
             if key in params
         }
 
-        return filtered_params, json.dumps(filtered_params, indent=2, ensure_ascii=False)
+        return filtered_params, format_config_params_text(filtered_params)
 
     except Exception as e:
         preview = raw_text[:200] if "raw_text" in locals() else ""
@@ -185,7 +253,7 @@ def on_universe_change(universe: str):
         gr.update(choices=[], value=None, interactive=False),           # pl
         gr.update(choices=[], value=None, interactive=False),           # start year
         gr.update(choices=[], value=None, interactive=False),           # end year
-        gr.update(value=""),                                           # config info
+        gr.update(value="\n\nNo model parameters selected yet."),   # config info
         gr.update(interactive=False),                                  # test button
     )
 
@@ -200,7 +268,7 @@ def on_task_change(universe: str, task_type: str):
         gr.update(choices=[], value=None, interactive=False),             # pl
         gr.update(choices=[], value=None, interactive=False),             # start year
         gr.update(choices=[], value=None, interactive=False),             # end year
-        gr.update(value=""),                                             # config info
+        gr.update(value="\n\nNo model parameters selected yet."),    # config info
         gr.update(interactive=False),                                    # test button
     )
 
@@ -213,7 +281,7 @@ def on_model_change(universe: str, task_type: str, model_name: str):
         gr.update(choices=[], value=None, interactive=False),               # pl
         gr.update(choices=[], value=None, interactive=False),               # start year
         gr.update(choices=[], value=None, interactive=False),               # end year
-        gr.update(value=""),                                               # config info
+        gr.update(value="\n\nNo model parameters selected yet."),           # config info
         gr.update(interactive=False),                                      # test button
     )
 
@@ -226,7 +294,7 @@ def on_config_change(universe: str, task_type: str, model_name: str, config_name
         gr.update(choices=[], value=None, interactive=False),                   # pl
         gr.update(choices=[], value=None, interactive=False),                   # start year
         gr.update(choices=[], value=None, interactive=False),                   # end year
-        gr.update(value=""),                                                   # config info
+        gr.update(value="\n\nNo model parameters selected yet."),                   # config info
         gr.update(interactive=False),                                          # test button
     )
 
@@ -237,7 +305,7 @@ def on_sl_change(universe: str, task_type: str, model_name: str, config_name: st
         gr.update(choices=pl_values, value=None, interactive=bool(pl_values)),  # pl
         gr.update(choices=[], value=None, interactive=False),                   # start year
         gr.update(choices=[], value=None, interactive=False),                   # end year
-        gr.update(value=""),                                                   # config info
+        gr.update(value="\n\nNo model parameters selected yet."),                   # config info
         gr.update(interactive=False),                                          # test button
     )
 

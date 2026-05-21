@@ -756,25 +756,106 @@ button:hover {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-#config-code-box{
-    height: 470px !important;
-    max-height: 470px !important;
+/* CONFIG TEXT BOX */
+#config-text-box {
+    height: 220px !important;
+    max-height: 220px !important;
+}
+
+/* Card container */
+#config-text-box > div {
+    height: 100% !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(99, 102, 241, 0.35) !important;
+    background: #0d1117 !important;
     overflow: hidden !important;
+    padding-top: 0 !important;
 }
 
-/* Gradio Code editor internals */
-#config-code-box .cm-editor {
-    height: 440px !important;
-    max-height: 440px !important;
+/* Header bar */
+#config-text-box > div::before {
+    content: "" !important;
+    display: block !important;
+    height: 38px !important;
+    background: #161b22 !important;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.18) !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1 !important;
 }
 
-#config-code-box .cm-scroller {
-    overflow: auto !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.82rem !important;
-    line-height: 1.5 !important;
+
+/* Label */
+#config-text-box label {
+    position: relative !important;
+    z-index: 2 !important;
+    display: block !important;
+    margin: 0 !important;
     background: transparent !important;
+    color: #818cf8 !important;
+    font-weight: 600 !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.10em !important;
+    text-transform: uppercase !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    line-height: 38px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    height: 38px !important;
 }
+
+
+/* Textarea */
+#config-text-box textarea {
+    height: 154px !important;
+    max-height: 154px !important;
+    min-height: 154px !important;
+    margin: 6px -3px 2px !important;
+    width: calc(100% - 24px) !important;
+    box-sizing: border-box !important;
+
+    overflow: auto !important;
+    resize: none !important;
+    padding: 9px 8px !important;
+
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    font-size: 0.85rem !important;
+    line-height: 1.7 !important;
+
+    color: rgb(167 119 205) !important;
+    background: #0a0f16 !important;
+    border: 1px solid rgba(99, 102, 241, 0.18) !important;
+    border-radius: 8px !important;
+    box-shadow: rgba(0, 0, 0, -0.6) 0px 2px 10px inset !important;
+}
+
+#config-text-box textarea:disabled {
+    opacity: 1 !important;
+    color: rgb(167 119 205) !important;
+    --webkit-text-fill-color: rgb(100 34 166) !important;
+    background: rgb(242 248 255) !important;
+    cursor: default !important;
+}
+
+/* Scrollbar webkit */
+#config-text-box textarea::-webkit-scrollbar { width: 6px; height: 6px; }
+#config-text-box textarea::-webkit-scrollbar-track { background: transparent; }
+#config-text-box textarea::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.35);
+    border-radius: 999px;
+}
+#config-text-box textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.6);
+}
+
+/* Firefox scrollbar */
+#config-text-box textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(192 168 244 / 35%) transparent;
+}
+
 #tickers-info {
     margin-top: 14px;
 }
@@ -1047,13 +1128,12 @@ button:hover {
     height: var(--test-box-height) !important;
     min-height: var(--test-box-height) !important;
     max-height: var(--test-box-height) !important;
-
+    overflow: hidden !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
 
-/* wrapper interni del Code: stessa altezza */
 #test-result-code > div,
 #test-result-code .wrap,
 #test-result-code .container,
@@ -1061,13 +1141,12 @@ button:hover {
     height: var(--test-box-height) !important;
     min-height: var(--test-box-height) !important;
     max-height: var(--test-box-height) !important;
-
+    overflow: hidden !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
-
-/* CodeMirror quando il risultato è pronto */
++
 #test-result-code .cm-editor {
     height: var(--test-box-height) !important;
     min-height: var(--test-box-height) !important;
@@ -1099,7 +1178,6 @@ button:hover {
     background: transparent !important;
 }
 
-/* Placeholder/loading del Code quando il test sta girando */
 #test-result-code:not(:has(.cm-editor)) {
     border: 1px solid #e0e7ff !important;
     border-radius: 14px !important;
@@ -1110,7 +1188,6 @@ button:hover {
     justify-content: center !important;
 }
 
-/* centra anche eventuali div interni del placeholder */
 #test-result-code:not(:has(.cm-editor)) > div {
     display: flex !important;
     align-items: center !important;
