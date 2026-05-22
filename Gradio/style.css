@@ -496,10 +496,10 @@ button:hover {
 }
 
 .preview-round-btn {
-    width: 32px !important;
-    min-width: 32px !important;
-    max-width: 32px !important;
-    height: 32px !important;
+    width: 21px !important;
+    min-width: 21px !important;
+    max-width: 21px !important;
+    height: 29px !important;
     padding: 0 !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
@@ -532,7 +532,7 @@ button:hover {
 }
 
 .preview-round-btn button:disabled {
-    color: #cbd5e1 !important;
+    color: #f3f2ff !important;
 }
 
 .preview-page-label {
@@ -2060,7 +2060,6 @@ table.mpt td.missing {
     overflow: visible !important;
 }
 
-/* Quando Gradio nasconde ticker/year, non devono occupare spazio */
 .preview-header-controls .hide,
 .preview-header-controls > .gap > .hide,
 .preview-header-controls > .gap > *:has(.hide) {
@@ -2073,7 +2072,6 @@ table.mpt td.missing {
     padding: 0 !important;
 }
 
-/* Slot fisso per la i */
 .preview-tooltip-slot {
     flex: 0 0 34px !important;
     width: 34px !important;
@@ -2120,9 +2118,9 @@ table.mpt td.missing {
     width: 26px;
     height: 26px;
     border-radius: 999px;
-    background: #e0e7ff;
-    color: #3730a3;
-    border: 1px solid #c7d2fe;
+    background: #deffe6;
+    color: #49cc47;
+    border: 1px solid #49cc47;
     font-size: 15px;
     font-weight: 700;
     cursor: help;
@@ -2219,4 +2217,25 @@ table.mpt td.missing {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* Tutti i CheckboxGroup Gradio */
+[data-testid="checkbox-group"] > label.selected {
+    background: #e7ebf9 !important;
+    border-color: #e2e8f0 !important;
+    color: #1e293b !important;
+}
+
+/* Checkbox interna quando la label è selected */
+[data-testid="checkbox-group"] > label.selected > input[type="checkbox"] {
+    border-color: #21ad73 !important;
+    background-color: #7dceb7 !important;
+}
+
+/* Variante con :checked */
+[data-testid="checkbox-group"] > label > input[type="checkbox"]:checked,
+[data-testid="checkbox-group"] > label > input[type="checkbox"]:checked:hover,
+[data-testid="checkbox-group"] > label > input[type="checkbox"]:checked:focus {
+    border-color: #21ad73 !important;
+    background-color: #7dceb7 !important;
 }

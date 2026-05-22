@@ -164,9 +164,15 @@ def filter_output_dataframe(
             pd.to_numeric(extracted["start"], errors="coerce").eq(int(start_year))
             & pd.to_numeric(extracted["end"],   errors="coerce").eq(int(end_year))
         )
+        before = len(filtered_df)
+
+        filtered_df = filtered_df[mask]
+
+        after = len(filtered_df)
+
         return (
-            filtered_df[mask],
-            [f"{period_col}={start_year}-{end_year}"],
+            filtered_df,
+            [f"{period_col}={start_year}-{end_year} ({before}->{after})"],
             [],
         )
 
@@ -239,6 +245,8 @@ def filter_output_dataframe(
             missing.append("/".join(aliases))
             continue
 
+        before = len(filtered)
+
         normal_mask = build_filter_mask(filtered[col], value)
 
         if aliases == ["model"]:
@@ -247,7 +255,9 @@ def filter_output_dataframe(
             mask = normal_mask
 
         filtered = filtered[mask]
-        applied.append(f"{col}={value}")
+
+        after = len(filtered)
+        applied.append(f"{col}={value} ({before}->{after})")
 
     if year_start is not None and year_end is not None:
         filtered, period_applied, period_missing = apply_period_filter(
@@ -406,6 +416,8 @@ def collapse_benchmark_rows(df: pd.DataFrame) -> pd.DataFrame:
             "selected_configuration",
             "selected_year_start",
             "selected_year_end",
+            "selected_sequence_length",
+            "selected_prediction_length",
             "selected_top_k",
             "selected_short_k",
             "universe",
@@ -413,6 +425,11 @@ def collapse_benchmark_rows(df: pd.DataFrame) -> pd.DataFrame:
             "model",
             "config",
             "row_type",
+            "topk",
+            "shortk",
+            "sl",
+            "pl",
+            "period",
         ]
         if col in benchmark_df.columns
     ]
@@ -464,6 +481,23 @@ def run_evaluation(
         configuration=configuration, year_start=year_start,
         year_end=year_end, length_pair=length_pair,
     )
+    logs = [
+        f"Selected .pkl combinations: {len(selected_records)}",
+        f"Evaluation jobs to process: {len(selected_records)}",
+        "\nSelected records:",
+    ]
+
+    for rec in selected_records:
+        logs.append(
+            f"- task_type={rec.get('task_type')} | "
+            f"model={rec.get('model')} | "
+            f"config={rec.get('configuration')} | "
+            f"universe={rec.get('universe')} | "
+            f"period=y{rec.get('year_start')}_y{rec.get('year_end')} | "
+            f"sl={rec.get('sequence_length')} | "
+            f"pl={rec.get('prediction_length')} | "
+            f"pkl={rec.get('pkl_path')}"
+        )
     if not selected_records:
         return _error_return(
             "The selected values do not match any available .pkl file."
@@ -494,6 +528,10 @@ def run_evaluation(
     frames = []
     command_cache = {}
 
+    # ============================================================
+    # 1) Execute all jobs first
+    # ============================================================
+
     for job_idx, job in enumerate(jobs, start=1):
         record = job["record"]
         job_top_k = job["top_k"]
@@ -508,54 +546,88 @@ def run_evaluation(
             + f"\nPKL:\n{record['pkl_path']}"
         )
 
-        if command_key not in command_cache:
-            completed = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env=env, capture_output=True, text=True)
-            command_str = " ".join(shlex.quote(x) for x in cmd)
-            logs.append(f"\nCommand executed:\n{command_str}")
-
-            if completed.stdout:
-                logs.append("\nSTDOUT:\n" + completed.stdout)
-            if completed.stderr:
-                logs.append("\nSTDERR:\n" + completed.stderr)
-
-            if completed.returncode != 0:
-                logs.append(
-                    f"\nError: process terminated with code {completed.returncode}."
-                )
-                command_cache[command_key] = {
-                    "ok": False, "df": pd.DataFrame(), "csv_path": None
-                }
-                continue
-
-            csv_path = output_csv_path(eval_mode, job_top_k, job_short_k)
-            if not csv_path.exists():
-                logs.append(f"\nThe expected CSV file was not found:\n{csv_path}")
-                command_cache[command_key] = {
-                    "ok": False, "df": pd.DataFrame(), "csv_path": csv_path
-                }
-                continue
-
-            df = pd.read_csv(csv_path)
-            command_cache[command_key] = {"ok": True, "df": df, "csv_path": csv_path}
-
-        else:
-            logs.append("\nCommand already executed before; reusing generated CSV.")
-
-        cached = command_cache[command_key]
-        if not cached["ok"]:
+        if command_key in command_cache:
+            logs.append("\nCommand already executed before; skipping duplicate execution.")
             continue
 
-        df = cached["df"]
-        csv_path = cached["csv_path"]
+        completed = subprocess.run(
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        command_str = " ".join(shlex.quote(x) for x in cmd)
+        logs.append(f"\nCommand executed:\n{command_str}")
+
+        if completed.stdout:
+            logs.append("\nSTDOUT:\n" + completed.stdout)
+
+        if completed.stderr:
+            logs.append("\nSTDERR:\n" + completed.stderr)
+
+        command_cache[command_key] = {
+            "returncode": completed.returncode,
+            "cmd": cmd,
+        }
+
+        if completed.returncode != 0:
+            logs.append(
+                f"\nWarning: process terminated with code {completed.returncode}. "
+                "The final CSV will still be read after all jobs."
+            )
+
+    # ============================================================
+    # 2) Read output CSVs only after all jobs are finished
+    # ============================================================
+
+    logs.append("\n" + "=" * 80)
+    logs.append("Reading output CSV files after all jobs...")
+
+    csv_cache = {}
+
+    for job_idx, job in enumerate(jobs, start=1):
+        record = job["record"]
+        job_top_k = job["top_k"]
+        job_short_k = job["short_k"]
+
+        csv_path = output_csv_path(eval_mode, job_top_k, job_short_k)
+
+        logs.append(
+            "\n" + "-" * 80
+            + f"\nFiltering final CSV for job {job_idx}/{len(jobs)}"
+            + f"\nExpected CSV:\n{csv_path}"
+        )
+
+        if not csv_path.exists():
+            logs.append(f"\nCSV file not found, skipping this job:\n{csv_path}")
+            continue
+
+        csv_key = str(csv_path)
+
+        if csv_key not in csv_cache:
+            try:
+                csv_cache[csv_key] = pd.read_csv(csv_path)
+            except Exception as e:
+                logs.append(f"\nCould not read CSV file:\n{csv_path}\nError: {e}")
+                continue
+
+        df = csv_cache[csv_key]
 
         filtered_df, applied, missing = filter_output_dataframe(
-            df=df, eval_mode=eval_mode,
-            task_type=record["task_type"], model=record["model"],
-            universe=record["universe"], configuration=record["configuration"],
-            year_start=record["year_start"], year_end=record["year_end"],
+            df=df,
+            eval_mode=eval_mode,
+            task_type=record["task_type"],
+            model=record["model"],
+            universe=record["universe"],
+            configuration=record["configuration"],
+            year_start=record["year_start"],
+            year_end=record["year_end"],
             sequence_length=record["sequence_length"],
             prediction_length=record["prediction_length"],
-            top_k=job_top_k, short_k=job_short_k,
+            top_k=job_top_k,
+            short_k=job_short_k,
         )
 
         logs.append(f"\nCSV file read:\n{csv_path}")
@@ -564,6 +636,7 @@ def run_evaluation(
 
         if applied:
             logs.append("\nFilters applied:\n" + "\n".join(f"- {x}" for x in applied))
+
         if missing:
             logs.append(
                 "\nColumns not found in the CSV file, so not used for filtering:\n"
@@ -572,8 +645,13 @@ def run_evaluation(
 
         if not filtered_df.empty:
             frames.append(
-                add_selection_context(filtered_df, record, eval_mode,
-                                      job_top_k, job_short_k)
+                add_selection_context(
+                    filtered_df,
+                    record,
+                    eval_mode,
+                    job_top_k,
+                    job_short_k,
+                )
             )
 
     if frames:

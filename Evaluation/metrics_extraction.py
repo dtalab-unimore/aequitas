@@ -458,6 +458,43 @@ def append_benchmark_rows(
         df["universe"].astype(str).str.lower().eq(universe_key)
     ].copy()
 
+    selected_period = f"y{int(args.initial_year)}_y{int(args.end_year)}"
+
+    if "model" in df_templates.columns:
+        df_templates = df_templates[
+            df_templates["model"].astype(str).eq(str(args.model))
+        ]
+
+    if "task_type" in df_templates.columns:
+        df_templates = df_templates[
+            df_templates["task_type"].astype(str).eq(str(args.type))
+        ]
+
+    if "sl" in df_templates.columns:
+        df_templates = df_templates[
+            pd.to_numeric(df_templates["sl"], errors="coerce").eq(int(args.sl))
+        ]
+
+    if "pl" in df_templates.columns:
+        df_templates = df_templates[
+            pd.to_numeric(df_templates["pl"], errors="coerce").eq(int(args.pl))
+        ]
+
+    if "period" in df_templates.columns:
+        df_templates = df_templates[
+            df_templates["period"].astype(str).eq(selected_period)
+        ]
+
+    if "topk" in df_templates.columns and hasattr(args, "top_k"):
+        df_templates = df_templates[
+            pd.to_numeric(df_templates["topk"], errors="coerce").eq(int(args.top_k))
+        ]
+
+    if "shortk" in df_templates.columns and hasattr(args, "short_k"):
+        df_templates = df_templates[
+            pd.to_numeric(df_templates["shortk"], errors="coerce").eq(int(args.short_k))
+        ]
+
     if df_templates.empty:
         logging.warning(f"Benchmark skipped: no rows for universe '{universe_key}'")
         return df

@@ -13,14 +13,13 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 SEED = "42"
 
 DATASET_PALETTES = {
-    "nasdaq100": ["#c0392b", "#e74c3c", "#f1948a", "#fadbd8"],
-    "sp500": ["#1a5276", "#2980b9", "#7fb3d3", "#aed6f1"],
-    "dji": ["#1e8449", "#27ae60", "#82e0aa", "#a9dfbf"],
-    "sx5e": ["#6c3483", "#8e44ad", "#c39bd3", "#d7bde2"],
-    "sxxp": ["#d35400", "#e67e22", "#f0b27a", "#fad7a0"],
-    "_default": ["#2c3e50", "#566573", "#99a3a4", "#ccd1d1"],
+    "nasdaq100": ["#D62728", "#FF4136", "#FF7F7F", "#B00020"],
+    "sp500": ["#0057B8", "#1F77B4", "#4DA3FF", "#003F88"],
+    "dji": ["#008000", "#00A651", "#2ECC71", "#006B3C"],
+    "sx5e": ["#7B2CBF", "#9D4EDD", "#C77DFF", "#5A189A"],
+    "sxxp": ["#FF8C00", "#F97316", "#FFB000", "#C2410C"],
+    "_default": ["#111827", "#374151", "#6B7280", "#9CA3AF"],
 }
-
 
 def _empty_state_html(message="Select filters and click <b>View Metrics</b> to load results."):
     return f"""
@@ -248,6 +247,12 @@ def list_datasets_for_config_pl_options(task_type, year_range, config_pl_options
                     datasets.add(dataset)
     return sorted(datasets)
 
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
 
 # ── reset outputs (no panel toggle) ─────────────────────────────────────────
 
@@ -257,7 +262,7 @@ def _reset_results():
         _empty_state_html(),  # metrics_table
         gr.update(choices=[], value=None, interactive=False),  # metric_selector
         gr.update(value=None),  # plot
-        gr.update(choices=[], value=None, interactive=False),  # dataset_radio
+        gr.update(choices=[], value=[], interactive=False),  # dataset_radio
     )
 
 
@@ -304,11 +309,10 @@ def on_metrics_config_pl_change(task_type, year_range, model_names, config_pl_op
         _hide_metrics_download(),
     )
 
-
 def on_metrics_datasets_change(
         task_type, year_range,
         config_pl_options, datasets,
-        current_metric, current_plot_dataset,
+        current_metric, current_plot_datasets,
 ):
     if not datasets:
         return (*_reset_results(), _hide_metrics_download())
@@ -320,26 +324,42 @@ def on_metrics_datasets_change(
             _empty_state_html("No metrics found for the current selection."),
             gr.update(choices=[], value=None, interactive=False),
             gr.update(value=None),
-            gr.update(choices=[], value=None, interactive=False),
+            gr.update(choices=[], value=[], interactive=False),
             _hide_metrics_download(),
         )
 
     valid_ds = [d for d in datasets if d in set(df["dataset"])]
+
     if not valid_ds:
         return (
             _empty_state_html("No valid datasets found."),
             gr.update(choices=[], value=None, interactive=False),
             gr.update(value=None),
-            gr.update(choices=[], value=None, interactive=False),
+            gr.update(choices=[], value=[], interactive=False),
             _hide_metrics_download(),
         )
 
     selected_metric = current_metric if current_metric in metric_cols else metric_cols[0]
-    plot_dataset = current_plot_dataset if current_plot_dataset in valid_ds else valid_ds[0]
+
+    selected_plot_datasets = [
+        d for d in _as_list(current_plot_datasets)
+        if d in valid_ds
+    ]
+
+    if not selected_plot_datasets:
+        selected_plot_datasets = valid_ds
+
     row_keys = ["model", "config", "sl", "pl"]
 
     table_html = build_metrics_html_table(df, valid_ds, metric_cols, row_keys)
-    fig = build_metrics_plot(df, valid_ds, row_keys, selected_metric, plot_dataset)
+
+    fig = build_metrics_plot(
+        df=df,
+        datasets=valid_ds,
+        row_keys=row_keys,
+        selected_metric=selected_metric,
+        plot_datasets=selected_plot_datasets,
+    )
 
     export_path = build_metrics_export_csv(
         df=df,
@@ -354,33 +374,56 @@ def on_metrics_datasets_change(
         table_html,
         gr.update(choices=metric_cols, value=selected_metric, interactive=True),
         gr.update(value=fig),
-        gr.update(choices=valid_ds, value=plot_dataset, interactive=True),
+        gr.update(choices=valid_ds, value=selected_plot_datasets, interactive=True),
         gr.update(value=export_path, visible=True),
     )
-
 
 def update_metrics_plot(
         task_type, year_range, model_names,
         config_pl_options, datasets,
-        selected_metric, plot_dataset,
+        selected_metric, plot_datasets,
 ):
-    if not all([task_type, year_range, model_names, config_pl_options,
-                datasets, selected_metric]):
+    if not all([
+        task_type,
+        year_range,
+        model_names,
+        config_pl_options,
+        datasets,
+        selected_metric,
+    ]):
         return gr.update(value=None)
 
-    df, metric_cols = build_metrics_df(task_type, year_range, config_pl_options, datasets)
+    df, metric_cols = build_metrics_df(
+        task_type,
+        year_range,
+        config_pl_options,
+        datasets,
+    )
+
     if df is None or selected_metric not in metric_cols:
         return gr.update(value=None)
 
     valid_ds = [d for d in datasets if d in set(df["dataset"])]
+
     if not valid_ds:
         return gr.update(value=None)
 
-    if not plot_dataset or plot_dataset not in valid_ds:
-        plot_dataset = valid_ds[0]
+    selected_plot_datasets = [
+        d for d in _as_list(plot_datasets)
+        if d in valid_ds
+    ]
 
-    fig = build_metrics_plot(df, valid_ds, ["model", "config", "sl", "pl"],
-                             selected_metric, plot_dataset)
+    if not selected_plot_datasets:
+        selected_plot_datasets = valid_ds
+
+    fig = build_metrics_plot(
+        df=df,
+        datasets=valid_ds,
+        row_keys=["model", "config", "sl", "pl"],
+        selected_metric=selected_metric,
+        plot_datasets=selected_plot_datasets,
+    )
+
     return gr.update(value=fig)
 
 
@@ -459,7 +502,7 @@ def build_metrics_df(task_type, year_range, config_pl_options, datasets):
 
 # ── plot builder ─────────────────────────────────────────────────────────────
 
-def build_metrics_plot(df, datasets, row_keys, selected_metric, plot_dataset=None):
+def build_metrics_plot(df, datasets, row_keys, selected_metric, plot_datasets=None):
     if df is None or df.empty or selected_metric is None:
         return go.Figure()
 
@@ -467,49 +510,114 @@ def build_metrics_plot(df, datasets, row_keys, selected_metric, plot_dataset=Non
     if not available:
         return go.Figure()
 
-    if plot_dataset is None or plot_dataset not in available:
-        plot_dataset = available[0]
+    selected_datasets = [
+        d for d in _as_list(plot_datasets)
+        if d in available
+    ]
 
-    df_ds = df[df["dataset"] == plot_dataset].copy()
-    if df_ds.empty:
+    if not selected_datasets:
+        selected_datasets = available
+
+    df_plot = df[df["dataset"].isin(selected_datasets)].copy()
+
+    if df_plot.empty or selected_metric not in df_plot.columns:
         return go.Figure()
 
-    model_configs = sorted({(r["model"], r["config"])
-                            for _, r in df_ds[["model", "config"]]
-                           .drop_duplicates().iterrows()})
-    palette = get_dataset_colors(plot_dataset, len(model_configs))
-    color_map = {mc: palette[i] for i, mc in enumerate(model_configs)}
+    df_plot[selected_metric] = pd.to_numeric(df_plot[selected_metric], errors="coerce")
+    df_plot["pl"] = pd.to_numeric(df_plot["pl"], errors="coerce")
+    df_plot["sl"] = pd.to_numeric(df_plot["sl"], errors="coerce")
+
+    df_plot = df_plot.dropna(subset=["pl", selected_metric])
+
+    if df_plot.empty:
+        return go.Figure()
 
     fig = go.Figure()
-    for (model, config), group in df_ds.groupby(["model", "config"], dropna=False):
-        grp = group.sort_values("pl")
-        x_vals = grp["pl"].tolist()
-        y_vals = [float(v) if v is not None and pd.notna(v) else None
-                  for v in grp[selected_metric].tolist()]
 
-        if not x_vals or all(v is None for v in y_vals):
+    line_dashes = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"]
+    marker_symbols = ["circle", "square", "diamond", "cross", "x", "triangle-up"]
+
+    model_configs = sorted({
+        (r["model"], r["config"])
+        for _, r in df_plot[["model", "config"]]
+        .drop_duplicates()
+        .iterrows()
+    })
+
+    style_map = {
+        mc: {
+            "dash": line_dashes[i % len(line_dashes)],
+            "symbol": marker_symbols[i % len(marker_symbols)],
+        }
+        for i, mc in enumerate(model_configs)
+    }
+
+    for dataset in selected_datasets:
+        df_ds = df_plot[df_plot["dataset"] == dataset].copy()
+
+        if df_ds.empty:
             continue
 
-        color = color_map[(model, config)]
-        label = f"{model} · {config}"
-        fig.add_trace(go.Scatter(
-            name=label,
-            legendgroup=f"{model}_{config}",
-            x=x_vals, y=y_vals,
-            mode="lines+markers",
-            connectgaps=True,
-            line=dict(color=color, width=2.5),
-            marker=dict(size=9, color=color, symbol="circle",
-                        line=dict(width=2, color="white")),
-            hovertemplate=(
-                f"<b>{label}</b><br>"
-                "pl = <b>%{x}</b><br>"
-                f"{selected_metric} = <b>%{{y:.4f}}</b><extra></extra>"
-            ),
-        ))
+        dataset_color = get_dataset_colors(dataset, 1)[0]
 
-    pl_ticks = sorted(df_ds["pl"].dropna().unique().astype(int).tolist())
-    y_all = df_ds[selected_metric].dropna().tolist()
+        for (model, config), group in df_ds.groupby(
+            ["model", "config"],
+            dropna=False
+        ):
+            grp = group.sort_values("pl").copy()
+
+            if grp.empty:
+                continue
+
+            label = f"{dataset.upper()} · {model} · {config}"
+            style = style_map.get(
+                (model, config),
+                {"dash": "solid", "symbol": "circle"}
+            )
+
+            hover_sl = [
+                "" if pd.isna(v) else str(int(v))
+                for v in grp["sl"].tolist()
+            ]
+
+            fig.add_trace(go.Scatter(
+                name=label,
+                legendgroup=f"{dataset}_{model}_{config}",
+                x=grp["pl"].astype(int).tolist(),
+                y=grp[selected_metric].tolist(),
+                customdata=hover_sl,
+                mode="lines+markers",
+                connectgaps=True,
+                line=dict(
+                    color=dataset_color,
+                    width=2.8,
+                    dash=style["dash"],
+                ),
+                marker=dict(
+                    size=9,
+                    color=dataset_color,
+                    symbol=style["symbol"],
+                    line=dict(width=1.8, color="white"),
+                ),
+                hovertemplate=(
+                    f"<b>{label}</b><br>"
+                    "pl = <b>%{x}</b><br>"
+                    "sl = <b>%{customdata}</b><br>"
+                    f"{selected_metric} = <b>%{{y:.4f}}</b>"
+                    "<extra></extra>"
+                ),
+            ))
+
+    pl_ticks = sorted(
+        df_plot["pl"]
+        .dropna()
+        .astype(int)
+        .unique()
+        .tolist()
+    )
+
+    y_all = df_plot[selected_metric].dropna().tolist()
+
     if y_all:
         y_min, y_max = min(y_all), max(y_all)
         pad = (y_max - y_min) * 0.15 if y_max != y_min else 0.1
@@ -517,42 +625,66 @@ def build_metrics_plot(df, datasets, row_keys, selected_metric, plot_dataset=Non
     else:
         y_range = None
 
+    if len(selected_datasets) == 1:
+        title_dataset = selected_datasets[0].upper()
+    else:
+        title_dataset = " + ".join(d.upper() for d in selected_datasets)
+
     fig.update_layout(
         title=dict(
-            text=f"<b>{plot_dataset.upper()}</b>  ·  {selected_metric} vs Prediction Length",
-            font=dict(size=14, family="DM Sans, system-ui, sans-serif", color="#0f172a"),
-            x=0.5, xanchor="center",
+            text=f"<b>{title_dataset}</b> · {selected_metric} vs Prediction Length",
+            font=dict(
+                size=14,
+                family="DM Sans, system-ui, sans-serif",
+                color="#0f172a",
+            ),
+            x=0.5,
+            xanchor="center",
+            y=0.96,
         ),
         xaxis=dict(
             title=dict(text="Prediction Length", font=dict(size=11, color="#64748b")),
-            tickmode="array", tickvals=pl_ticks,
+            tickmode="array",
+            tickvals=pl_ticks,
             ticktext=[str(v) for v in pl_ticks],
             tickfont=dict(size=11, color="#334155"),
-            gridcolor="#eef2ff", zeroline=False,
-            showline=True, linecolor="#e2e8f0",
+            gridcolor="#eef2ff",
+            zeroline=False,
+            showline=True,
+            linecolor="#e2e8f0",
         ),
         yaxis=dict(
             title=dict(text=selected_metric, font=dict(size=11, color="#64748b")),
             tickfont=dict(size=11, color="#334155"),
-            gridcolor="#f1f5f9", zeroline=False,
-            showline=True, linecolor="#c7d2fe",
+            gridcolor="#f1f5f9",
+            zeroline=False,
+            showline=True,
+            linecolor="#c7d2fe",
             range=y_range,
         ),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.04,
-            xanchor="center", x=0.5,
-            font=dict(size=10, color="#334155"),
-            bgcolor="rgba(255,255,255,.9)",
-            bordercolor="#e2e8f0", borderwidth=1,
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=9, color="#334155"),
+            bgcolor="rgba(255,255,255,.92)",
+            bordercolor="#e2e8f0",
+            borderwidth=1,
+            itemclick="toggle",
+            itemdoubleclick="toggleothers",
         ),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="white",
-        margin=dict(t=90, b=60, l=70, r=30),
+        margin=dict(t=70, b=60, l=70, r=260),
         hovermode="x unified",
         font=dict(family="DM Mono, Fira Mono, monospace"),
     )
+
     fig.update_xaxes(showgrid=True)
     fig.update_yaxes(showgrid=True)
+
     return fig
 
 
