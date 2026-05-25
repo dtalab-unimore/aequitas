@@ -75,15 +75,17 @@ def run_test(
     ).to(device)
     model.load_state_dict(torch.load(f'{model_save_path}/model.pth', map_location=device))
 
-    test_loss, metrics, preds, labels = valid_epoch(test_loader, model, device)
+    test_loss, metrics, preds, labels, mask = valid_epoch(test_loader, model, device)
+    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
+    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
 
     metrics, results_pkl, metrics_json = save_results(
         args,
         metrics,
         preds,
         labels,
-        dl_test.output_dates,
-        dl_test.input_dates,
+        output_dates,
+        input_dates,
         dl_test.tickers_to_date,
         metrics_path,
         log_fn=log_fn

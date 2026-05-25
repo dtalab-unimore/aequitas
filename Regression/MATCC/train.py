@@ -129,12 +129,19 @@ def valid_epoch(data_loader, model, device):
     ric = []
     preds = []
     labels = []
+    mask = []
     with torch.no_grad():
         for data in data_loader:
             data = torch.squeeze(data, dim=0)
             feature = data[:, :, 0:-1].to(device)
             label = data[:, -1, -1].to(device)
+
+            if label.shape[0] == 1:
+                mask.append(False)
+                continue
+
             label = zscore(label)
+
             with torch.no_grad():
                 pred = model(feature.float())
             loss = loss_fn(pred, label)
@@ -150,6 +157,7 @@ def valid_epoch(data_loader, model, device):
 
             preds.append(pred.detach().cpu().numpy())
             labels.append(label.detach().cpu().numpy())
+            mask.append(True)
 
     preds_flat = np.concatenate(preds, axis=0)
     labels_flat = np.concatenate(labels, axis=0)
@@ -161,7 +169,7 @@ def valid_epoch(data_loader, model, device):
         'R2': r2_score(preds_flat, labels_flat)
     }
 
-    return float(np.mean(losses)), metrics, preds, labels
+    return float(np.mean(losses)), metrics, preds, labels, mask
 
 def select_valid_ticker(df, start_date, end_date):
     df_train = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
@@ -237,8 +245,8 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
     for step in range(1, args.n_epoch + 1):
         train_loss = train_epoch(train_loader, train_optimizer=train_optimizer, lr_scheduler=lr_scheduler, model=model, device=device)
 
-        val_loss, valid_metrics, _, _, = valid_epoch(valid_loader, model, device)
-        test_loss, test_metrics, preds, labels = valid_epoch(test_loader, model, device)
+        val_loss, valid_metrics, _, _, _ = valid_epoch(valid_loader, model, device)
+        test_loss, test_metrics, preds, labels, mask = valid_epoch(test_loader, model, device)
 
         print("==" * 10 + f" {args.model_name}_{args.seed} Epoch {step} " + "==" * 10)
         print("Epoch %d, train_loss %.6f, valid_loss %.6f, test_loss %.6f " %(step, train_loss, val_loss, test_loss))
@@ -264,13 +272,16 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
             with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
                 json.dump(valid_metrics, f, indent=4)
 
+            output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
+            input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
+
             metrics, results_pkl, metrics_json = save_results(
                 args,
                 test_metrics,
                 preds,
                 labels,
-                dl_test.output_dates,
-                dl_test.input_dates,
+                output_dates,
+                input_dates,
                 dl_test.tickers_to_date,
                 metrics_path
             )

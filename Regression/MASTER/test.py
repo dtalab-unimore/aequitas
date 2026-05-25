@@ -36,10 +36,9 @@ def run_test(
     )
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
-    _log(log_fn, "Caricamento dati alpha...")
+    _log(log_fn, "Loading alpha...")
     alpha_path = f"{args.data_path}/{args.universe}/{args.universe}_alpha158.csv"
     df_alpha = pd.read_csv(alpha_path)
-    _log(log_fn, f"Dati alpha caricati: {len(df_alpha)} righe")
 
     constituents_path = f"{args.data_path}/constituents/eodhd/{args.universe}.csv"
     tickers = filter_constituents_by_date(
@@ -49,25 +48,19 @@ def run_test(
     selected_tickers = tickers["EODHD"].tolist()
     df_alpha = df_alpha[df_alpha["instrument"].isin(selected_tickers)]
 
-    _log(log_fn, "Caricamento indice di mercato...")
     market_index_path = f"{args.data_path}/{args.nation}_market.csv"
     market_index = pd.read_csv(market_index_path)
     df_alpha = pd.merge(df_alpha, market_index, how="left", on="date")
-    _log(log_fn, "Merge con indice di mercato completata.")
-
-    _log(log_fn, "Estrazione label...")
     df_alpha = extract_labels(df_alpha, args)
 
-    _log(log_fn, "Selezione ticker validi sul train...")
     df_alpha = select_valid_ticker(df_alpha, args.start_date, args.end_train_date)
 
-    _log(log_fn, "Calcolo robust z-score sul train set...")
     train_slice = df_alpha[
         (df_alpha["date"] >= args.start_date) & (df_alpha["date"] <= args.end_train_date)
     ]
     robust_z_score = RobustZScoreNormalization(train_slice)
 
-    _log(log_fn, "Creazione dataset di test...")
+    _log(log_fn, " Test Dataset Creation...")
     dl_test = CSVDataset(
         df_alpha=df_alpha,
         seq_len=args.seq_len,
@@ -77,8 +70,6 @@ def run_test(
         z_score=robust_z_score,
         period="test"
     )
-
-    _log(log_fn, "Inizializzazione modello MASTER...")
     model = MASTERModel(
         d_feat=args.gate_input_start_index,
         d_model=args.d_model,
@@ -97,20 +88,21 @@ def run_test(
     )
 
     model_weights_path = f"{model_save_path}/model.pth"
-    _log(log_fn, f"Caricamento pesi da: {model_weights_path}")
+    _log(log_fn, f"Loading weights from: {model_weights_path}")
     model.load_param(model_weights_path)
-    _log(log_fn, "Pesi caricati correttamente.")
 
-    _log(log_fn, "Avvio predizione...")
-    preds, labels, metrics = model.predict(dl_test, args.num_workers)
+    preds, labels, metrics, mask = model.predict(dl_test, args.num_workers)
+
+    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
+    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
 
     metrics, results_pkl, metrics_json = save_results(
         args,
         metrics,
         preds,
         labels,
-        dl_test.output_dates,
-        dl_test.input_dates,
+        output_dates,
+        input_dates,
         dl_test.tickers_to_date,
         metrics_path,
         log_fn=log_fn

@@ -143,7 +143,7 @@ class SequenceModel():
             train_loss = self.train_epoch(train_loader)
             self.fitted = step
             if dl_valid:
-                predictions, labels, metrics = self.predict(dl_valid)
+                predictions, labels, metrics, _ = self.predict(dl_valid)
                 metrics = {k: float(v) for k, v in metrics.items()}
 
                 with open(f'{val_metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
@@ -170,16 +170,19 @@ class SequenceModel():
         labels = []
         ic = []
         ric = []
+        mask = []
 
         self.model.eval()
         for data in test_loader:
             data = torch.squeeze(data, dim=0)
             feature = data[:, :, 0:-1].to(self.device)
             label = data[:, -1, -1]
-            label = zscore(label) # CSZscoreNorm
-            
-            # nan label will be automatically ignored when compute metrics.
-            # zscorenorm will not affect the results of ranking-based metrics.
+
+            if label.shape[0] == 1:
+                mask.append(False)
+                continue
+
+            label = zscore(label)
 
             with torch.no_grad():
                 pred = self.model(feature.float()).detach().cpu().numpy()
@@ -194,6 +197,7 @@ class SequenceModel():
 
             preds.append(pred)
             labels.append(label.detach().cpu().numpy())
+            mask.append(True)
 
         preds_flat = np.concatenate(preds, axis=0)
         labels_flat = np.concatenate(labels, axis=0)
@@ -205,4 +209,4 @@ class SequenceModel():
             'R2': r2_score(preds_flat, labels_flat),
         }
 
-        return preds, labels, metrics
+        return preds, labels, metrics, mask

@@ -177,19 +177,22 @@ if __name__ == '__main__':
     model.fit(dl_train, metrics_path, args, dl_valid, args.num_workers)
 
     print("Model Trained.")
-    predictions, labels, metrics = model.predict(dl_test, args.num_workers)
+    predictions, labels, metrics, mask = model.predict(dl_test, args.num_workers)
 
     running_time = time.time() - start
 
     print('Seed: {:d} time cost : {:.2f} sec'.format(args.seed, running_time))
+
+    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
+    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
 
     metrics, results_pkl, metrics_json = save_results(
         args,
         metrics,
         predictions,
         labels,
-        dl_test.input_dates,
-        dl_test.input_dates,
+        output_dates,
+        input_dates,
         dl_test.tickers_to_date,
         metrics_path
     )
