@@ -156,11 +156,11 @@ class Processor(IO):
         parser.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
         parser.add_argument('--seq_len', type=int, default=4, help='Lookback length for the model')
         parser.add_argument('--start_date', type=str, default='2019-01-01', help='Start date for the dataset')
-        parser.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
-        parser.add_argument('--start_valid_date', type=str, default='2022-01-01', help='Start date for validation set')
-        parser.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-        parser.add_argument('--start_test_date', type=str, default='2023-01-01', help='Start date for the test set')
-        parser.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
+        parser.add_argument('--end_train_date', type=str, default='2020-12-31', help='End date for training set')
+        parser.add_argument('--start_valid_date', type=str, default='2021-01-01', help='Start date for validation set')
+        parser.add_argument('--end_valid_date', type=str, default='2021-12-31', help='End date for validation set')
+        parser.add_argument('--start_test_date', type=str, default='2022-01-01', help='Start date for the test set')
+        parser.add_argument('--end_date', type=str, default='2024-12-31', help='End date for the dataset')
 
         # processor
         parser.add_argument('--phase', default='train', help='must be train or test')
