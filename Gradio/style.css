@@ -1868,7 +1868,7 @@ table.mpt td.missing {
 
 .evaluation-chatgpt-explanation-card {
     margin-top: 14px !important;
-    min-height: 80px !important;
+    /*min-height: 80px !important;*/
 }
 
 .evaluation-chatgpt-explanation-card *:not(#evaluation-chatgpt-explanation):not(#evaluation-chatgpt-explanation *) {

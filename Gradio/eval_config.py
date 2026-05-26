@@ -38,11 +38,11 @@ METRICS_EXTRACTION_SCRIPT = EVALUATION_DIR / "metrics_extraction.py"
 # -------------------------------------------------
 SEED = 42
 
-EVAL_MODES = ["EOY", "METRICS", "QUINTILE"]
+EVAL_MODES = ["METRICS", "EOY", "QUINTILE"]
 
 EVAL_TO_CMD = {
-    "EOY": "eoy",
     "METRICS": "metrics",
+    "EOY": "eoy",
     "QUINTILE": "quintile",
 }
 

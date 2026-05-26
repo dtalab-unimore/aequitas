@@ -94,6 +94,18 @@ def empty_evaluation_table_html(message: str = "No evaluation output yet.") -> s
     """
 
 
+def format_display_value(value) -> str:
+    if pd.isna(value):
+        return "-"
+
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+
+    return str(value)
+
+
 def dataframe_to_metrics_html(df) -> str:
     if df is None or df.empty:
         return empty_evaluation_table_html("No rows to display for this selection.")
@@ -200,11 +212,10 @@ def dataframe_to_metrics_html(df) -> str:
 
             td_class = " ".join(td_classes)
 
-            if pd.isna(value):
-                value = "-"
+            display_value = format_display_value(value)
 
             html.append(
-                f'<td class="{td_class}">{escape(str(value))}</td>'
+                f'<td class="{td_class}">{escape(display_value)}</td>'
             )
 
         html.append("</tr>")
