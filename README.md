@@ -1,6 +1,6 @@
 # AEQUITAS: A Toolkit for Stock Market Prediction and Portfolio Evaluation
 
-**AEQUITAS** (An Evaluation toolkit for QUantItative and Trading AnalySis) is an interactive environment for stock market prediction and portfolio evaluation, built on top of the [FinBench](https://github.com/softlab-unimore/finbench) benchmarking framework. It supports the complete evaluation workflow — from reusable dataset construction to model execution and portfolio-level result analysis — and exposes it through a configurable backend and a Gradio-based graphical interface with LLM-assisted result interpretation.
+**AEQUITAS** (An Evaluation toolkit for QUantItative and Trading AnalySis) is an interactive environment for stock market prediction and portfolio evaluation, built on top of the [FinBench](https://github.com/softlab-unimore/finbench) benchmarking framework. It supports the complete evaluation workflow from reusable dataset construction to model execution and portfolio-level result analysis and exposes it through a configurable backend and a Gradio-based graphical interface with LLM-assisted result interpretation. The demonstration video is avaible on [Youtube](https://www.youtube.com/watch?v=kzshWMwvhjM).
 
 ![AEQUITAS Architecture](aequitas.png)
 
