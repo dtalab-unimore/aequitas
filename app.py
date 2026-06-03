@@ -45,7 +45,7 @@ with gr.Blocks() as demo:
     with gr.Column(elem_classes="main-shell"):
         gr.HTML("""
         <div class="hero">
-            <h1>FinBench Demo</h1>
+            <h1>Aequitas</h1>
         </div>
         """)
 
