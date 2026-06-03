@@ -1,15 +1,16 @@
-# Aequitas
-FinBench is a collection of tools, datasets and example implementations to evaluate and experiment with models and algorithms in the financial domain (time-series forecasting, ranking, portfolio simulation, factor modeling, etc.). The repository aims to provide a reproducible foundation for research, benchmarking and rapid prototyping in quantitative finance and financial machine learning.
+# AEQUITAS: A Toolkit for Stock Market Prediction and Portfolio Evaluation
 
-![FinBench Architecture](finbench.png)
+**AEQUITAS** (An Evaluation toolkit for QUantItative and Trading AnalySis) is an interactive environment for stock market prediction and portfolio evaluation, built on top of the [FinBench](https://github.com/softlab-unimore/finbench) benchmarking framework. It supports the complete evaluation workflow — from reusable dataset construction to model execution and portfolio-level result analysis — and exposes it through a configurable backend and a Gradio-based graphical interface with LLM-assisted result interpretation.
+
+![AEQUITAS Architecture](aequitas.png)
 
 ## Key features
 
-- Structured datasets and data loaders for common financial tasks.
-- Preprocessing and feature engineering utilities (technical indicators, rolling statistics, factor calculation).
-- Baseline model implementations across multiple tasks (classification, regression, ranking, portfolio optimization).
-- Evaluation and backtesting tools for reproducible experiment comparison.
-- Per-model example training scripts and requirements to reproduce results.
+- **Data Layer**: constructs reusable financial datasets from heterogeneous sources — historical prices, macroeconomic indicators, relational structures, financial news, and company metadata.
+- **Model Layer**: integrates classification, regression, and ranking stock prediction models under consistent experimental settings, including temporal alignment and normalization.
+- **Evaluation Layer**: maps model outputs to standardized portfolio strategies (Long-Only Top-K, Long-Short Top-K, Quintile Analysis) and reports both task-level and portfolio-level metrics.
+- **Interactive Dashboard**: Gradio-based interface for configuring experiments, monitoring execution, visualizing results, and comparing model behavior across universes and market regimes.
+- **LLM-Assisted Explanation**: AI module that summarizes evaluation results, highlights discrepancies between predictive and portfolio-level behavior, and supports robustness analysis.
 
 The full list of financial indicators, variables, descriptions, and formulas is available here: [View feature tables](docs/feature_tables/README.md)
 
@@ -39,105 +40,52 @@ The full list of financial indicators, variables, descriptions, and formulas is 
 |                | [RT-GCN](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10184655)                      | MSE Loss + Pointwise Ranking Loss                   | Per-Ticker Max Scaling (Max Normalization)                                                                              |
 
 
+## Quick Start
 
-## Repository layout (high level)
+### 1. Clone the repository
 
-- `Classification/` — Multiple classification model implementations and training scripts (e.g., Adv-ALSTM, CNNPred, DGDNN, HGTAN, MAN-SF, THGNN).
-- `Ranking/` — Ranking models and related training pipelines.
-- `Regression/` — Regression and forecasting models (FinFormer, FactorVAE, HIST and more).
-- `Evaluation/` — Evaluation and backtesting utilities, evaluation scripts and configuration templates.
-
-Note: Each model implementation includes their own `requirements.txt` and example training scripts.
-
-## Quick start
-
-1. Clone the repository:
-
-```
-git clone https://github.com/softlab-unimore/finbench.git
-cd finbench
+```bash
+git clone https://github.com/softlab-unimore/aequitas.git
+cd aequitas
 ```
 
-2. Create and activate a Python virtual environment for each model and Evaluation package.
+### 2. Configure environment variables
 
+Copy the template and fill in your API keys:
 
-3. Install dependencies.
+```bash
+cp .env_template .env
+```
 
-   - Global evaluation tools (used by `Evaluation/`):
+Open `.env` and add your OpenAI API key:
 
-   ```
-   pip install -r Evaluation/requirements.txt
-   ```
+```dotenv
+OPENAI_API_KEY=sk-...your-key-here...
+```
 
-   - Per-model dependencies: each model folder (for example `Classification/Adv-ALSTM/`) contains a `requirements.txt` with the packages needed for training and evaluation of that model. Follow the instructions in each model folder.
+The LLM-assisted explanation module requires a valid OpenAI key to summarize evaluation results and highlight cross-universe behavioral patterns.
 
+### 3. Install dependencies
 
-## Running evaluation and examples
+Create and activate a Python virtual environment (Python 3.10 recommended):
 
-1. **Data loading**: `Evaluation/main.py` provide the script to extract data from the data sources and prepare it for training and evaluation. 
-  Please run from the root directory:
-      ```
-      cd Evaluation
-      python3 main.py 
-      ```
-    
-2. **Model training**: all the models provide a `train.py` script inside their folder. Typical usage (adjust per-model arguments):
-    ```
-    cd ../<Type>/<Model_Folder>
-    python3 train.py [<pararms>] 
-    ```
-    Replace `<Model_Folder>` with the appropriate value. Check the model folder for specific training instructions and required arguments.
-    `Type` must be one of: `Ranking`, `Classification`, `Regression`.
+```bash
+python3.10 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
 
+### 4. Launch the AEQUITAS dashboard
 
-3. **Extract task level metrics**: Use the provided tool to collect best validation runs and produce per-model CSV metric summaries.
+```bash
+python app.py
+```
 
-   1. Verify your results layout
-      - Results must follow the pattern:
-        ```<Type>/<Model>/results/<Universe>/<Config>/<Seed>/<Year>/*```
-   
-   2. Run the extractor
-      - From the repository root, run:
-        ```
-        python extract_model_metrics.py --type <TYPE> --model <MODEL_NAME> 
-        ```
-        Replace `TYPE` and `MODEL_NAME` with the appropriate type and model folder. 
-     
-        `TYPE` must be one of: `Ranking`, `Classification`, `Regression`.
+The Gradio interface will be accessible at: 
+```bash
+http://localhost:7860
+```
 
-      - The script will create:
-        - `<Type>/<Model>/best_results.json` — best test metrics selected by validation score.
-        - `<Type>/<Model>/metrics.csv` — tab-separated table of metrics per (Year, Seed, Universe) for common sl/pl configurations.
-   
-
-
-5. **Evaluation**: 
-   1. `evaluation.py` provide mechanisms compute portfolio metrics on model predictions. 
-         ```
-         cd Evaluation
-         python3 evaluation.py --type <TYPE> --model <MODEL_NAME> --universe <UNIVERSE> --sl <SL> --pl <PL> --initial_year <YEAR> --top_k <K> --short_k <SK>
-         ```
-
-   2. `quintile_analysis.py` provides tools to compute quintile-based metrics and visualizations.
-         ```
-         cd Evaluation
-         python3 quintile_analysis.py --type <TYPE> --model <MODEL_NAME> --universe <UNIVERSE> --initial_year <YEAR>
-         ```
-       
-   Replace `TYPE`, `MODEL_NAME` and the other placeholders with the appropriate values. Check the `Evaluation/README.md` file for specific instructions and available arguments.
-
-
-
-Check the docs or the training script in the model folder for model-specific flags and data requirements. 
-
-
-Almost all models were tested with **Python 3.10**; however, some exceptions (e.g., Adv-ASLTM) required different Python versions due to library compatibility issues.
-Check the ```README.md``` in each model folder for specific Python version requirements and installation instructions.
-
-
-## Results
-
-All the results on the implemented models are available in the `results.md` file at the project root.
 
 ## License
 
