@@ -7,20 +7,20 @@ All business logic lives in:
     eval_form.py     – cascade-dropdown update logic
     eval_plot.py     – matplotlib plot builders
     eval_output.py   – HTML/CSV formatting and LLM explanation
-    eval_run.py      – evaluation runner + Gradio loading helpers
+    eval_run.py      – evaluation runner + Aequitas loading helpers
 """
 from functools import partial
 
 import gradio as gr
 import pandas as pd
 
-from Gradio.eval_config import EVAL_MODES
-from Gradio.eval_form import update_eval_form
-from Gradio.eval_output import (
+from Aequitas.eval_config import EVAL_MODES
+from Aequitas.eval_form import update_eval_form
+from Aequitas.eval_output import (
     explain_evaluation_with_chatgpt,
     empty_evaluation_table_html
 )
-from Gradio.eval_run import (
+from Aequitas.eval_run import (
     run_evaluation,
     show_evaluation_loading,
     hide_evaluation_loading,

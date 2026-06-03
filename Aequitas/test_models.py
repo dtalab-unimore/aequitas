@@ -9,7 +9,7 @@ import gradio as gr
 import pandas as pd
 from pathlib import Path
 import re
-from Gradio.test_model_dispatcher import dispatch_test
+from Aequitas.test_model_dispatcher import dispatch_test
 from utils.filter_constituents import filter_constituents_by_date
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))

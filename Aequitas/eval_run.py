@@ -1,6 +1,6 @@
 """
 Evaluation runner: build subprocess commands, execute them, read and filter
-the output CSVs, and expose the Gradio loading-state helpers.
+the output CSVs, and expose the Aequitas loading-state helpers.
 """
 import os
 import re
@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from Gradio.eval_config import (
+from Aequitas.eval_config import (
     SEED,
     EVAL_TO_CMD,
     EVALUATION_DIR,
@@ -20,14 +20,14 @@ from Gradio.eval_config import (
     METRICS_EXTRACTION_SCRIPT,
     PROJECT_ROOT,
 )
-from Gradio.eval_scan import (
+from Aequitas.eval_scan import (
     scan_available_pkls,
     filter_records,
     filter_records_by_length_pairs,
     find_column,
 )
-from Gradio.eval_plot import build_evaluation_plot
-from Gradio.eval_output import (
+from Aequitas.eval_plot import build_evaluation_plot
+from Aequitas.eval_output import (
     dataframe_to_metrics_html,
     empty_evaluation_table_html,
     write_evaluation_download_file,
@@ -44,7 +44,7 @@ TARGET_METRICS = [
 ]
 
 # -------------------------------------------------
-# Gradio loading-state helpers
+# Aequitas loading-state helpers
 # -------------------------------------------------
 
 def empty_plot():

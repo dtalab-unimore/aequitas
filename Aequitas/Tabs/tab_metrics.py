@@ -1,6 +1,6 @@
 import gradio as gr
 
-from Gradio.metrics_view import (
+from Aequitas.metrics_view import (
     on_metrics_task_change,
     on_metrics_year_range_change,
     on_metrics_model_change,
@@ -218,7 +218,7 @@ def _empty_state_html(message="Select filters and click <b>View Metrics</b> to l
 #
 # import gradio as gr
 #
-# from Gradio.metrics_view import (
+# from Aequitas.metrics_view import (
 #     on_metrics_task_change,
 #     on_metrics_year_range_change,
 #     on_metrics_model_change,

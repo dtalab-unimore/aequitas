@@ -1,6 +1,6 @@
 import gradio as gr
 
-from Gradio.test_models import (
+from Aequitas.test_models import (
     get_universe_options,
     on_universe_change,
     on_task_change,

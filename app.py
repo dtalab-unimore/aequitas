@@ -3,7 +3,7 @@ import sys
 
 from pathlib import Path
 
-from Gradio.Tabs.tab_train import build_train_tab
+from Aequitas.Tabs.tab_train import build_train_tab
 
 GRADIO_TMP_DIR = Path("./.gradio_tmp").resolve()
 GRADIO_TMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -11,10 +11,10 @@ GRADIO_TMP_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["GRADIO_TEMP_DIR"] = str(GRADIO_TMP_DIR)
 
 import gradio as gr
-from Gradio.Tabs.tab_download import build_tab as build_download_tab
-from Gradio.Tabs.tab_test import build_tab as build_test_tab
-from Gradio.Tabs.tab_evaluation import build_tab as build_evaluation_tab
-from Gradio.Tabs.tab_metrics import build_tab as build_metrics_tab
+from Aequitas.Tabs.tab_download import build_tab as build_download_tab
+from Aequitas.Tabs.tab_test import build_tab as build_test_tab
+from Aequitas.Tabs.tab_evaluation import build_tab as build_evaluation_tab
+from Aequitas.Tabs.tab_metrics import build_tab as build_metrics_tab
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ""))
@@ -58,7 +58,7 @@ with gr.Blocks() as demo:
 # -------------------------------------------------
 # Launch
 # -------------------------------------------------
-CSS_PATH = os.path.join(PROJECT_ROOT, "Gradio", "style.css")
+CSS_PATH = os.path.join(PROJECT_ROOT, "Aequitas", "style.css")
 
 with open(CSS_PATH, "r", encoding="utf-8") as f:
     custom_css = f.read()

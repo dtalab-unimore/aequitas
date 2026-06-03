@@ -24,8 +24,8 @@ print(f"Using OpenAI model: {OPENAI_EXPLANATION_MODEL}")
 # Paths
 # -------------------------------------------------
 # eval_config.py lives in:
-#   FINBENCH_DEMO/Gradio/eval_config.py
-# so parents[0] = Gradio, parents[1] = FINBENCH_DEMO
+#   FINBENCH_DEMO/Aequitas/eval_config.py
+# so parents[0] = Aequitas, parents[1] = FINBENCH_DEMO
 _THIS_FILE = Path(__file__).resolve()
 PROJECT_ROOT = _THIS_FILE.parents[1]
 

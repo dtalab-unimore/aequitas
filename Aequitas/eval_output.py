@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 from openai import OpenAI
 
-from Gradio.eval_config import EVALUATION_DIR, OPENAI_API_KEY, OPENAI_EXPLANATION_MODEL
-from Gradio.eval_scan import normalize_column_name
+from Aequitas.eval_config import EVALUATION_DIR, OPENAI_API_KEY, OPENAI_EXPLANATION_MODEL
+from Aequitas.eval_scan import normalize_column_name
 
 TARGET_METRICS = [
     "Cumulative Return",

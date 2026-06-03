@@ -4,7 +4,7 @@ used by both the form cascade logic and the evaluation runner.
 """
 import re
 
-from Gradio.eval_config import (
+from Aequitas.eval_config import (
     FINBENCH_RESULTS_ROOT,
     SEED,
     YEAR_DIR_RE,

@@ -9,13 +9,13 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 
-from Gradio.eval_config import (
+from Aequitas.eval_config import (
     MAX_PLOT_COLUMNS,
     FIXED_SUBPLOT_WIDTH,
     FIXED_SUBPLOT_HEIGHT_EOY,
     FIXED_SUBPLOT_HEIGHT_QUINTILE,
 )
-from Gradio.eval_scan import find_column
+from Aequitas.eval_scan import find_column
 
 # -------------------------------------------------
 # Low-level helpers

@@ -20,7 +20,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EVALUATION_DIR = PROJECT_ROOT / "Evaluation"
 DATA_DIR = EVALUATION_DIR / "data"
-CONFIG_PATH = PROJECT_ROOT / "Gradio" / "configs" / "model_to_data.json"
+CONFIG_PATH = PROJECT_ROOT / "Aequitas" / "configs" / "model_to_data.json"
 TICKER_RE = re.compile(r"^[A-Za-z0-9.\-]{1,12}$")
 
 if str(PROJECT_ROOT) not in sys.path:
@@ -155,9 +155,9 @@ def _dedupe_keep_order(items: list) -> list:
 
 def _normalize_models(model: str | list[str] | tuple[str, ...] | None) -> list[str]:
     """
-    Normalizes the Gradio multiselect value.
+    Normalizes the Aequitas multiselect value.
 
-    Gradio multiselect returns:
+    Aequitas multiselect returns:
         []              if nothing is selected
         ["A", "B"]      if multiple models are selected
 
@@ -176,7 +176,7 @@ def _targets_from_model_config(
     model: str | list[str] | tuple[str, ...] | None,
 ) -> tuple[list[str], list[list[str]], list[str]]:
     """
-    Reads Gradio/configs/model_to_data.json and converts required files into
+    Reads Aequitas/configs/model_to_data.json and converts required files into
     pipeline targets.
 
     Supports multiple selected models.

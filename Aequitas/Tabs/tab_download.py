@@ -1,7 +1,7 @@
 import gradio as gr
 
 
-from Gradio.data_load import (
+from Aequitas.data_load import (
     get_models,
     inspect_required_files,
     download_missing_files,

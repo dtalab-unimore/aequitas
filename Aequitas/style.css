@@ -11,7 +11,7 @@
     margin-bottom: -20px !important;
 }
 
-/* Removes the default min-width of Gradio's form wrapper */
+/* Removes the default min-width of Aequitas's form wrapper */
 .gradio-container .form {
     min-width: 0 !important;
 }
@@ -62,7 +62,7 @@
     opacity: 0.92;
 }
 
-/* Bottoni */
+/* Buttons */
 button {
     border-radius: 12px !important;
     font-weight: 700 !important;
@@ -73,7 +73,7 @@ button:hover {
     transform: translateY(-1px);
 }
 
-/* ── Gradio custom scrollbar ───────────────────────────────── */
+/* ── Aequitas custom scrollbar ───────────────────────────────── */
 .gradio-container,
 .gradio-container * {
     scrollbar-width: thin;
@@ -2219,20 +2219,19 @@ table.mpt td.missing {
     }
 }
 
-/* Tutti i CheckboxGroup Gradio */
+/* CheckboxGroup Aequitas */
 [data-testid="checkbox-group"] > label.selected {
     background: #e7ebf9 !important;
     border-color: #e2e8f0 !important;
     color: #1e293b !important;
 }
 
-/* Checkbox interna quando la label è selected */
+
 [data-testid="checkbox-group"] > label.selected > input[type="checkbox"] {
     border-color: #21ad73 !important;
     background-color: #7dceb7 !important;
 }
 
-/* Variante con :checked */
 [data-testid="checkbox-group"] > label > input[type="checkbox"]:checked,
 [data-testid="checkbox-group"] > label > input[type="checkbox"]:checked:hover,
 [data-testid="checkbox-group"] > label > input[type="checkbox"]:checked:focus {

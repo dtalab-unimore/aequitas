@@ -1,6 +1,6 @@
 import gradio as gr
-from Gradio.test_models import get_tickers
-from Gradio.train_models import toggle_train_button, validate_train_inputs_soft, \
+from Aequitas.test_models import get_tickers
+from Aequitas.train_models import toggle_train_button, validate_train_inputs_soft, \
     train_model_with_logs_if_valid, get_models_train,on_train_model_change
 
 

@@ -8,8 +8,8 @@ from datetime import datetime
 import gradio as gr
 import json
 
-from Gradio.data_load import read_configs
-from Gradio.train_model_dispatcher import dispatch_train
+from Aequitas.data_load import read_configs
+from Aequitas.train_model_dispatcher import dispatch_train
 
 YEAR_RE = re.compile(r"^\d{4}$")
 

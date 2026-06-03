@@ -3,8 +3,8 @@ Cascade-dropdown update logic for the Evaluation tab form.
 """
 import gradio as gr
 
-from Gradio.eval_config import EVAL_MODES, TOP_SHORT_PAIRS_BY_UNIVERSE
-from Gradio.eval_scan import (
+from Aequitas.eval_config import EVAL_MODES, TOP_SHORT_PAIRS_BY_UNIVERSE
+from Aequitas.eval_scan import (
     scan_available_pkls,
     filter_records,
     unique_values,
