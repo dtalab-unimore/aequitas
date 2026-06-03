@@ -11,6 +11,8 @@ FinBench is a collection of tools, datasets and example implementations to evalu
 - Evaluation and backtesting tools for reproducible experiment comparison.
 - Per-model example training scripts and requirements to reproduce results.
 
+The full list of financial indicators, variables, descriptions, and formulas is available here: [View feature tables](docs/feature_tables/README.md)
+
 ## Implemented models
 
 
