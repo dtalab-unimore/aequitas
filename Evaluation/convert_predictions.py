@@ -50,6 +50,63 @@ def convert_predictions_to_rankings(
     raise ValueError(f"Unknown model: {model_name}")
 
 
+def normalize_classification_labels(labels, predictions):
+    """Match classification labels to converted scores, preserving container type."""
+    if isinstance(predictions, np.ndarray):
+        label_array = np.asarray(labels)
+        if label_array.size != predictions.size:
+            raise ValueError(
+                f"Prediction/label size mismatch: "
+                f"{predictions.shape} != {label_array.shape}"
+            )
+        return label_array.reshape(predictions.shape)
+
+    if not isinstance(predictions, list):
+        raise ValueError("Classification predictions must be a list or numpy array")
+
+    if isinstance(labels, np.ndarray):
+        labels = list(labels)
+    if not isinstance(labels, list):
+        raise ValueError("Classification labels must be a list or numpy array")
+    if len(labels) != len(predictions):
+        raise ValueError(
+            f"Prediction/label length mismatch: {len(predictions)} != {len(labels)}"
+        )
+
+    normalized = []
+    for index, (label, prediction) in enumerate(zip(labels, predictions)):
+        label_array = np.asarray(label)
+        if label_array.size != prediction.size:
+            raise ValueError(
+                f"Prediction/label size mismatch at index {index}: "
+                f"{prediction.shape} != {label_array.shape}"
+            )
+        normalized.append(label_array.reshape(prediction.shape))
+    return normalized
+
+
+def align_dgdnn_result_lengths(results):
+    """Trim legacy DGDNN output by one sample when its dates are off by one."""
+    fields = ["preds", "labels", "tickers", "last_date", "pred_date"]
+    lengths = {field: len(results[field]) for field in fields}
+    if len(set(lengths.values())) == 1:
+        return results
+
+    minimum = min(lengths.values())
+    maximum = max(lengths.values())
+    if maximum - minimum != 1:
+        details = ", ".join(f"{key}: {value}" for key, value in lengths.items())
+        raise ValueError(f"Inconsistent DGDNN result lengths: {details}")
+
+    print(
+        "  ! Legacy DGDNN off-by-one detected; "
+        f"aligning all result collections to {minimum} samples."
+    )
+    for field in fields:
+        results[field] = results[field][:minimum]
+    return results
+
+
 def convert_classification_preds(pred_paths: list[str], model_name: str) -> list[str]:
     converted_preds_paths = []
 
@@ -62,6 +119,11 @@ def convert_classification_preds(pred_paths: list[str], model_name: str) -> list
             results = pickle.load(f)
 
         results['preds'] = convert_predictions_to_rankings(model_name=model_name, predictions=results['preds'])
+        results['labels'] = normalize_classification_labels(
+            results['labels'], results['preds']
+        )
+        if model_name == "DGDNN":
+            results = align_dgdnn_result_lengths(results)
 
         # Save converted predictions
         with open(converted_path, 'wb') as f:
