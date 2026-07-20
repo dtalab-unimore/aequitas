@@ -22,6 +22,34 @@ def dataset_normalization(dataset, max_values):
     return dataset
 
 
+def compute_split_indices(all_dates, args):
+    sample_count = len(all_dates) - args.history_len - args.pred_len + 1
+    if sample_count <= 0:
+        raise ValueError("Periodo troppo breve per seq_len e pred_len selezionati.")
+
+    date_values = pd.to_datetime(all_dates)
+    valid_candidates = np.flatnonzero(date_values > pd.Timestamp(args.end_train_date))
+    if len(valid_candidates) == 0:
+        raise ValueError(
+            f"Nessuna data di validazione successiva a {args.end_train_date}."
+        )
+
+    valid_index = int(valid_candidates[0]) - args.history_len - args.pred_len + 1
+    test_candidates = np.flatnonzero(date_values > pd.Timestamp(args.end_valid_date))
+    test_index = (
+        int(test_candidates[0]) - args.history_len - args.pred_len + 1
+        if len(test_candidates) > 0
+        else sample_count
+    )
+
+    if valid_index <= 0 or test_index <= valid_index:
+        raise ValueError(
+            "Intervalli train/validation insufficienti per seq_len e pred_len selezionati."
+        )
+
+    return valid_index, test_index
+
+
 def load_stock_features(args):
     dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}.csv')
     constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
@@ -78,15 +106,14 @@ def load_stock_features(args):
     base_price = np.array(base_price)
 
     all_dates = all_dates[(all_dates >= args.start_date) & (all_dates <= args.end_date)].reset_index(drop=True)
-    valid_index = pd.to_datetime(all_dates[all_dates > args.end_train_date]).idxmin() - args.history_len - args.pred_len + 1
-    test_index = pd.to_datetime(all_dates[all_dates > args.end_valid_date]).idxmin() - args.history_len - args.pred_len + 1
+    valid_index, test_index = compute_split_indices(all_dates, args)
+
 
     return stock_features, masks, return_ratios, base_price, valid_index, test_index, all_dates.to_list(), available_tickers
 
 
 def load_inci_matrix(tickers, args):
-    # inci_matrix = np.load(f'{args.data_path}/{args.universe}/{args.universe}_inc_matrix.npz')
-    inci_matrix = np.load(f'{args.data_path}/{args.universe}/{args.universe}_inc_matrix_sect_ind.npz')
+    inci_matrix = np.load(f'{args.data_path}/{args.universe}/{args.universe}_inc_matrix.npz')
     matr = inci_matrix['inc_matrix']
     matr_tickers = inci_matrix['tickers']
 

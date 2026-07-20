@@ -1,4 +1,5 @@
 import copy
+import os
 import numpy as np
 from tqdm import tqdm
 from scipy import sparse
@@ -10,12 +11,12 @@ from torch_geometric import utils
 import torch.optim as optim
 import torch.distributions as ds
 
-from utils.load_data import load_stock_features, load_inci_matrix
-from utils.args import Args
-from utils.metric import evaluate_svat
-from utils.optimize import Adjust_LR, init_model
-from models.svat import SVAT, AdvSampler, AdvGenerator
-from experiments.exp_basic import Exp_Basic
+from Ranking.SVAT.utils.load_data import load_stock_features, load_inci_matrix
+from Ranking.SVAT.utils.args import Args
+from Ranking.SVAT.utils.metric import evaluate_svat
+from Ranking.SVAT.utils.optimize import Adjust_LR, init_model
+from Ranking.SVAT.models.svat import SVAT, AdvSampler, AdvGenerator
+from Ranking.SVAT.experiments.exp_basic import Exp_Basic
 
 def tensor_clean(data, r_num):
     data = torch.where(torch.isnan(data), torch.full_like(data, r_num), data)
@@ -184,12 +185,13 @@ class Exp_SVAT(Exp_Basic):
                 curr_rank_score = curr_rank_score.detach().cpu().numpy().reshape((self.total_stock_num,1))
                 cur_valid_pred[:, cur_offset-start_idx] = copy.copy(curr_rank_score[:, 0])
             cur_valid_perf = evaluate_svat(cur_valid_pred, cur_valid_gt, cur_valid_mask)
-            val_rank_loss = val_rank_loss / (self.test_index - self.valid_index)
+            val_rank_loss = val_rank_loss / max(end_idx - start_idx, 1)
 
             return val_rank_loss, cur_valid_perf, cur_valid_pred, cur_valid_gt, cur_valid_mask
 
-    def train(self):
+    def train(self, model_save_path):
         best_perf = {'sharpe5': -np.inf}
+        best_valid_loss = np.inf
 
         best_preds = None
         best_gt = None
@@ -301,15 +303,24 @@ class Exp_SVAT(Exp_Basic):
                 lr_adjuster(model_optim, tra_rank_loss, i+1, args)
 
                 cur_valid_loss, cur_valid_perf, cur_valid_pred, cur_valid_labels, valid_mask = self.valid(self.valid_index, self.test_index, args)
-                if cur_valid_perf['btl5'] < 0. and cur_valid_perf['sharpe5'] > best_perf['sharpe5']:
+                if best_valid_pred is None or cur_valid_loss < best_valid_loss:
+                    best_valid_loss = cur_valid_loss
                     best_perf = cur_valid_perf.copy()
                     self.best_args = args
+
+                    torch.save(
+                        self.model.state_dict(),
+                        os.path.join(model_save_path, 'model.pth'),
+                    )
 
                     best_valid_pred = cur_valid_pred.copy()
                     best_valid_labels = cur_valid_labels.copy()
 
                     end_idx = self.trade_dates - args.history_len - args.pred_len + 1
-                    cur_test_loss, cur_test_perf, best_preds, best_gt, mask = self.valid(self.test_index, end_idx, args)
+                    if self.test_index < end_idx:
+                        _, _, best_preds, best_gt, mask = self.valid(
+                            self.test_index, end_idx, args
+                        )
 
                 print('Valid Rank Loss: {}'.format(cur_valid_loss))
                 print('====> Valid preformance: btl5: {}, sharpe5: {}'.format(cur_valid_perf['btl5'], cur_valid_perf['sharpe5']))
@@ -320,3 +331,15 @@ class Exp_SVAT(Exp_Basic):
         print('{}'.format(best_perf))
 
         return best_preds, best_gt, mask, best_valid_pred, best_valid_labels, valid_mask
+
+    def test(self, model_save_path):
+        args = Args(self.params[0])
+        self.model, self.z_prior_sampler, self.z_post_sampler, self.adv_generator = self._build_model(args)
+
+        checkpoint_path = os.path.join(model_save_path, "model.pth")
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+        self.model.load_state_dict(checkpoint)
+
+        end_idx = self.trade_dates - args.history_len - args.pred_len + 1
+        _, _, test_pred, test_gt, mask = self.valid(self.test_index, end_idx, args)
+        return test_pred, test_gt, mask

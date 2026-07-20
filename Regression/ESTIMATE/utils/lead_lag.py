@@ -7,12 +7,24 @@ insights and applications" (Cucuringu et al. 2019) clustering algo
 
 import itertools
 import dcor
-import iisignature
 import numpy as np
 import pandas as pd
 from sklearn import cluster
 from sklearn.feature_selection import mutual_info_classif
 from tqdm import tqdm
+
+
+def path_signature_lead_lag(path):
+    """Return the antisymmetric level-2 signature of a two-dimensional path."""
+    increments = np.diff(np.asarray(path, dtype=float), axis=0)
+    if len(increments) == 0:
+        return 0.0
+
+    previous_increments = np.cumsum(increments, axis=0) - increments
+    return np.sum(
+        previous_increments[:, 0] * increments[:, 1]
+        - previous_increments[:, 1] * increments[:, 0]
+    )
 
 
 def cross_correlation(data_1, data_2, lag, correlation_method="pearson"):
@@ -104,8 +116,7 @@ def compute_lead_lag(data_subset, method, **kwargs):
     elif method == "signature":
         path = data_subset.cumsum()
         path /= path.std()
-        signature = iisignature.sig(path, 2, 1)
-        lead_lag_measure = signature[1][1] - signature[1][2]
+        lead_lag_measure = path_signature_lead_lag(path)
 
     elif method == "ccf_at_max_lag":
         lags = np.arange(1, kwargs["max_lag"] + 1)

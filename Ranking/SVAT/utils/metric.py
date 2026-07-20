@@ -1,14 +1,6 @@
-import math
-import copy
-import heapq
-
 from scipy.stats import spearmanr
-from tqdm import tqdm
 import numpy as np
-import scipy.stats as sps
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.metrics import ndcg_score
-from empyrical.stats import max_drawdown, downside_risk, calmar_ratio
 
 def evaluate(prediction, ground_truth, mask, topk=5):
     assert ground_truth.shape == prediction.shape, 'shape mis-match'
