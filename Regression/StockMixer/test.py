@@ -1,0 +1,61 @@
+import json
+import os
+from argparse import ArgumentParser
+
+import numpy as np
+import torch
+
+from .load_datasets import load_dataset
+from .train import build_model, evaluate_range, result_dates, set_seed
+from utils.load_configuation import _log, load_configuration
+from utils.save_results import save_results
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
+
+
+def run_test(task_type, test_model, universe, config_name, sl_value, pl_value,
+             start_test_date, end_date, log_fn=None):
+    _log(log_fn, "Preparazione del test StockMixer...")
+    args, model_save_path, metrics_path = load_configuration(
+        task_type, test_model, universe, config_name, sl_value, pl_value,
+        start_test_date, end_date, PROJECT_ROOT, log_fn
+    )
+    set_seed(args.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    eod_data, gt_data, price_data, _, test_index, dates, tickers = load_dataset(args)
+    mask_data = np.isfinite(gt_data).astype(np.float32)
+    gt_data = np.nan_to_num(gt_data, nan=0.0)
+    model = build_model(args, eod_data.shape[0], eod_data.shape[-1], device)
+    checkpoint_path = os.path.join(model_save_path, "model.pth")
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model.load_state_dict(checkpoint["model"])
+    _, _, _, test_metrics, predictions, labels = evaluate_range(
+        model, args, (eod_data, gt_data, price_data, mask_data),
+        device, test_index, eod_data.shape[1]
+    )
+    pred_dates, last_dates, tickers_to_date = result_dates(dates, tickers, test_index, args)
+    metrics, results_pkl, metrics_json = save_results(
+        args, test_metrics, predictions, labels, pred_dates, last_dates,
+        tickers_to_date, metrics_path, log_fn=log_fn
+    )
+    return {"metrics": metrics, "results_path": results_pkl,
+            "metrics_path": metrics_json, "device": str(device)}
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser(description="Test a trained StockMixer model")
+    parser.add_argument("--task_type", default="Regression")
+    parser.add_argument("--model_name", default="StockMixer")
+    parser.add_argument("--universe", default="nasdaq100")
+    parser.add_argument("--config_name", default="StockMixer")
+    parser.add_argument("--sl_value", type=int, default=20)
+    parser.add_argument("--pl_value", type=int, default=5)
+    parser.add_argument("--start_test_date", default="2023-01-01")
+    parser.add_argument("--end_date", default="2023-12-31")
+    cli_args = parser.parse_args()
+    output = run_test(
+        cli_args.task_type, cli_args.model_name, cli_args.universe, cli_args.config_name,
+        cli_args.sl_value, cli_args.pl_value, cli_args.start_test_date, cli_args.end_date
+    )
+    print(json.dumps(output, indent=4))

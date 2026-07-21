@@ -113,7 +113,7 @@ def evaluate_regression(prediction, ground_truth, mask):
         'MSE': np.mean((prediction - ground_truth) ** 2),
         'MAE': np.mean(np.abs(prediction - ground_truth)),
         'RMSE': np.sqrt(np.mean((prediction - ground_truth) ** 2)),
-        'R2': r2_score(prediction, ground_truth)
+        'R2': r2_score(ground_truth, prediction)
     }
 
     return metrics

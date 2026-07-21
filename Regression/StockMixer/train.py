@@ -1,203 +1,178 @@
 import json
 import os
-import pickle
 import random
 from argparse import ArgumentParser
 
 import numpy as np
-import torch as torch
-from load_datasets import load_dataset
-from evaluator import evaluate_regression
-from model import get_loss, StockMixer
+import torch
+
+from .evaluator import evaluate_regression
+from .load_datasets import load_dataset
+from .model import StockMixer, get_loss
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 
-def save_dates(dates, tickers, start_index, pred_len, seq_len):
-    last_seq_date = dates[start_index + seq_len - 1: - pred_len]
-    dates_gt = dates[start_index + seq_len + pred_len - 1:]
-    tickers = [tickers] * len(dates_gt)
-    return dates_gt, last_seq_date, tickers
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
-def validate(start_index, end_index):
-    with torch.no_grad():
-        cur_valid_pred = []
-        cur_valid_gt = []
-        cur_valid_mask = []
-
-        loss = 0.
-        reg_loss = 0.
-        rank_loss = 0.
-        for cur_offset in range(start_index, end_index - args.seq_len - args.pred_len + 1):
-            data_batch, mask_batch, price_batch, gt_batch = map(
-
-                lambda x: torch.Tensor(x).to(device),
-                get_batch(cur_offset)
-            )
-            prediction = model(data_batch)
-            cur_loss, cur_reg_loss, cur_rank_loss, cur_rr = get_loss(prediction, gt_batch, price_batch, mask_batch,
-                                                                     stock_num, args.alpha)
-            loss += cur_loss.item()
-            reg_loss += cur_reg_loss.item()
-            rank_loss += cur_rank_loss.item()
-
-            cur_valid_pred.append(cur_rr.cpu().numpy())
-            cur_valid_gt.append(gt_batch.cpu().numpy())
-            cur_valid_mask.append(mask_batch.cpu().numpy())
-
-        loss = loss / (end_index - start_index)
-        reg_loss = reg_loss / (end_index - start_index)
-        rank_loss = rank_loss / (end_index - start_index)
-
-        cur_valid_pred_flat = np.array(cur_valid_pred).reshape(cur_valid_pred[0].shape[0], -1)
-        cur_valid_gt_flat = np.array(cur_valid_gt).reshape(cur_valid_gt[0].shape[0], -1)
-        cur_valid_mask_flat = np.array(cur_valid_mask).reshape(cur_valid_mask[0].shape[0], -1)
-
-        cur_valid_perf = evaluate_regression(cur_valid_pred_flat, cur_valid_gt_flat, cur_valid_mask_flat)
-    return loss, reg_loss, rank_loss, cur_valid_perf, cur_valid_pred, cur_valid_gt
-
-
-def get_batch(offset=None):
-    if offset is None:
-        offset = random.randrange(0, valid_index)
-    seq_len = args.seq_len
-    mask_batch = mask_data[:, offset: offset + seq_len + args.pred_len]
-    mask_batch = np.min(mask_batch, axis=1)
-    return (
-        eod_data[:, offset:offset + seq_len, :],
-        np.expand_dims(mask_batch, axis=1),
-        np.expand_dims(price_data[:, offset + seq_len - 1], axis=1),
-        np.expand_dims(gt_data[:, offset + seq_len - 1], axis=1))
-
-
-
-if __name__ == '__main__':
-
-    args = ArgumentParser()
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-    args.add_argument('--universe', type=str, default='nasdaq100', help='Universe of stocks to use')
-    args.add_argument('--model_name', type=str, default='StockMixer', help='Name of the model to use')
-
-    args.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
-    args.add_argument('--seq_len', type=int, default=20, help='Lookback length for the model')
-    args.add_argument('--start_date', type=str, default='2018-01-01', help='Start date for the dataset')
-    args.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
-    args.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01', help='Start date for the test set')
-    args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
-
-    args.add_argument('--reletion_name', type=str, default='wikidata', help='Name of the relation')
-    args.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
-    args.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
-    args.add_argument('--alpha', type=float, default=0.1, help='Regularization parameter')
-    args.add_argument('--activation', type=str, default='GELU', help='Activation function to use')
-    args.add_argument('--market_num', type=int, default=20, help='Number of markets')
-    args.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility')
-    args = args.parse_args()
-
-    device = torch.device("cuda") if torch.cuda.is_available() else 'cpu'
-
-    np.random.seed(args.seed)
-    torch.random.manual_seed(args.seed)
-
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
-
-    print('Preprocessing data...')
-    eod_data, gt_data, price_data, valid_index, test_index, dates, tickers = load_dataset(
-        args.data_path, args.universe, args.start_date, args.end_train_date, args.end_valid_date, args.start_test_date,
-        args.end_date, args.pred_len, args.seq_len)
-    stock_num = eod_data.shape[0]
-    fea_num = eod_data.shape[-1]
-    mask_data = np.ones((stock_num, eod_data.shape[1]), dtype=float)
-    trade_dates = mask_data.shape[1]
-
-    model = StockMixer(
-        stocks=stock_num,
-        time_steps=args.seq_len,
-        channels=fea_num,
-        market=args.market_num,
-        scale=(args.seq_len // 2)
+def build_model(args, stock_num, feature_num, device):
+    if args.seq_len < 2:
+        raise ValueError("StockMixer requires seq_len >= 2.")
+    return StockMixer(
+        stocks=stock_num, time_steps=args.seq_len, channels=feature_num,
+        market=args.market_num, scale=max(1, args.seq_len // 2),
     ).to(device)
 
+
+def get_batch(offset, args, eod_data, mask_data, price_data, gt_data):
+    mask_batch = mask_data[:, offset + args.seq_len - 1]
+    return (
+        eod_data[:, offset: offset + args.seq_len, :],
+        np.expand_dims(mask_batch, axis=1),
+        np.expand_dims(price_data[:, offset + args.seq_len - 1], axis=1),
+        np.expand_dims(gt_data[:, offset + args.seq_len - 1], axis=1),
+    )
+
+
+def evaluate_range(model, args, arrays, device, start_index, end_index):
+    eod_data, gt_data, price_data, mask_data = arrays
+    predictions, labels, masks = [], [], []
+    losses, reg_losses, rank_losses = [], [], []
+    model.eval()
+    stop = min(end_index, eod_data.shape[1] - args.seq_len - args.pred_len + 1)
+    with torch.no_grad():
+        for offset in range(start_index, stop):
+            data, mask, price, ground_truth = map(
+                lambda value: torch.as_tensor(value, dtype=torch.float32, device=device),
+                get_batch(offset, args, eod_data, mask_data, price_data, gt_data),
+            )
+            prediction = model(data)
+            loss, reg_loss, rank_loss, return_ratio = get_loss(
+                prediction, ground_truth, price, mask, eod_data.shape[0], args.alpha
+            )
+            losses.append(float(loss.item()))
+            reg_losses.append(float(reg_loss.item()))
+            rank_losses.append(float(rank_loss.item()))
+            predictions.append(return_ratio.cpu().numpy())
+            labels.append(ground_truth.cpu().numpy())
+            masks.append(mask.cpu().numpy())
+    if not predictions:
+        raise ValueError("The selected StockMixer period produced no evaluation windows.")
+    pred_matrix = np.asarray(predictions).squeeze(-1).T
+    label_matrix = np.asarray(labels).squeeze(-1).T
+    mask_matrix = np.asarray(masks).squeeze(-1).T
+    metrics = evaluate_regression(pred_matrix, label_matrix, mask_matrix)
+    return (
+        float(np.mean(losses)), float(np.mean(reg_losses)), float(np.mean(rank_losses)),
+        metrics, predictions, labels,
+    )
+
+
+def result_dates(dates, tickers, start_index, args):
+    last_dates = dates[start_index + args.seq_len - 1: -args.pred_len].astype(str).tolist()
+    pred_dates = dates[start_index + args.seq_len + args.pred_len - 1:].astype(str).tolist()
+    return pred_dates, last_dates, [tickers] * len(pred_dates)
+
+
+def run_train(args):
+    set_seed(args.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_save_path, metrics_path = create_saving_path(
+        args, "Regression", "StockMixer", PROJECT_ROOT
+    )
+    eod_data, gt_data, price_data, valid_index, test_index, dates, tickers = load_dataset(args)
+    args.trained_tickers = list(tickers)
+    with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
+        json.dump(vars(args), handle, indent=4)
+
+    stock_num, feature_num = eod_data.shape[0], eod_data.shape[-1]
+    mask_data = np.isfinite(gt_data).astype(np.float32)
+    gt_data = np.nan_to_num(gt_data, nan=0.0)
+    arrays = (eod_data, gt_data, price_data, mask_data)
+    model = build_model(args, stock_num, feature_num, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    best_valid_loss = np.inf
-    best_valid_perf = None
-    best_test_perf = None
+    best_valid_loss = float("inf")
+    best_payload = None
+    checkpoint_path = os.path.join(model_save_path, "model.pth")
 
-    dates_gt, last_seq_date, tickers = save_dates(dates, tickers, test_index, args.pred_len, args.seq_len)
-
-    batch_offsets = np.arange(start=0, stop=valid_index, dtype=int)
-
+    train_offsets = np.arange(valid_index, dtype=int)
     for epoch in range(args.epochs):
-        print("epoch{}##########################################################".format(epoch + 1))
-        np.random.shuffle(batch_offsets)
-        tra_loss = 0.0
-        tra_reg_loss = 0.0
-        tra_rank_loss = 0.0
-        for j in range(valid_index):
-            data_batch, mask_batch, price_batch, gt_batch = map(
-                lambda x: torch.Tensor(x).to(device),
-                get_batch(batch_offsets[j])
+        model.train()
+        np.random.shuffle(train_offsets)
+        losses = []
+        for offset in train_offsets:
+            data, mask, price, ground_truth = map(
+                lambda value: torch.as_tensor(value, dtype=torch.float32, device=device),
+                get_batch(offset, args, eod_data, mask_data, price_data, gt_data),
             )
             optimizer.zero_grad()
-            prediction = model(data_batch)
-
-            cur_loss, cur_reg_loss, cur_rank_loss, _ = get_loss(prediction, gt_batch, price_batch, mask_batch, stock_num, args.alpha)
-
-            cur_loss = cur_loss
-            cur_loss.backward()
+            prediction = model(data)
+            loss, _, _, _ = get_loss(
+                prediction, ground_truth, price, mask, stock_num, args.alpha
+            )
+            loss.backward()
             optimizer.step()
+            losses.append(float(loss.item()))
+        valid_loss, _, _, valid_metrics, _, _ = evaluate_range(
+            model, args, arrays, device, valid_index, test_index
+        )
+        print(
+            f"Epoch {epoch + 1}/{args.epochs}: train_loss={np.mean(losses):.6f}, "
+            f"valid_loss={valid_loss:.6f}", flush=True
+        )
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
+            test_output = evaluate_range(model, args, arrays, device, test_index, eod_data.shape[1])
+            best_payload = (valid_metrics, test_output[3], test_output[4], test_output[5])
+            torch.save({"model": model.state_dict(), "epoch": epoch + 1}, checkpoint_path)
 
-            tra_loss += cur_loss.item()
-            tra_reg_loss += cur_reg_loss.item()
-            tra_rank_loss += cur_rank_loss.item()
+    if best_payload is None:
+        raise RuntimeError("StockMixer training did not produce a checkpoint.")
+    valid_metrics, test_metrics, predictions, labels = best_payload
+    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
+        json.dump({key: float(value) for key, value in valid_metrics.items()}, handle, indent=4)
+    pred_dates, last_dates, tickers_to_date = result_dates(dates, tickers, test_index, args)
+    metrics, results_pkl, metrics_json = save_results(
+        args, test_metrics, predictions, labels, pred_dates, last_dates,
+        tickers_to_date, metrics_path
+    )
+    return {"model_path": checkpoint_path, "metrics": metrics,
+            "results_path": results_pkl, "metrics_path": metrics_json}
 
-            if j % 500 == 0:
-                print(f"Iteration j: {j}")
 
-        tra_loss = tra_loss / (valid_index - args.seq_len - args.pred_len + 1)
-        tra_reg_loss = tra_reg_loss / (valid_index - args.seq_len - args.pred_len + 1)
-        tra_rank_loss = tra_rank_loss / (valid_index - args.seq_len - args.pred_len + 1)
-        print('Train : loss:{:.2e}  =  {:.2e} + alpha*{:.2e}'.format(tra_loss, tra_reg_loss, tra_rank_loss))
+def build_parser():
+    parser = ArgumentParser(description="Train the StockMixer regression model")
+    parser.add_argument("--data_path", default="./Evaluation/data")
+    parser.add_argument("--universe", default="nasdaq100")
+    parser.add_argument("--model_name", default="StockMixer")
+    parser.add_argument("--pred_len", type=int, default=5)
+    parser.add_argument("--seq_len", type=int, default=20)
+    parser.add_argument("--start_date", default="2018-01-01")
+    parser.add_argument("--end_train_date", default="2021-12-31")
+    parser.add_argument("--start_valid_date", default="2022-01-01")
+    parser.add_argument("--end_valid_date", default="2022-12-31")
+    parser.add_argument("--start_test_date", default="2023-01-01")
+    parser.add_argument("--end_date", default="2023-12-31")
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--alpha", type=float, default=0.1)
+    parser.add_argument("--activation", default="GELU")
+    parser.add_argument("--market_num", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=42)
+    return parser
 
-        val_loss, val_reg_loss, val_rank_loss, val_perf, _, _ = validate(valid_index, test_index)
-        print('Valid : loss:{:.2e}  =  {:.2e} + alpha*{:.2e}'.format(val_loss, val_reg_loss, val_rank_loss))
 
-        test_loss, test_reg_loss, test_rank_loss, test_perf, pred, gt = validate(test_index, trade_dates)
-        print('Test: loss:{:.2e}  =  {:.2e} + alpha*{:.2e}'.format(test_loss, test_reg_loss, test_rank_loss))
-
-        if val_loss < best_valid_loss:
-            best_valid_loss = val_loss
-            best_valid_perf = val_perf
-            best_test_perf = test_perf
-
-            test_perf = {k: float(v) for k, v in test_perf.items()}
-
-            val_perf = {k: float(v) for k, v in val_perf.items()}
-
-            results = {
-                'metrics': test_perf,
-                'preds': pred,
-                'labels': gt,
-                'pred_date': dates_gt.to_list(),
-                'last_date': last_seq_date.to_list(),
-                'tickers': tickers
-            }
-
-            with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-                pickle.dump(results, f)
-
-            with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(test_perf, f, indent=4)
-
-            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(val_perf, f, indent=4)
-
-        print('Valid performance:\n', 'mse:{:.2e}, mae:{:.2e}, rmse:{:.2e}, r2:{:.2e}'.format(val_perf['MSE'], val_perf['MAE'],
-                                                         val_perf['RMSE'], val_perf['R2']))
-        print('Test performance:\n', 'mse:{:.2e}, mae:{:.2e}, rmse:{:.2e}, r2:{:.2e}'.format(test_perf['MSE'], test_perf['MAE'],
-                                                                                test_perf['RMSE'], test_perf['R2']), '\n\n')
-
-    print('----------------------------------------------------')
-    print('Best test performance:\n', 'mse:{:.2e}, mae:{:.2e}, rmse:{:.2e}, r2:{:.2e}'.format(best_test_perf['MSE'], best_test_perf['MAE'],
-                                                                                                         best_test_perf['RMSE'], best_test_perf['R2']), '\n\n')
+if __name__ == "__main__":
+    output = run_train(build_parser().parse_args())
+    print("__TRAIN_JSON_START__", flush=True)
+    print(json.dumps(output, ensure_ascii=False), flush=True)
+    print("__TRAIN_JSON_END__", flush=True)

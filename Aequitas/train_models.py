@@ -13,7 +13,7 @@ from Aequitas.train_model_dispatcher import dispatch_train
 
 YEAR_RE = re.compile(r"^\d{4}$")
 
-MODELS_WITHOUT_SEQUENCE_LENGTH = {"hist", "finformer"}
+MODELS_WITHOUT_SEQUENCE_LENGTH = {"hist", "finformer", "discoverplf"}
 
 
 def _normalize_model_name(model_name):
