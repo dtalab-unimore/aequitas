@@ -61,7 +61,7 @@ def prepare_dataset(args):
     dataset.rename(columns={'date': 'datetime'}, inplace=True)
     dataset['datetime'] = pd.to_datetime(dataset['datetime'])
 
-    dataset = extract_labels(dataset, args, pred_len=args.seq_len)
+    dataset = extract_labels(dataset, args, pred_len=args.pred_len)
     dataset = select_valid_ticker(dataset, pd.to_datetime(args.start_date), pd.to_datetime(args.end_train_date))
 
     dataset.set_index(['datetime', 'instrument'], inplace=True)
@@ -96,8 +96,9 @@ def predict(model, dataloader, all_dates, pred_len, device):
     """
     Out-of-sample predictions, one batch per date.
 
-    Predictions are the reconstruction of the forward pass, as in the
-    original code.
+    Uses FactorVAE.prediction (prior factors from the inputs only); the
+    forward pass reconstructs returns from the true labels and must not be
+    used for predictions.
     Dates follow the original convention: pred_date is the sample date and
     last_date the date pred_len trading days before it.
     """
@@ -109,8 +110,7 @@ def predict(model, dataloader, all_dates, pred_len, device):
         inputs = char_with_label[:, :, :-1].to(device).float()
         label = char_with_label[:, -1, -1].reshape(-1, 1)
 
-        _, rec, _, _, _, _ = model(inputs, label.to(device).float())
-        preds.append(rec.cpu().numpy().reshape(-1, 1))
+        preds.append(model.prediction(inputs).cpu().numpy().reshape(-1, 1))
         labels.append(label.numpy())
 
         # Each sample's index lists the (datetime, instrument) of every row of
