@@ -333,6 +333,17 @@ button {
     resize: none !important;
 }
 
+/* Plain white variant (e.g. the model parameters box): no tinted fill or
+   inset shadow, on the textarea or on any Gradio wrapper behind it */
+.aq-log-plain,
+.aq-log-plain *:not(button):not(button *) {
+    background: var(--aq-surface) !important;
+}
+
+.aq-log-plain textarea {
+    box-shadow: none !important;
+}
+
 /* Streamed log box: at least --aq-log-height tall, and it fills the rest of
    its card when a sibling card in the same row is taller. */
 .aq-card .form:has(> .aq-log-fixed) {
@@ -802,6 +813,51 @@ table.aq-table td.better-than-benchmark {
     align-self: flex-start !important;
 }
 
+/* Train tab: "N tickers selected" pill with the download button right
+   next to it */
+.ticker-header-row {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.ticker-header-row > .block:not(.ticker-download-btn) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+/* Keep header, pill row and chips packed at the top when the card is
+   stretched to the height of the progress card, with a fixed 8px between
+   them instead of the column gap plus the HTML margins */
+.tickers-card-wrap > .ticker-block,
+.tickers-card-wrap > .ticker-header-row {
+    flex-grow: 0 !important;
+}
+
+.tickers-card-wrap > .ticker-header-row,
+.tickers-card-wrap > .ticker-header-row + .ticker-block {
+    margin-top: calc(8px - var(--layout-gap, 16px)) !important;
+}
+
+.tickers-card-wrap .ticker-subtitle,
+.tickers-card-wrap .ticker-header-row .ticker-count {
+    margin-bottom: 0;
+}
+
+.tickers-card-wrap .ticker-block .ticker-card {
+    padding: 0;
+}
+
+.tickers-card-wrap .ticker-block .ticker-list {
+    margin-top: 0;
+}
+
+.tickers-card-wrap .ticker-header-row .ticker-download-btn {
+    align-self: center !important;
+}
+
 /* =============================================================
    Tab-specific rules
    ============================================================= */
@@ -999,7 +1055,7 @@ table.aq-table td.better-than-benchmark {
     gap: 4px !important;
     width: auto !important;
     height: 40px !important;
-    margin-bottom: -15px !important;
+    margin: 0 !important;
     padding: 4px 10px !important;
     box-sizing: border-box !important;
     background: var(--aq-surface) !important;
@@ -1011,10 +1067,10 @@ table.aq-table td.better-than-benchmark {
 
 .preview-round-btn {
     flex-shrink: 0 !important;
-    width: 21px !important;
-    min-width: 21px !important;
-    max-width: 21px !important;
-    height: 29px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
     margin: 0 !important;
     padding: 0 !important;
 }

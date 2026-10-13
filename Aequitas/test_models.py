@@ -405,23 +405,19 @@ def update_end_year_choices(start_year):
     )
 
 
-def get_tickers(universe: str, start_test_year: str):
-    if not universe or not start_test_year:
-        return (
-            gr.update(
-                visible=True,
-                value="""
-                <div class="ticker-card ticker-warning">
-                    Please select both universe and start year before running the test.
-                </div>
-                """
-            ),
-            gr.update(
-                visible=False,
-                value=None,
-            ),
-        )
+TICKERS_WARNING_HTML = """
+<div class="ticker-card ticker-warning">
+    Please select both universe and start year before running the test.
+</div>
+"""
 
+
+def _build_tickers(universe: str, start_test_year: str):
+    """Export the tickers CSV and build the tickers card pieces.
+
+    Returns (header_html, chips_html, csv_path): the header holds the title,
+    the subtitle and the "N tickers selected" pill; the chips list follows it.
+    """
     start_test_date = f"{int(start_test_year)}-01-01"
 
     constituents = pd.read_csv(
@@ -468,34 +464,70 @@ def get_tickers(universe: str, start_test_year: str):
         else ""
     )
 
-    html = f"""
-    <div class="ticker-card">
+    header_html = f"""
         <div class="ticker-title">Selected preprocessed tickers</div>
         <div class="ticker-subtitle">
             The test will be run on the tickers already preprocessed for
             <b>{universe}</b>, filtered from <b>{start_test_date}</b>.
         </div>
+    """
+
+    count_html = f"""
         <div class="ticker-actions-row">
             <div class="ticker-count">
                 {len(ticker_list)} tickers selected
             </div>
         </div>
+    """
+
+    chips_html = f"""
         <div class="ticker-list">
             {chips}
             {more_text}
         </div>
-    </div>
     """
 
+    return header_html, count_html, chips_html, csv_path
+
+
+def get_tickers(universe: str, start_test_year: str):
+    if not universe or not start_test_year:
+        return (
+            gr.update(visible=True, value=TICKERS_WARNING_HTML),
+            gr.update(visible=False, value=None),
+        )
+
+    header_html, count_html, chips_html, csv_path = _build_tickers(universe, start_test_year)
+    html = f'<div class="ticker-card">{header_html}{count_html}{chips_html}</div>'
+
     return (
-        gr.update(
-            visible=True,
-            value=html,
-        ),
-        gr.update(
-            visible=True,
-            value=str(csv_path),
-        ),
+        gr.update(visible=True, value=html),
+        gr.update(visible=True, value=str(csv_path)),
+    )
+
+
+def get_tickers_split(universe: str, start_test_year: str):
+    """Like get_tickers, but with the "N tickers selected" pill and the chips
+    list as separate outputs, so the download button can sit right next to
+    the pill.
+
+    Outputs: tickers header, tickers count, download button, tickers chips.
+    """
+    if not universe or not start_test_year:
+        return (
+            gr.update(visible=True, value=TICKERS_WARNING_HTML),
+            gr.update(visible=False, value=""),
+            gr.update(visible=False, value=None),
+            gr.update(visible=False, value=""),
+        )
+
+    header_html, count_html, chips_html, csv_path = _build_tickers(universe, start_test_year)
+
+    return (
+        gr.update(visible=True, value=f'<div class="ticker-card">{header_html}</div>'),
+        gr.update(visible=True, value=count_html),
+        gr.update(visible=True, value=str(csv_path)),
+        gr.update(visible=True, value=f'<div class="ticker-card">{chips_html}</div>'),
     )
 
 def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year):

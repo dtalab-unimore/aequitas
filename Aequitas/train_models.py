@@ -5,7 +5,7 @@ import gradio as gr
 
 from Aequitas.data_load import read_configs
 from Aequitas.script_runner import start_job, follow_job, get_job, cancel_job
-from Aequitas.test_models import get_tickers
+from Aequitas.test_models import get_tickers_split
 from Aequitas.train_model_dispatcher import dispatch_train
 from Aequitas.ui import error_alert
 
@@ -262,20 +262,22 @@ def restore_training_view(job_id, run_shown):
     training run. Does nothing if this page already shows a run.
 
     Outputs: universe, task, model, config, sl, pl, start_train, end_train,
-    start_valid, end_valid, train_output_section, tickers_info, tickers_download,
-    resume_token, run_shown.
+    start_valid, end_valid, train_output_section, tickers_info, tickers_count,
+    tickers_download, tickers_list, resume_token, run_shown.
 
     Following the logs is not done here but by the `resume_token` change
     event, so this event returns immediately.
     """
     job = get_job(job_id)
     if job is None or run_shown:
-        return (*(gr.update(),) * 13, gr.update(), run_shown)
+        return (*(gr.update(),) * 15, gr.update(), run_shown)
 
     m = job.meta
     uses_sl = model_uses_sequence_length(m["model_name"])
     models = list(read_configs(m["task_type"]).keys())
-    tickers_info, tickers_download = get_tickers(m["universe"], m["end_valid_year"])
+    tickers_info, tickers_count, tickers_download, tickers_list = get_tickers_split(
+        m["universe"], m["end_valid_year"]
+    )
 
     return (
         gr.update(value=m["universe"]),
@@ -294,7 +296,9 @@ def restore_training_view(job_id, run_shown):
         gr.update(value=m["end_valid_year"]),
         gr.update(visible=True),
         tickers_info,
+        tickers_count,
         tickers_download,
+        tickers_list,
         f"{job_id}:{time.time()}",
         True,
     )

@@ -130,7 +130,7 @@ def build_tab():
                         max_lines=8,
                         interactive=False,
                         buttons=["copy"],
-                        elem_classes=["aq-log"],
+                        elem_classes=["aq-log", "aq-log-plain"],
                     )
 
             # ── TEST button ──────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import gradio as gr
 
-from Aequitas.test_models import get_tickers
+from Aequitas.test_models import get_tickers_split
 from Aequitas.train_models import (
     toggle_train_button,
     validate_train_inputs_soft,
@@ -22,10 +22,12 @@ def build_train_tab():
         if not is_valid:
             return (
                 gr.update(value="", visible=False),
+                gr.update(value="", visible=False),
                 gr.update(value=None, visible=False),
+                gr.update(value="", visible=False),
             )
 
-        return get_tickers(universe, end_valid)
+        return get_tickers_split(universe, end_valid)
 
     def show_train_loading_if_valid(is_valid):
         return gr.update(visible=bool(is_valid))
@@ -150,15 +152,22 @@ def build_train_tab():
                     with gr.Column(scale=1, elem_classes=["aq-card", "tickers-card-wrap"]):
                         gr.HTML(section_header("Tickers used"))
 
-                        tickers_info = gr.HTML(value="", visible=False)
+                        tickers_info = gr.HTML(value="", visible=False, padding=False, elem_classes=["ticker-block"])
 
-                        tickers_download = gr.DownloadButton(
-                            label="Download tickers info ↓",
-                            value=None,
-                            visible=False,
-                            variant="secondary",
-                            elem_classes=["aq-chip-btn", "ticker-download-btn"],
-                        )
+                        # "N tickers selected" pill with the download button
+                        # right next to it; the chips follow.
+                        with gr.Row(elem_classes=["ticker-header-row"]):
+                            tickers_count = gr.HTML(value="", visible=False, padding=False)
+
+                            tickers_download = gr.DownloadButton(
+                                label="Download tickers info ↓",
+                                value=None,
+                                visible=False,
+                                variant="secondary",
+                                elem_classes=["aq-chip-btn", "ticker-download-btn"],
+                            )
+
+                        tickers_list = gr.HTML(value="", visible=False, padding=False, elem_classes=["ticker-block"])
 
                     with gr.Column(scale=1, elem_classes=["aq-card", "aq-badge-host"]):
                         gr.HTML(section_header("Train progress"))
@@ -267,7 +276,7 @@ def build_train_tab():
         ).then(
             fn=get_train_tickers_if_valid,
             inputs=[train_validation_state, train_universe, end_valid],
-            outputs=[tickers_info, tickers_download],
+            outputs=[tickers_info, tickers_count, tickers_download, tickers_list],
             **UI_EVENT,
         ).then(
             fn=show_train_loading_if_valid,
@@ -289,7 +298,8 @@ def build_train_tab():
         train_tab.select(
             fn=restore_training_view,
             inputs=[train_job_state, run_shown_state],
-            outputs=[*required_train_inputs, train_output_section, tickers_info, tickers_download,
+            outputs=[*required_train_inputs, train_output_section, tickers_info, tickers_count,
+                     tickers_download, tickers_list,
                      resume_token, run_shown_state],
             show_progress="hidden",
         )
