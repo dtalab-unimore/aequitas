@@ -6,6 +6,26 @@ from here, so markup and CSS classes (see style.css) stay consistent.
 """
 from html import escape
 
+# Bound to the `.change` event of streamed log boxes (elem_classes "aq-log-autoscroll").
+# Gradio 6's own Textbox autoscroll only fires once, so this keeps the box pinned to
+# the latest line on every update, unless the user has scrolled up to read.
+AUTOSCROLL_LOG_JS = """
+() => {
+    document.querySelectorAll(".aq-log-autoscroll textarea").forEach((box) => {
+        if (!box.dataset.aqScroll) {
+            box.dataset.aqScroll = "1";
+            box.addEventListener("scroll", () => {
+                const distance = box.scrollHeight - box.scrollTop - box.clientHeight;
+                box.dataset.aqStick = distance < 40 ? "1" : "0";
+            });
+        }
+        if (box.dataset.aqStick !== "0") {
+            box.scrollTop = box.scrollHeight;
+        }
+    });
+}
+"""
+
 
 def section_header(title: str, spaced: bool = False) -> str:
     """Pill-shaped header placed at the top of a card or card section."""

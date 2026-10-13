@@ -13,7 +13,7 @@ from Aequitas.test_models import (
     NO_PARAMS_TEXT,
     get_tickers,
 )
-from Aequitas.ui import section_header
+from Aequitas.ui import section_header, AUTOSCROLL_LOG_JS
 
 UI_EVENT = dict(show_progress="hidden", queue=False)
 
@@ -169,7 +169,7 @@ def build_tab():
                             interactive=False,
                             autoscroll=True,
                             show_label=False,
-                            elem_classes=["aq-log", "aq-log-fixed"],
+                            elem_classes=["aq-log", "aq-log-fixed", "aq-log-autoscroll"],
                         )
 
                     with gr.Column(scale=1, elem_classes=["aq-card"]):
@@ -188,6 +188,8 @@ def build_tab():
         # ── Wiring ───────────────────────────────────────────────────────
         # queue=False on read callbacks prevents lag; .input() avoids
         # re-triggering on programmatic updates.
+        test_logs.change(fn=None, js=AUTOSCROLL_LOG_JS, **UI_EVENT)
+
         test_universe.input(
             fn=on_universe_change,
             inputs=[test_universe],

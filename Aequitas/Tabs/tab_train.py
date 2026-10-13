@@ -8,7 +8,7 @@ from Aequitas.train_models import (
     get_models_train,
     on_train_model_change,
 )
-from Aequitas.ui import section_header, loading_badge
+from Aequitas.ui import section_header, loading_badge, AUTOSCROLL_LOG_JS
 
 UI_EVENT = dict(show_progress="hidden", queue=False)
 
@@ -161,7 +161,7 @@ def build_train_tab():
                             interactive=False,
                             autoscroll=True,
                             show_label=False,
-                            elem_classes=["aq-log", "aq-log-fixed"],
+                            elem_classes=["aq-log", "aq-log-fixed", "aq-log-autoscroll"],
                         )
 
                 train_result = gr.Code(
@@ -186,6 +186,8 @@ def build_train_tab():
             start_valid,
             end_valid,
         ]
+
+        train_logs.change(fn=None, js=AUTOSCROLL_LOG_JS, **UI_EVENT)
 
         train_task.change(
             fn=get_models_train,
