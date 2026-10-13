@@ -7,6 +7,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import gradio as gr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +27,9 @@ from Aequitas.eval_scan import (
     filter_records_by_length_pairs,
     find_column,
 )
+from Aequitas.eval_form import update_eval_form
 from Aequitas.eval_plot import build_evaluation_plot
+from Aequitas.script_runner import start_job, follow_job, get_job
 from Aequitas.eval_output import (
     dataframe_to_metrics_html,
     empty_evaluation_table_html,
@@ -66,16 +69,6 @@ def show_evaluation_loading():
         gr.update(visible=False, interactive=False),  # explain_evaluation_button
         gr.update(visible=False),              # chatgpt_explanation_group
         "",                                    # chatgpt_explanation
-    )
-
-
-def hide_evaluation_loading():
-    return (
-        gr.update(visible=False),                  # table_loading
-        gr.update(visible=False),                  # plot_loading
-        gr.update(interactive=True),               # run_btn
-        gr.update(visible=True, interactive=True), # explain_evaluation_button
-        gr.update(visible=True, interactive=True),  # download_evaluation_button
     )
 
 
@@ -460,48 +453,34 @@ def collapse_benchmark_rows(df: pd.DataFrame) -> pd.DataFrame:
 # -------------------------------------------------
 # Main runner
 # -------------------------------------------------
+# The evaluation runs as a background job (script_runner): it survives page
+# reloads, and the Evaluation tab can re-attach to it (follow_evaluation).
 
-def run_evaluation(
+def evaluate(
     eval_mode,
     task_type, model, universe, configuration,
     year_start, year_end, length_pair,
     top_k, short_k,
+    log_fn,
 ):
-    _error_return = lambda msg: (
-        msg,
-        empty_evaluation_table_html(msg),
-        gr.update(value=None, visible=False),
-        gr.update(visible=False, interactive=False),
-        empty_plot(),
-        pd.DataFrame(),
-    )
+    """
+    Run the evaluation commands and collect their output rows.
+
+    Returns {"eval_mode", "output_df"} or, when nothing can be evaluated,
+    {"eval_mode", "error"}. Progress goes to `log_fn`.
+    """
+    def error(msg):
+        log_fn(msg)
+        return {"eval_mode": eval_mode, "error": msg}
 
     selected_records = selected_records_for_form(
         task_type=task_type, model=model, universe=universe,
         configuration=configuration, year_start=year_start,
         year_end=year_end, length_pair=length_pair,
     )
-    logs = [
-        f"Selected .pkl combinations: {len(selected_records)}",
-        f"Evaluation jobs to process: {len(selected_records)}",
-        "\nSelected records:",
-    ]
 
-    for rec in selected_records:
-        logs.append(
-            f"- task_type={rec.get('task_type')} | "
-            f"model={rec.get('model')} | "
-            f"config={rec.get('configuration')} | "
-            f"universe={rec.get('universe')} | "
-            f"period=y{rec.get('year_start')}_y{rec.get('year_end')} | "
-            f"sl={rec.get('sequence_length')} | "
-            f"pl={rec.get('prediction_length')} | "
-            f"pkl={rec.get('pkl_path')}"
-        )
     if not selected_records:
-        return _error_return(
-            "The selected values do not match any available .pkl file."
-        )
+        return error("The selected values do not match any available .pkl file.")
 
     jobs = [
         {
@@ -512,18 +491,11 @@ def run_evaluation(
         for rec in selected_records
     ]
 
-    if not jobs:
-        return _error_return(
-            "No valid Top K / Short K pair is available for the selected universes."
-        )
+    log_fn(f"Selected .pkl combinations: {len(selected_records)}")
+    log_fn(f"Evaluation jobs to process: {len(jobs)}")
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-
-    logs = [
-        f"Selected .pkl combinations: {len(selected_records)}",
-        f"Evaluation jobs to process: {len(jobs)}",
-    ]
 
     frames = []
     command_cache = {}
@@ -540,15 +512,15 @@ def run_evaluation(
         cmd = build_eval_command(eval_mode, record, job_top_k, job_short_k)
         command_key = tuple(cmd)
 
-        logs.append(
-            "\n" + "=" * 80
-            + f"\nJob {job_idx}/{len(jobs)}"
-            + f"\nPKL:\n{record['pkl_path']}"
-        )
+        log_fn("=" * 80)
+        log_fn(f"Job {job_idx}/{len(jobs)}\nPKL:\n{record['pkl_path']}")
 
         if command_key in command_cache:
-            logs.append("\nCommand already executed before; skipping duplicate execution.")
+            log_fn("Command already executed before; skipping duplicate execution.")
             continue
+
+        command_str = " ".join(shlex.quote(x) for x in cmd)
+        log_fn(f"Command executed:\n{command_str}")
 
         completed = subprocess.run(
             cmd,
@@ -558,14 +530,11 @@ def run_evaluation(
             text=True,
         )
 
-        command_str = " ".join(shlex.quote(x) for x in cmd)
-        logs.append(f"\nCommand executed:\n{command_str}")
-
         if completed.stdout:
-            logs.append("\nSTDOUT:\n" + completed.stdout)
+            log_fn("STDOUT:\n" + completed.stdout.rstrip())
 
         if completed.stderr:
-            logs.append("\nSTDERR:\n" + completed.stderr)
+            log_fn("STDERR:\n" + completed.stderr.rstrip())
 
         command_cache[command_key] = {
             "returncode": completed.returncode,
@@ -573,8 +542,8 @@ def run_evaluation(
         }
 
         if completed.returncode != 0:
-            logs.append(
-                f"\nWarning: process terminated with code {completed.returncode}. "
+            log_fn(
+                f"Warning: process terminated with code {completed.returncode}. "
                 "The final CSV will still be read after all jobs."
             )
 
@@ -582,8 +551,8 @@ def run_evaluation(
     # 2) Read output CSVs only after all jobs are finished
     # ============================================================
 
-    logs.append("\n" + "=" * 80)
-    logs.append("Reading output CSV files after all jobs...")
+    log_fn("=" * 80)
+    log_fn("Reading output CSV files after all jobs...")
 
     csv_cache = {}
 
@@ -594,14 +563,11 @@ def run_evaluation(
 
         csv_path = output_csv_path(eval_mode, job_top_k, job_short_k)
 
-        logs.append(
-            "\n" + "-" * 80
-            + f"\nFiltering final CSV for job {job_idx}/{len(jobs)}"
-            + f"\nExpected CSV:\n{csv_path}"
-        )
+        log_fn("-" * 80)
+        log_fn(f"Filtering final CSV for job {job_idx}/{len(jobs)}\nExpected CSV:\n{csv_path}")
 
         if not csv_path.exists():
-            logs.append(f"\nCSV file not found, skipping this job:\n{csv_path}")
+            log_fn(f"CSV file not found, skipping this job:\n{csv_path}")
             continue
 
         csv_key = str(csv_path)
@@ -610,7 +576,7 @@ def run_evaluation(
             try:
                 csv_cache[csv_key] = pd.read_csv(csv_path)
             except Exception as e:
-                logs.append(f"\nCould not read CSV file:\n{csv_path}\nError: {e}")
+                log_fn(f"Could not read CSV file:\n{csv_path}\nError: {e}")
                 continue
 
         df = csv_cache[csv_key]
@@ -630,16 +596,16 @@ def run_evaluation(
             short_k=job_short_k,
         )
 
-        logs.append(f"\nCSV file read:\n{csv_path}")
-        logs.append(f"Total number of rows in the CSV file: {len(df)}")
-        logs.append(f"Rows shown for this job: {len(filtered_df)}")
+        log_fn(f"CSV file read:\n{csv_path}")
+        log_fn(f"Total number of rows in the CSV file: {len(df)}")
+        log_fn(f"Rows shown for this job: {len(filtered_df)}")
 
         if applied:
-            logs.append("\nFilters applied:\n" + "\n".join(f"- {x}" for x in applied))
+            log_fn("Filters applied:\n" + "\n".join(f"- {x}" for x in applied))
 
         if missing:
-            logs.append(
-                "\nColumns not found in the CSV file, so not used for filtering:\n"
+            log_fn(
+                "Columns not found in the CSV file, so not used for filtering:\n"
                 + "\n".join(f"- {x}" for x in missing)
             )
 
@@ -661,9 +627,32 @@ def run_evaluation(
 
     output_df = collapse_benchmark_rows(output_df)
 
-    logs.append("\n" + "=" * 80)
-    logs.append(f"Unique commands executed: {len(command_cache)}")
-    logs.append(f"Final rows shown: {len(output_df)}")
+    log_fn("=" * 80)
+    log_fn(f"Unique commands executed: {len(command_cache)}")
+    log_fn(f"Final rows shown: {len(output_df)}")
+
+    return {"eval_mode": eval_mode, "output_df": output_df}
+
+
+def render_evaluation(result):
+    """
+    Build the tab outputs from an `evaluate` result.
+
+    Returns: output_table, download_button, explain_button, plot, output_df.
+    Runs in the request thread, not in the job thread: pyplot is not thread-safe.
+    """
+    if result is None or "error" in result:
+        msg = (result or {}).get("error", "The evaluation failed: see the execution log.")
+        return (
+            empty_evaluation_table_html(msg),
+            gr.update(value=None, visible=False),
+            gr.update(visible=False, interactive=False),
+            empty_plot(),
+            pd.DataFrame(),
+        )
+
+    eval_mode = result["eval_mode"]
+    output_df = result["output_df"]
 
     plt.close("all")
 
@@ -680,4 +669,104 @@ def run_evaluation(
         gpt_button_update = gr.update(value="Explain with ChatGPT",
                                       visible=True, interactive=True)
 
-    return "\n".join(logs), table_html, download_update, gpt_button_update, plot_update, output_df
+    return table_html, download_update, gpt_button_update, plot_update, output_df
+
+
+def run_evaluation(
+    eval_mode,
+    task_type, model, universe, configuration,
+    year_start, year_end, length_pair,
+    top_k, short_k,
+):
+    """Start an evaluation job and stream it into the tab (see follow_evaluation)."""
+    form_values = {
+        "eval_mode": eval_mode,
+        "task_type": task_type,
+        "model": model,
+        "universe": universe,
+        "configuration": configuration,
+        "year_start": year_start,
+        "year_end": year_end,
+        "length_pair": length_pair,
+        "top_k": top_k,
+        "short_k": short_k,
+    }
+
+    job_id = start_job(
+        lambda log_fn: evaluate(**form_values, log_fn=log_fn),
+        "Evaluation",
+        meta=form_values,
+        format_result=None,
+    )
+    yield from follow_evaluation(job_id)
+
+
+def follow_evaluation(job_id):
+    """
+    Stream an evaluation job into the Evaluation tab.
+
+    Yields: log_box, output_table, download_button, explain_button, plot,
+    evaluation_output_state, eval_job_state, table_loading, plot_loading, run_btn.
+    """
+    job = get_job(job_id)
+    first = True
+
+    for logs_text, _, running in follow_job(job_id):
+        job_state = job_id if first else gr.skip()
+        first = False
+
+        if running:
+            yield (
+                gr.update(value=logs_text),
+                gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(),
+                job_state,
+                gr.update(visible=True),
+                gr.update(visible=True),
+                gr.update(interactive=False),
+            )
+            continue
+
+        if job.status == "error":
+            logs_text += "\n\n" + job.result_text
+
+        yield (
+            gr.update(value=logs_text),
+            *render_evaluation(job.result if job.status == "ok" else None),
+            job_state,
+            gr.update(visible=False),
+            gr.update(visible=False),
+            gr.update(interactive=True),
+        )
+
+
+def restore_evaluation_view(job_id, run_shown):
+    """
+    When the Evaluation tab is opened after a page reload, put the form back
+    as it was for the browser's last evaluation. Does nothing if this page
+    already shows a run.
+
+    Outputs: eval_mode, the form outputs of update_eval_form, resume_token, run_shown.
+    The results are streamed by the resume_token change event (follow_evaluation).
+    """
+    job = get_job(job_id)
+    if job is None or run_shown:
+        return (*(gr.update(),) * 13, gr.update(), run_shown)
+
+    m = job.meta
+    form_updates = update_eval_form(**m, changed_field="short_k")
+
+    return (
+        gr.update(value=m["eval_mode"]),
+        *form_updates,
+        f"{job_id}:{time.time()}",
+        True,
+    )
+
+
+def resume_evaluation(job_id):
+    """After a page reload, re-attach the tab to the browser's last evaluation."""
+    if get_job(job_id) is None:
+        yield (gr.skip(),) * 10
+        return
+
+    yield from follow_evaluation(job_id)

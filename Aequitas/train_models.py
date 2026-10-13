@@ -4,7 +4,7 @@ import time
 import gradio as gr
 
 from Aequitas.data_load import read_configs
-from Aequitas.script_runner import start_job, follow_job, get_job
+from Aequitas.script_runner import start_job, follow_job, get_job, cancel_job
 from Aequitas.test_models import get_tickers
 from Aequitas.train_model_dispatcher import dispatch_train
 from Aequitas.ui import error_alert
@@ -174,6 +174,7 @@ def train_model_with_logs(
             gr.update(visible=False),
             gr.skip(),
             gr.skip(),
+            gr.skip(),
         )
         return
 
@@ -224,19 +225,34 @@ def follow_training(job_id):
     """
     Stream a training job into the Train tab.
 
-    Yields: train_logs, train_result, train_loading, train_job_state, train_button.
-    The Train button stays disabled while the job is running.
+    Yields: train_logs, train_result, train_loading, train_job_state,
+    train_button, stop_button.
+    While the job is running the Train button is disabled and the Stop
+    button is shown.
     """
+    job = get_job(job_id)
     first = True
     for logs_text, result_text, running in follow_job(job_id):
+        stopping = job.cancel_requested
         yield (
             gr.update(value=logs_text),
             result_text,
             gr.update(visible=running),
             job_id if first else gr.skip(),
             gr.update(interactive=not running),
+            gr.update(
+                visible=running,
+                interactive=not stopping,
+                value="Stopping..." if stopping else "Stop training",
+            ),
         )
         first = False
+
+
+def stop_training(job_id):
+    """Interrupt the browser's running training job."""
+    cancel_job(job_id)
+    return gr.update(interactive=False, value="Stopping...")
 
 
 def restore_training_view(job_id, run_shown):
@@ -287,7 +303,7 @@ def restore_training_view(job_id, run_shown):
 def resume_training(job_id):
     """After a page reload, re-attach the log box to the browser's last training run."""
     if get_job(job_id) is None:
-        yield (gr.skip(),) * 5
+        yield (gr.skip(),) * 6
         return
 
     yield from follow_training(job_id)
@@ -444,6 +460,7 @@ def train_model_with_logs_if_valid(
             gr.skip(),
             gr.skip(),
             gr.update(visible=False),
+            gr.skip(),
             gr.skip(),
             gr.skip(),
         )

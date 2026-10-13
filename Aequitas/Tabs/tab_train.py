@@ -8,6 +8,7 @@ from Aequitas.train_models import (
     get_models_train,
     on_train_model_change,
     restore_training_view,
+    stop_training,
     resume_training,
 )
 from Aequitas.ui import section_header, loading_badge, AUTOSCROLL_LOG_JS
@@ -135,6 +136,11 @@ def build_train_tab():
                     interactive=False,
                     elem_classes=["aq-primary-btn"],
                 )
+                stop_button = gr.Button(
+                    "Stop training",
+                    visible=False,
+                    elem_classes=["aq-stop-btn"],
+                )
 
             # ── Outputs, shown after TRAIN click ─────────────────────────
             with gr.Column(visible=False) as train_output_section:
@@ -233,6 +239,13 @@ def build_train_tab():
 
         train_button.click(fn=lambda: True, outputs=[run_shown_state], **UI_EVENT)
 
+        stop_button.click(
+            fn=stop_training,
+            inputs=[train_job_state],
+            outputs=[stop_button],
+            **UI_EVENT,
+        )
+
         train_button.click(
             fn=validate_train_inputs_soft,
             inputs=required_train_inputs,
@@ -264,7 +277,7 @@ def build_train_tab():
         ).then(
             fn=train_model_with_logs_if_valid,
             inputs=[train_validation_state, *required_train_inputs],
-            outputs=[train_logs, train_result, train_loading, train_job_state, train_button],
+            outputs=[train_logs, train_result, train_loading, train_job_state, train_button, stop_button],
             show_progress="hidden",
         )
 
@@ -284,6 +297,6 @@ def build_train_tab():
         resume_token.change(
             fn=resume_training,
             inputs=[train_job_state],
-            outputs=[train_logs, train_result, train_loading, train_job_state, train_button],
+            outputs=[train_logs, train_result, train_loading, train_job_state, train_button, stop_button],
             show_progress="hidden",
         )

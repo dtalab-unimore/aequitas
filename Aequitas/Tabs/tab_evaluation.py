@@ -23,15 +23,24 @@ from Aequitas.eval_output import (
 from Aequitas.eval_run import (
     run_evaluation,
     show_evaluation_loading,
-    hide_evaluation_loading,
+    restore_evaluation_view,
+    resume_evaluation,
     show_chatgpt_explanation_loading,
     hide_chatgpt_explanation_loading,
 )
-from Aequitas.ui import section_header, loading_overlay, loading_inline
+from Aequitas.ui import section_header, loading_overlay, loading_inline, AUTOSCROLL_LOG_JS
 
 
 def build_tab():
-    with gr.Tab("Evaluation"):
+    # Job id of this browser's latest evaluation, kept in localStorage across
+    # page reloads (declared outside the tab, which Gradio mounts lazily).
+    eval_job_state = gr.BrowserState(None, storage_key="aequitas_eval_job")
+
+    with gr.Tab("Evaluation") as eval_tab:
+        resume_token = gr.State(None)
+        # True once this page has shown a run (restored or started here).
+        run_shown_state = gr.State(False)
+
         with gr.Column(elem_classes=["aq-tab"]):
 
             with gr.Row(elem_classes=["aq-row", "evaluation-main-layout"]):
@@ -155,7 +164,7 @@ def build_tab():
                                 lines=12,
                                 max_lines=12,
                                 show_label=False,
-                                elem_classes=["aq-log"],
+                                elem_classes=["aq-log", "aq-log-autoscroll"],
                             )
 
                 # ── RIGHT COLUMN ────────────────────────────────────────────
@@ -256,6 +265,12 @@ def build_tab():
         bind_form_input(short_k, "short_k")
 
         # ── Run button chain ─────────────────────────────────────────────────
+        run_outputs = [
+            log_box, output_table, download_evaluation_button,
+            explain_evaluation_button, plot_output, evaluation_output_state,
+            eval_job_state, table_loading, plot_loading, run_btn,
+        ]
+
         run_event = run_btn.click(
             fn=show_evaluation_loading,
             inputs=[],
@@ -271,22 +286,30 @@ def build_tab():
         run_event = run_event.then(
             fn=run_evaluation,
             inputs=form_inputs,
-            outputs=[
-                log_box, output_table, download_evaluation_button,
-                explain_evaluation_button, plot_output,
-                evaluation_output_state,
-            ],
+            outputs=run_outputs,
             show_progress="hidden",
         )
 
-        run_event.then(
-            fn=hide_evaluation_loading,
-            inputs=[],
-            outputs=[table_loading, plot_loading, run_btn,
-                     explain_evaluation_button, download_evaluation_button],
+        run_btn.click(fn=lambda: True, outputs=[run_shown_state], show_progress="hidden", queue=False)
+
+        # After a page reload, opening the tab shows the evaluation this
+        # browser started (if any); see tab_train.py for why this runs on
+        # tab select and streams from resume_token's change event.
+        eval_tab.select(
+            fn=restore_evaluation_view,
+            inputs=[eval_job_state, run_shown_state],
+            outputs=[eval_mode, *form_outputs, resume_token, run_shown_state],
             show_progress="hidden",
-            queue=False,
         )
+
+        resume_token.change(
+            fn=resume_evaluation,
+            inputs=[eval_job_state],
+            outputs=run_outputs,
+            show_progress="hidden",
+        )
+
+        log_box.change(fn=None, js=AUTOSCROLL_LOG_JS, show_progress="hidden", queue=False)
 
         # ── Explain button chain ─────────────────────────────────────────────
         explain_event = explain_evaluation_button.click(

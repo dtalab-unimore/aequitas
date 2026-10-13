@@ -136,10 +136,15 @@ button {
 
 .aq-action-row {
     justify-content: center !important;
+    gap: 12px !important;
 }
 
 .aq-action-row > .aq-primary-btn {
     flex: 0 1 260px !important;
+}
+
+.aq-action-row > .aq-stop-btn {
+    flex: 0 1 200px !important;
 }
 
 /* ── Cards ─────────────────────────────────────────────────── */
@@ -235,6 +240,27 @@ button {
     color: var(--aq-faint) !important;
     box-shadow: none !important;
     transform: none !important;
+}
+
+/* Interrupt a running job: same shape as the primary button, red outline */
+.aq-stop-btn {
+    min-height: 44px !important;
+    border-radius: var(--aq-radius-pill) !important;
+    font-weight: 850 !important;
+    background: var(--aq-error-bg) !important;
+    border: 1px solid var(--aq-error-border) !important;
+    color: var(--aq-error-text) !important;
+    box-shadow: none !important;
+}
+
+.aq-stop-btn:hover:not(:disabled) {
+    background: #fee2e2 !important;
+    border-color: #fca5a5 !important;
+}
+
+.aq-stop-btn:disabled {
+    opacity: 0.7 !important;
+    cursor: wait !important;
 }
 
 /* Small pill: downloads, "Explain with ChatGPT", ... */
