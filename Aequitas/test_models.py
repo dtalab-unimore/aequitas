@@ -1,14 +1,10 @@
 import os
 import json
-import traceback
-from datetime import datetime
-import queue
-import threading
-import time
 import gradio as gr
 import pandas as pd
 from pathlib import Path
 import re
+from Aequitas.script_runner import stream_job_logs
 from Aequitas.test_model_dispatcher import dispatch_test
 from utils.filter_constituents import filter_constituents_by_date
 
@@ -490,17 +486,6 @@ def get_tickers(universe: str, start_test_year: str):
     )
 
 def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year):
-    logs = []
-    log_queue = queue.Queue()
-    done_queue = queue.Queue()
-
-    def push_log(msg):
-        ts = datetime.now().strftime("%H:%M:%S")
-        log_queue.put(f"[{ts}] {msg}")
-
-    def current_logs():
-        return "\n".join(logs)
-
     if None in [universe, task_type, test_model, config_name, sl_value, pl_value, start_year, end_year]:
         yield gr.update(value="Missing parameters."), ""
         return
@@ -508,50 +493,18 @@ def run_test_with_logs(universe, task_type, test_model, config_name, sl_value, p
     start_test_date = f"{int(start_year)}-01-01"
     end_date = f"{int(end_year)}-12-31"
 
-    def worker():
-        try:
-            push_log("Start test...")
+    def job(log_fn):
+        return dispatch_test(
+            universe=universe,
+            task_type=task_type,
+            test_model=test_model,
+            config_name=config_name,
+            sl_value=int(sl_value),
+            pl_value=int(pl_value),
+            start_test_date=start_test_date,
+            end_date=end_date,
+            log_fn=log_fn,
+        )
 
-            output = dispatch_test(
-                universe=universe,
-                task_type=task_type,
-                test_model=test_model,
-                config_name=config_name,
-                sl_value=int(sl_value),
-                pl_value=int(pl_value),
-                start_test_date=start_test_date,
-                end_date=end_date,
-                log_fn=push_log,
-            )
-
-            done_queue.put(("ok", output))
-
-        except Exception:
-            push_log("Error during the test.")
-            done_queue.put(("error", traceback.format_exc()))
-
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
-
-    result_text = ""
-
-    while True:
-
-        if not log_queue.empty():
-            logs.append(log_queue.get())
-
-        yield gr.update(value=current_logs()), result_text
-
-        if not done_queue.empty() and log_queue.empty():
-            status, payload = done_queue.get()
-
-            if status == "ok":
-                logs.append("[OK] Test completed.")
-                result_text = json.dumps(payload, indent=2, ensure_ascii=False)
-            else:
-                result_text = payload
-
-            yield gr.update(value=current_logs()), result_text
-            break
-
-        time.sleep(0.10)
+    for logs_text, result_text, _ in stream_job_logs(job, "Test"):
+        yield gr.update(value=logs_text), result_text

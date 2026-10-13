@@ -1,4 +1,3 @@
-import json
 import os
 from argparse import ArgumentParser
 
@@ -7,7 +6,8 @@ import tensorflow as tf
 
 from .load_data import construct_data_warehouse_3d
 from .train import get_metrics, predict_all_stocks
-from utils.load_configuation import _log, load_configuration
+from utils.load_configuation import load_configuration
+from utils.logger import _log, emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +16,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 def run_test(task_type, test_model, universe, config_name, sl_value, pl_value,
              start_test_date, end_date, log_fn=None):
-    _log(log_fn, "Preparazione del test CNNPred3D...")
+    _log(log_fn, "Preparing test...")
     args, model_save_path, metrics_path = load_configuration(
         task_type, test_model, universe, config_name, sl_value, pl_value,
         start_test_date, end_date, PROJECT_ROOT, log_fn
@@ -64,4 +64,4 @@ if __name__ == "__main__":
         cli_args.task_type, cli_args.model_name, cli_args.universe, cli_args.config_name,
         cli_args.sl_value, cli_args.pl_value, cli_args.start_test_date, cli_args.end_date
     )
-    print(json.dumps(output, indent=4))
+    emit_result(output)

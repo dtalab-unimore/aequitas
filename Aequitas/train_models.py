@@ -1,14 +1,9 @@
-import queue
 import re
-import threading
-import traceback
-import time
-from datetime import datetime
 
 import gradio as gr
-import json
 
 from Aequitas.data_load import read_configs
+from Aequitas.script_runner import stream_job_logs
 from Aequitas.train_model_dispatcher import dispatch_train
 from Aequitas.ui import error_alert
 
@@ -155,17 +150,6 @@ def train_model_with_logs(
     start_valid_year,
     end_valid_year,
 ):
-    logs = []
-    log_queue = queue.Queue()
-    done_queue = queue.Queue()
-
-    def push_log(msg):
-        ts = datetime.now().strftime("%H:%M:%S")
-        log_queue.put(f"[{ts}] {msg}")
-
-    def current_logs():
-        return "\n".join(logs)
-
     required_values = [
         universe,
         task_type,
@@ -194,71 +178,28 @@ def train_model_with_logs(
     start_valid_date = f"{int(start_valid_year)}-01-01"
     end_valid_date = f"{int(end_valid_year)}-12-31"
 
-    def worker(sl_value_for_worker):
-        try:
-            push_log("Start training...")
-
-            sl_value_for_worker = normalize_sequence_length_for_model(
-                model_name,
-                sl_value_for_worker,
-            )
-
-            output = dispatch_train(
-                universe=universe,
-                task_type=task_type,
-                model_name=model_name,
-                config_name=config_name,
-                sl_value=sl_value_for_worker,
-                pl_value=pl_value,
-                start_train_date=start_train_date,
-                end_train_date=end_train_date,
-                start_valid_date=start_valid_date,
-                end_valid_date=end_valid_date,
-                log_fn=push_log,
-            )
-
-            done_queue.put(("ok", output))
-
-        except Exception:
-            push_log("Error during the training.")
-            done_queue.put(("error", traceback.format_exc()))
-
-    thread = threading.Thread(
-        target=worker,
-        args=(sl_value,),
-        daemon=True,
-    )
-    thread.start()
-
-    result_text = ""
-
-    while True:
-        while not log_queue.empty():
-            logs.append(log_queue.get())
-
-        yield (
-            gr.update(value=current_logs()),
-            result_text,
-            gr.update(visible=True),
+    def job(log_fn):
+        return dispatch_train(
+            universe=universe,
+            task_type=task_type,
+            model_name=model_name,
+            config_name=config_name,
+            sl_value=normalize_sequence_length_for_model(model_name, sl_value),
+            pl_value=pl_value,
+            start_train_date=start_train_date,
+            end_train_date=end_train_date,
+            start_valid_date=start_valid_date,
+            end_valid_date=end_valid_date,
+            log_fn=log_fn,
         )
 
-        if not done_queue.empty() and log_queue.empty():
-            status, payload = done_queue.get()
+    for logs_text, result_text, running in stream_job_logs(job, "Training"):
+        yield (
+            gr.update(value=logs_text),
+            result_text,
+            gr.update(visible=running),
+        )
 
-            if status == "ok":
-                logs.append("\n[ OK ✅ ] Train completed with success.")
-                result_text = json.dumps(payload, indent=2, ensure_ascii=False)
-            else:
-                result_text = payload
-
-            yield (
-                gr.update(value=current_logs()),
-                result_text,
-                gr.update(visible=False),
-            )
-            break
-
-        time.sleep(0.10)
 
 def _is_empty(value):
     return value is None or str(value).strip() == ""

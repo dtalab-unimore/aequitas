@@ -108,9 +108,10 @@ button {
     font-weight: 700;
     letter-spacing: -0.03em;
     line-height: 1.15;
-    background: linear-gradient(120deg, var(--aq-primary-ink) 0%, var(--aq-primary-light) 50%, #a78bfa 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
+    /* literal colors: a var() inside this shorthand gets dropped next to background-clip */
+    background-image: linear-gradient(120deg, #1e1b4b 0%, #6366f1 50%, #a78bfa 100%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
     -webkit-text-fill-color: transparent;
 }
 
@@ -144,6 +145,7 @@ button {
 /* ── Cards ─────────────────────────────────────────────────── */
 .aq-card {
     background: var(--aq-surface) !important;
+    flex-wrap: nowrap !important;
     border: 1px solid var(--aq-border) !important;
     border-radius: var(--aq-radius-card) !important;
     box-shadow: var(--aq-shadow-card) !important;
@@ -722,7 +724,7 @@ table.aq-table td.better-than-benchmark {
 }
 
 .download-fixed-card {
-    height: 250px;
+    min-height: 250px;
 }
 
 /* Preview header: title + selectors on a single line */
@@ -733,6 +735,7 @@ table.aq-table td.better-than-benchmark {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
+    flex-wrap: nowrap !important;
     width: 100% !important;
     height: 50px !important;
     margin: 0 !important;
@@ -751,7 +754,7 @@ table.aq-table td.better-than-benchmark {
 }
 
 .preview-header-row > div:first-child {
-    flex: 1 1 auto !important;
+    flex: 1 1 0 !important;
     min-width: 0 !important;
 }
 
@@ -1118,10 +1121,6 @@ table.aq-table td.better-than-benchmark {
     .aq-row > .column {
         width: 100% !important;
         min-width: 0 !important;
-    }
-
-    .download-fixed-card {
-        height: auto;
     }
 
     .preview-header-row {

@@ -2,10 +2,8 @@ import json
 import os
 from argparse import Namespace
 
+from .logger import _log
 
-def _log(log_fn, msg):
-    if log_fn is not None:
-        log_fn(msg)
 
 def create_saving_path(args, task_type, test_model, project_root):
     args.seq_len = getattr(args, "seq_len", 1)
@@ -47,10 +45,10 @@ def load_configuration(
     )
 
     config_path = os.path.join(config_dir, "config_params.json")
-    _log(log_fn, f"Lettura configurazione da: {config_path}")
+    _log(log_fn, f"Reading configuration from: {config_path}")
 
     if not os.path.isfile(config_path):
-        raise FileNotFoundError(f"config_params.json non trovato: {config_path}")
+        raise FileNotFoundError(f"config_params.json not found: {config_path}")
 
     with open(config_path, "r", encoding="utf-8-sig") as f:
         saved_args = json.load(f)
@@ -66,7 +64,7 @@ def load_configuration(
 
     args = Namespace(**args_dict)
 
-    _log(log_fn, "Creazione dei path di salvataggio...")
+    _log(log_fn, "Creating output folders...")
     model_save_path, metrics_path = create_saving_path(args, task_type, test_model, root_dir)
 
     return args, model_save_path, metrics_path

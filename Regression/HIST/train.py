@@ -4,7 +4,6 @@ import os
 import copy
 import json
 import argparse
-import datetime
 import collections
 import numpy as np
 import pandas as pd
@@ -19,6 +18,7 @@ from qlib.contrib.model.pytorch_alstm import ALSTMModel
 from qlib.contrib.model.pytorch_transformer import Transformer
 
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 from .model import MLP, HIST
 from .utils import metric_fn, mse, select_valid_ticker
@@ -91,10 +91,7 @@ def loss_fn(pred, label, args):
 
 global_log_file = None
 def pprint(*args):
-    # print with UTC+8 time
-    time = '['+str(datetime.datetime.utcnow()+
-                   datetime.timedelta(hours=8))[:19]+'] -'
-    print(time, *args, flush=True)
+    print(*args, flush=True)
 
 
 def zscore(x):
@@ -436,7 +433,5 @@ if __name__ == '__main__':
     args = parse_args()
     out = main(args)
 
-    print("__TRAIN_JSON_START__", flush=True)
-    print(json.dumps(out, ensure_ascii=False), flush=True)
-    print("__TRAIN_JSON_END__", flush=True)
+    emit_result(out)
 

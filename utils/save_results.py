@@ -1,7 +1,7 @@
 import json
 import pickle
 
-from .load_configuation import _log
+from .logger import _log
 
 
 def save_results(
@@ -34,6 +34,6 @@ def save_results(
     with open(metrics_json, "w") as f:
         json.dump(metrics, f)
 
-    _log(log_fn, "Test completato con successo.")
+    _log(log_fn, f"Results saved to: {metrics_path}")
 
     return metrics, results_pkl, metrics_json

@@ -10,6 +10,7 @@ from .evaluator import evaluate_regression
 from .load_datasets import load_dataset
 from .model import StockMixer, get_loss
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -173,6 +174,4 @@ def build_parser():
 
 if __name__ == "__main__":
     output = run_train(build_parser().parse_args())
-    print("__TRAIN_JSON_START__", flush=True)
-    print(json.dumps(output, ensure_ascii=False), flush=True)
-    print("__TRAIN_JSON_END__", flush=True)
+    emit_result(output)

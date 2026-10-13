@@ -1,4 +1,3 @@
-import json
 import os
 from argparse import ArgumentParser
 from os.path import join
@@ -9,7 +8,8 @@ from tensorflow.keras import backend as K
 
 from Classification.CNNPred2D.load_data import construct_data_warehouse_2d, split_train_val_test
 from Classification.CNNPred2D.train import prediction, create_model, get_metrics
-from utils.load_configuation import _log, load_configuration
+from utils.load_configuation import load_configuration
+from utils.logger import _log, emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +26,7 @@ def run_test(
         end_date,
         log_fn=None,
 ):
-    _log(log_fn, "Preparazione del test...")
+    _log(log_fn, "Preparing test...")
 
     args, model_save_path, metrics_path = load_configuration(
         task_type, test_model, universe, config_name, sl_value, pl_value, start_test_date, end_date, PROJECT_ROOT, log_fn
@@ -96,4 +96,4 @@ if __name__=='__main__':
         start_test_date=args.start_test_date,
         end_date=args.end_date,
     )
-    print(json.dumps(out, indent=4))
+    emit_result(out)

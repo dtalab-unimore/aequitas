@@ -12,6 +12,7 @@ from .load_dataset import CustomDataset
 from .finformer import Finformer_Model
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -141,8 +142,6 @@ if __name__ == '__main__':
 
     print(f"Training completed. Metrics saved to {metrics_path}")
 
-    print("__TRAIN_JSON_START__", flush=True)
-    print(json.dumps(out, ensure_ascii=False), flush=True)
-    print("__TRAIN_JSON_END__", flush=True)
+    emit_result(out)
 
 

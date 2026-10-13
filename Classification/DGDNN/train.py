@@ -19,6 +19,7 @@ from .dataset_gen import CustomDataset, DatasetConfig
 from .model.dgdnn import DGDNN
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -248,6 +249,4 @@ def build_parser():
 
 if __name__ == "__main__":
     output = run_train(build_parser().parse_args())
-    print("__TRAIN_JSON_START__", flush=True)
-    print(json.dumps(output, ensure_ascii=False), flush=True)
-    print("__TRAIN_JSON_END__", flush=True)
+    emit_result(output)

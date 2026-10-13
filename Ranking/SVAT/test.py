@@ -1,4 +1,3 @@
-import json
 import os
 from argparse import ArgumentParser
 
@@ -10,7 +9,8 @@ from Ranking.SVAT.utils.config import build_param_dict
 from Ranking.SVAT.utils.load_data import save_dates
 from Ranking.SVAT.utils.metric import get_metrics
 from Ranking.SVAT.utils.optimize import set_seed
-from utils.load_configuation import _log, load_configuration
+from utils.load_configuation import load_configuration
+from utils.logger import _log, emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,7 +28,7 @@ def run_test(
     end_date,
     log_fn=None,
 ):
-    _log(log_fn, "Preparazione del test...")
+    _log(log_fn, "Preparing test...")
 
     args, model_save_path, metrics_path = load_configuration(
         task_type,
@@ -102,4 +102,4 @@ if __name__ == "__main__":
         start_test_date=cli_args.start_test_date,
         end_date=cli_args.end_date,
     )
-    print(json.dumps(output, indent=4))
+    emit_result(output)

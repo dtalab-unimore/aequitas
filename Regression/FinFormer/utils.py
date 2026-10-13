@@ -1,4 +1,3 @@
-import datetime
 
 import numpy as np
 import pandas as pd
@@ -34,7 +33,4 @@ def edgeIndexTransform(adj):
 
 
 def pprint(*args):
-    # print with UTC+8 time
-    time = '[' + str(datetime.datetime.utcnow() +
-                     datetime.timedelta(hours=8))[:19] + '] -'
-    print(time, *args, flush=True)
+    print(*args, flush=True)

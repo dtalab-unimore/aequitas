@@ -144,7 +144,6 @@ def demo_search_constituents():
     isin_exchange = {'NL': 'AS', 'FI': 'HE', 'FR': 'PA', 'ES': 'MC', 'DE': 'XETRA', 'IE': 'LSE', 'IT': 'LSE',
                      'PL': 'WAR', 'NO': 'OL', 'BE': 'BR', 'DK': 'CO', 'SE': 'ST', 'CH': 'SW'}
 
-    print('Here!')
 
 
 def demo_validate_constituents():
@@ -293,7 +292,6 @@ def demo_download_dataset(universe: str):
     market_caps, errors = eodhd.download_multi(symbols, userdata.get('eodhd'), 'market_cap', verbose=True, p=4)
     _format_dataset(market_caps).to_csv(os.path.join(out_dir, f'{universe}_market_cap.csv'), index=True)
 
-    print('Here!')
 
 
 def demo_download_news():
@@ -327,7 +325,6 @@ def demo_download_news():
             with open(output_file, 'w') as f:
                 json.dump(ticker_news, f)
 
-    print('Here!')
 
 
 def demo_market_information():
@@ -347,7 +344,6 @@ def demo_market_information():
         df_market = calculate_market_information(df, symbols)
         df_market.to_csv(os.path.join(out_dir, f'{region}_market.csv'), index=True)
 
-    print('Here!')
 
 
 def demo_feature_extraction(universe: str):
@@ -368,7 +364,6 @@ def demo_feature_extraction(universe: str):
     df_techs = calculate_technicals(prices)
     df_techs.to_csv(os.path.join(out_dir, f'{universe}_tech.csv'), index=True)
 
-    print('Here!')
 
 
 def demo_compute_relation(universe: str):
@@ -410,7 +405,6 @@ def demo_compute_relation(universe: str):
     adj_mat, dates, rels, tcks = build_wikidata_adjacency_matrix(prices, ticker_to_wikidata, wiki_chk, 'MS', True)
     np.savez_compressed(out_file, adj_matrix=adj_mat, dates=pd.to_datetime(dates).values, relations=rels, tickers=tcks)
 
-    print('Here!')
 
 
 def demo_incidence_matrix(universe: str):
@@ -452,7 +446,6 @@ def demo_incidence_matrix(universe: str):
         categories2=[f'E{i}' for i in range(wiki_inc_matrix.shape[1])],
     )
     np.savez_compressed(out_inc_file, inc_matrix=inc_matrix, relations=relations, tickers=tickers)
-    print('Here!')
 
 
 def cnnpred_market_features():
@@ -482,7 +475,6 @@ def cnnpred_market_features():
     df = pd.concat([df_fred, df_commodities, df_us_indx_forex], axis=1).sort_index(ascending=True)
     df.to_csv('./data/cnnpred_market.csv', index=True)
 
-    print('Here!')
 
 
 if __name__ == '__main__':
