@@ -49,7 +49,7 @@ def extract_labels(df, df_label, dates=None, test_dates=None, flag='train'):
     return df, df_label, dates, test_dates
 
 
-def train_val_test_split(df, end_train_date, end_valid_date, seq_len, pred_len):
+def train_val_test_split(df, end_train_date, end_valid_date, seq_len, pred_len, test_start=None):
     dates = pd.to_datetime(df['date'])
 
     # Extract training data
@@ -87,6 +87,12 @@ def train_val_test_split(df, end_train_date, end_valid_date, seq_len, pred_len):
         df_valid_label = None
         start_test_date = end_valid_date
 
+    if test_start is not None:
+        # Explicit test start (e.g. a later year than the one after validation):
+        # keep the seq_len + pred_len rows before it as lookback, as above.
+        pos = int((df['date'] < test_start).sum())
+        start_test_date = df['date'].iloc[pos - seq_len - pred_len] if pos >= seq_len + pred_len else ''
+
     df_test = df[df['date'] > start_test_date]
     df_test_label = df_test.iloc[seq_len - 1:-pred_len, df_test.columns.get_loc('Label')].to_numpy().reshape(-1, 1)
 
@@ -119,10 +125,12 @@ def date_to_weekday(df):
     return dates
 
 
-def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_valid_date, seq_len=5, pred_len=1):
+def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_valid_date, seq_len=5, pred_len=1,
+                 start_test_date=None):
+    """start_test_date: first test date; by default the test follows the validation period."""
     
     constituents = pd.read_csv(f'{data_path}/constituents/eodhd/{universe}.csv')
-    constituents = filter_constituents_by_date(constituents, end_valid_date)
+    constituents = filter_constituents_by_date(constituents, start_test_date or end_valid_date)
 
     data = pd.read_csv(f'{data_path}/{universe}/{universe}_tech.csv')
     data = data[data['instrument'].isin(constituents['EODHD'].tolist())]
@@ -154,7 +162,7 @@ def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_
 
     for i in tqdm(range(len(data_ticker))):
 
-        df_train, df_train_label, df_valid, df_valid_label, df_test, df_test_label, _, test_dates_ticker = train_val_test_split(data_ticker[i], end_train_date, end_valid_date, seq_len, pred_len)
+        df_train, df_train_label, df_valid, df_valid_label, df_test, df_test_label, _, test_dates_ticker = train_val_test_split(data_ticker[i], end_train_date, end_valid_date, seq_len, pred_len, start_test_date)
 
         if df_train is not None:
             train_samples.append(df_train[:, :, 1:-1])
