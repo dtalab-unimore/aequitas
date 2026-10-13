@@ -173,7 +173,7 @@ class Supervisor():
         if self._cuda:
             checkpoint = torch.load(os.path.join(self._pretrained_log, "model-best.pth"), weights_only=False)
         else:
-            checkpoint = torch.load(os.path.join(self._pretrained_log, "model-best.pth"), map_location='cpu')
+            checkpoint = torch.load(os.path.join(self._pretrained_log, "model-best.pth"), map_location='cpu', weights_only=False)
 
         #self._model.load_state_dict(checkpoint)
         self._model = checkpoint

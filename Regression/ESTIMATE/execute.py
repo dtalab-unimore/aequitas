@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from dataclasses import asdict
 
 import numpy as np
+import torch
 
 from parser import build_config_from_args
 from utils.common import seed, get_class
@@ -76,19 +77,22 @@ if __name__=='__main__':
     args.add_argument('--verify_threshold', type=float, default=0.08)
     args.add_argument('--seed', type=int, default=42)
     args.add_argument('--job_id', type=int, default=0)
+    args.add_argument('--pretrained_log', type=str, default=None,
+                      help='folder of the model checkpoint (default: pretrained/<model>/<run_name>-<job_id>/rb)')
 
     # Backtest
     args.add_argument('--config_path', default='backtest/config/normal.yaml')
 
     args = args.parse_args()
+    # --cuda defaults to True and cannot be switched off: fall back to CPU when there is no GPU.
+    args.cuda = args.cuda and torch.cuda.is_available()
 
     config = asdict(build_config_from_args(args))
     config['data']['symbols'] = get_symbols()
 
     seed(args.seed)
 
-    base_pretrained_run_folder = "pretrained/{}/{}".format(args.model, args.run_name)
-    pretrained_folder = base_pretrained_run_folder + "-{}/rb".format(args.job_id)
+    pretrained_folder = args.pretrained_log or "pretrained/{}/{}-{}/rb".format(args.model, args.run_name, args.job_id)
     config['model']['pretrained_log'] = pretrained_folder
     os.makedirs(pretrained_folder, exist_ok=True)
 
