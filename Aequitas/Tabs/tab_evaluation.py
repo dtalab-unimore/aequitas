@@ -28,7 +28,7 @@ from Aequitas.eval_run import (
     show_chatgpt_explanation_loading,
     hide_chatgpt_explanation_loading,
 )
-from Aequitas.ui import section_header, loading_overlay, loading_inline, AUTOSCROLL_LOG_JS
+from Aequitas.ui import section_header, loading_overlay, loading_inline, AUTOSCROLL_LOG_JS, STREAM_EVENT
 
 
 def build_tab():
@@ -287,7 +287,7 @@ def build_tab():
             fn=run_evaluation,
             inputs=form_inputs,
             outputs=run_outputs,
-            show_progress="hidden",
+            **STREAM_EVENT,
         )
 
         run_btn.click(fn=lambda: True, outputs=[run_shown_state], show_progress="hidden", queue=False)
@@ -306,7 +306,7 @@ def build_tab():
             fn=resume_evaluation,
             inputs=[eval_job_state],
             outputs=run_outputs,
-            show_progress="hidden",
+            **STREAM_EVENT,
         )
 
         log_box.change(fn=None, js=AUTOSCROLL_LOG_JS, show_progress="hidden", queue=False)

@@ -11,7 +11,7 @@ from Aequitas.train_models import (
     stop_training,
     resume_training,
 )
-from Aequitas.ui import section_header, loading_badge, AUTOSCROLL_LOG_JS
+from Aequitas.ui import section_header, loading_badge, AUTOSCROLL_LOG_JS, STREAM_EVENT
 
 UI_EVENT = dict(show_progress="hidden", queue=False)
 
@@ -278,7 +278,7 @@ def build_train_tab():
             fn=train_model_with_logs_if_valid,
             inputs=[train_validation_state, *required_train_inputs],
             outputs=[train_logs, train_result, train_loading, train_job_state, train_button, stop_button],
-            show_progress="hidden",
+            **STREAM_EVENT,
         )
 
         # After a page reload, opening the tab shows the run this browser
@@ -298,5 +298,5 @@ def build_train_tab():
             fn=resume_training,
             inputs=[train_job_state],
             outputs=[train_logs, train_result, train_loading, train_job_state, train_button, stop_button],
-            show_progress="hidden",
+            **STREAM_EVENT,
         )

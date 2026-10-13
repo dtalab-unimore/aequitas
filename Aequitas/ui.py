@@ -6,6 +6,13 @@ from here, so markup and CSS classes (see style.css) stay consistent.
 """
 from html import escape
 
+# Event settings for handlers that stream a background job's logs for its whole
+# duration (training, test, evaluation). Gradio runs at most one call per
+# handler at a time by default: a second page (another browser tab or user)
+# would wait in the queue until the first run ends. These handlers mostly
+# sleep while the job runs in its own thread, so they need no limit.
+STREAM_EVENT = dict(show_progress="hidden", concurrency_limit=None)
+
 # Bound to the `.change` event of streamed log boxes (elem_classes "aq-log-autoscroll").
 # Gradio 6's own Textbox autoscroll only fires once, so this keeps the box pinned to
 # the latest line on every update, unless the user has scrolled up to read.

@@ -13,7 +13,7 @@ from Aequitas.test_models import (
     NO_PARAMS_TEXT,
     get_tickers,
 )
-from Aequitas.ui import section_header, AUTOSCROLL_LOG_JS
+from Aequitas.ui import section_header, AUTOSCROLL_LOG_JS, STREAM_EVENT
 
 UI_EVENT = dict(show_progress="hidden", queue=False)
 
@@ -263,4 +263,5 @@ def build_tab():
             inputs=[test_universe, test_task, test_model, test_config,
                     sl, pl, start_test, end_test],
             outputs=[test_logs, test_result],
+            **STREAM_EVENT,
         )
