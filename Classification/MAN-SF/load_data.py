@@ -96,7 +96,7 @@ def encode_news(tickers, dates, args, batch_size=512):
     file_emb = f'{args.data_path}_news/{args.universe}/news_embeddings_y{start_year}_y{end_year}.pkl'
 
     if os.path.exists(file_emb):
-        print(f"[load_news] Loading precomputed news embeddings")
+        print("[load_news] Loading precomputed news embeddings")
         with open(file_emb, 'rb') as f:
              return pickle.load(f)
 

@@ -2,7 +2,6 @@ import os
 import shutil
 from argparse import ArgumentParser
 
-import numpy as np
 import pandas as pd
 import torch
 

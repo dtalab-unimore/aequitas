@@ -87,7 +87,7 @@ def _extract_fundamentals(data: dict) -> pd.DataFrame:
 
     # Validate data exists
     if not bs_data or not cf_data or not is_data:
-        raise ValueError(f'No quarterly financial data found in API response')
+        raise ValueError('No quarterly financial data found in API response')
 
     # Validate periods match across all statements
     if not (set(bs_data.keys()).issubset(cf_data.keys()) or set(cf_data.keys()).issubset(bs_data.keys())):

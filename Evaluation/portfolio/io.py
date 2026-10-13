@@ -6,9 +6,9 @@ def _parse_weight_percentage(weight: str) -> float:
     """ Extract and validate portfolio weight from string format """
     try:
         # Validate weight format and convert to decimal
-        assert weight.endswith('%'), f'Ticker weight must end with %'
+        assert weight.endswith('%'), 'Ticker weight must end with %'
         weight_value = float(weight.rstrip('%'))
-        assert 0 <= weight_value <= 100, f'Ticker weight must be between 0% and 100%'
+        assert 0 <= weight_value <= 100, 'Ticker weight must be between 0% and 100%'
         return weight_value / 100
     except (AssertionError, ValueError) as e:
         raise ValueError(f'Invalid portfolio weight: {str(e)}')

@@ -1,7 +1,6 @@
 # -*-Encoding: utf-8 -*-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from .resnet import Res12_Quadratic
 from .diffusion_process import GaussianDiffusion, get_beta_schedule

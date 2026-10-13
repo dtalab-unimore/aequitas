@@ -151,7 +151,7 @@ class TSDataSampler:
             i = bisect.bisect_right(self.idx_df.index, date) - 1
             j = bisect.bisect_left(self.idx_df.columns, inst)
         else:
-            raise NotImplementedError(f"This type of input is not supported")
+            raise NotImplementedError("This type of input is not supported")
         return i, j
 
     def __getitem__(self, idx):

@@ -6,7 +6,6 @@ import torch
 import yaml
 import numpy as np
 import utils.model as utls
-from utils.model import save_results
 
 from model.estimate.framework.data_loader import DataLoader
 from model.estimate.framework.model import Model

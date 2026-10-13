@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import scipy.sparse as sp
 
 from .layers import Attn_head, Attn_head_adj
 

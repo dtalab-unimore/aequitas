@@ -1,4 +1,3 @@
-import numpy as np
 from backtest.report import Report
 from backtest.strategy import Strategy
 from pandas import DataFrame

@@ -1,7 +1,5 @@
 # -*-Encoding: utf-8 -*-
 from torch import nn
-from torch.autograd import grad
-import torch
 
 
 def weights_init(m):

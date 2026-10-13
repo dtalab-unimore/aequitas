@@ -41,7 +41,7 @@ def calculate_alpha360(prices: pd.DataFrame, verbose: bool = False) -> pd.DataFr
     cols['OPEN0'] = cols['open'] / cols['close']
     cols['HIGH0'] = cols['high'] / cols['close']
     cols['LOW0'] = cols['low'] / cols['close']
-    cols[f'VOLUME0'] = cols['volume'] / (cols['volume'] + 1e-12)
+    cols['VOLUME0'] = cols['volume'] / (cols['volume'] + 1e-12)
     cols['VWAP0'] = vwap / cols['close']
 
     for w in tqdm(np.arange(1, 60), desc='Calculating indicators for different windows', disable=not verbose):

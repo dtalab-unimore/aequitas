@@ -36,7 +36,6 @@ import numpy as _np
 import seaborn as _sns
 from .. import (
     stats as _stats,
-    utils as _utils,
 )
 
 

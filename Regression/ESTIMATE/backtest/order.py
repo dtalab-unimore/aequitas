@@ -1,4 +1,3 @@
-import pandas as pd
 
 class OrderManagement:
     def __init__(self):

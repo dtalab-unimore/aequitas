@@ -5,10 +5,8 @@ from utils.backtest import lists_difference, lists_intersection
 from pandas import DataFrame
 import random
 from backtest.portfolio import PortfolioManagement
-from backtest.order import OrderManagement
 from backtest.report import Report
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import numpy as np

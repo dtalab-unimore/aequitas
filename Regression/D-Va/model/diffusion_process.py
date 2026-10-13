@@ -4,8 +4,6 @@ import torch
 from functools import partial
 from inspect import isfunction
 import torch.nn as nn
-import torch.nn.functional as F
-from .resnet import Res12_Quadratic
 
 
 def get_beta_schedule(beta_schedule, beta_start, beta_end, num_diffusion_timesteps):

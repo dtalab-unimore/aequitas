@@ -1,4 +1,3 @@
-import pandas as pd
 from pandas import DataFrame
 from utils.common import format_str_datetime
 

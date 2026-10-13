@@ -35,7 +35,7 @@ def calculate_technicals(prices: pd.DataFrame) -> pd.DataFrame:
     # Calculate ratios of open, high, and low to previous close
     for col in ['open', 'high', 'low', 'close']:
         res_df[f'{col}_close_ratio_d1'] = res_df[col] / ref(res_df['close'], 1)
-        res_df[f'adj_{col}_close_ratio_d1'] = res_df[f'adj_{col}'] / ref(res_df[f'adj_close'], 1)
+        res_df[f'adj_{col}_close_ratio_d1'] = res_df[f'adj_{col}'] / ref(res_df['adj_close'], 1)
 
     # Calculate absolute returns of close prices
     res_df['adj_close_abs_return'] = res_df['adj_close'] - ref(res_df['adj_close'], 1)
@@ -48,15 +48,15 @@ def calculate_technicals(prices: pd.DataFrame) -> pd.DataFrame:
         res_df[f'f_d{k}'] = sum_(res_df['adj_close'], k) / (k * (res_df['adj_close'] - 1))
 
     # TA-lib indicators (CNNPred paper) https://github.com/Data-Analisis/Technical-Analysis-Indicators---Pandas/
-    res_df['vol'] = res_df[f'volume'] / ref(res_df[f'volume'], 1) - 1
-    res_df['mom1'] = res_df[f'adj_close'] - ref(res_df['adj_close'], 1)
-    res_df['mom2'] = res_df[f'adj_close'] - ref(res_df['adj_close'], 2)
-    res_df['mom3'] = res_df[f'adj_close'] - ref(res_df['adj_close'], 3)
+    res_df['vol'] = res_df['volume'] / ref(res_df['volume'], 1) - 1
+    res_df['mom1'] = res_df['adj_close'] - ref(res_df['adj_close'], 1)
+    res_df['mom2'] = res_df['adj_close'] - ref(res_df['adj_close'], 2)
+    res_df['mom3'] = res_df['adj_close'] - ref(res_df['adj_close'], 3)
 
-    res_df['roc5'] = 100 * (res_df[f'adj_close'] - ref(res_df['adj_close'], 5)) / ref(res_df['adj_close'], 5)
-    res_df['roc10'] = 100 * (res_df[f'adj_close'] - ref(res_df['adj_close'], 10)) / ref(res_df['adj_close'], 10)
-    res_df['roc15'] = 100 * (res_df[f'adj_close'] - ref(res_df['adj_close'], 15)) / ref(res_df['adj_close'], 15)
-    res_df['roc20'] = 100 * (res_df[f'adj_close'] - ref(res_df['adj_close'], 20)) / ref(res_df['adj_close'], 20)
+    res_df['roc5'] = 100 * (res_df['adj_close'] - ref(res_df['adj_close'], 5)) / ref(res_df['adj_close'], 5)
+    res_df['roc10'] = 100 * (res_df['adj_close'] - ref(res_df['adj_close'], 10)) / ref(res_df['adj_close'], 10)
+    res_df['roc15'] = 100 * (res_df['adj_close'] - ref(res_df['adj_close'], 15)) / ref(res_df['adj_close'], 15)
+    res_df['roc20'] = 100 * (res_df['adj_close'] - ref(res_df['adj_close'], 20)) / ref(res_df['adj_close'], 20)
 
     res_df['ema10'] = ema(res_df['adj_close'], 10)
     res_df['ema20'] = ema(res_df['adj_close'], 20)

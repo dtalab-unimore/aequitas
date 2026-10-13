@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .layers import GraphAttentionLayer, SpGraphAttentionLayer
+from .layers import GraphAttentionLayer
 
 
 class gru(nn.Module):

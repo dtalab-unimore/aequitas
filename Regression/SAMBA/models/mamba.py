@@ -1,5 +1,3 @@
-import json
-import torch
 import torch.nn as nn
 
 from ..config.model_config import ModelArgs
@@ -73,40 +71,6 @@ class Mamba(nn.Module):
         logits = self.lm_head(x)
 
         return logits
-
-    @staticmethod
-    def from_pretrained(pretrained_model_name: str):
-        """Load pretrained weights from HuggingFace into model."""
-        from transformers.utils import WEIGHTS_NAME, CONFIG_NAME
-        from transformers.utils.hub import cached_file
-
-        def load_config_hf(model_name):
-            resolved_archive_file = cached_file(model_name, CONFIG_NAME, _raise_exceptions_for_missing_entries=False)
-            return json.load(open(resolved_archive_file))
-
-
-        def load_state_dict_hf(model_name, device=None, dtype=None):
-            resolved_archive_file = cached_file(model_name, WEIGHTS_NAME, _raise_exceptions_for_missing_entries=False)
-            return torch.load(resolved_archive_file, weights_only=True, map_location='cpu', mmap=True)
-
-        config_data = load_config_hf(pretrained_model_name)
-        args = ModelArgs(
-            d_model=config_data['d_model'],
-            n_layer=config_data['n_layer'],
-            vocab_size=config_data['vocab_size'],
-            seq_in=config_data['seq_in'],
-            seq_out=config_data['seq_out'],
-        )
-        model = Mamba(args)
-
-        state_dict = load_state_dict_hf(pretrained_model_name)
-        new_state_dict = {}
-        for key in state_dict:
-            new_key = key.replace('backbone.', '')
-            new_state_dict[new_key] = state_dict[key]
-        model.load_state_dict(new_state_dict)
-
-        return model
 
 
 class ResidualBlock(nn.Module):
