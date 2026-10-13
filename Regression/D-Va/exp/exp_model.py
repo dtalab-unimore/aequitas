@@ -5,7 +5,6 @@ from data_load.data_loader import Dataset_Custom
 from model.model import diffusion_generate, denoise_net, pred_net
 from torch.optim.lr_scheduler import OneCycleLR, StepLR
 
-from gluonts.torch.util import copy_parameters
 from utils.tools import EarlyStopping, adjust_learning_rate
 from model.resnet import Res12_Quadratic
 from model.diffusion_process import GaussianDiffusion
@@ -86,7 +85,7 @@ class Exp_Model(object):
         return criterion
 
     def vali(self, vali_data, vali_loader, criterion):
-        copy_parameters(self.denoise_net, self.pred_net)
+        self.pred_net.load_state_dict(self.denoise_net.state_dict())
         total_mse = []
         total_mae = []
 
@@ -169,7 +168,7 @@ class Exp_Model(object):
         self.denoise_net.load_state_dict(torch.load(best_model_path))
 
     def test(self, setting, seq_len, pred_len):
-        copy_parameters(self.denoise_net, self.pred_net)
+        self.pred_net.load_state_dict(self.denoise_net.state_dict())
         test_data, test_loader = self._get_data(flag='test')
 
         preds = []
@@ -196,7 +195,7 @@ class Exp_Model(object):
         return preds, trues, dates, last_seq_date
 
     def validate(self, setting, seq_len, pred_len):
-        copy_parameters(self.denoise_net, self.pred_net)
+        self.pred_net.load_state_dict(self.denoise_net.state_dict())
         val_data, val_loader = self._get_data(flag='val')
 
         preds = []

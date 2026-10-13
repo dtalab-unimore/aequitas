@@ -147,10 +147,12 @@ class CustomDataset(Dataset[Dict[str, Tensor]]):
     # Dataset protocol
     # ------------------------------------------------------------------
     def __len__(self) -> int:  # type: ignore[override]
-        total = len(self.dates) - self.window - self.pred_len
+        total = len(self.dates) - self.window - self.pred_len + 1
         return max(total, 0)
 
     def __getitem__(self, index: int) -> Dict[str, Tensor]:  # type: ignore[override]
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Sample index {index} is outside the dataset range")
         path = os.path.join(self.output_directory, f"graph_{index}.pt")
         if not os.path.exists(path):
             raise IndexError(f"Serialized sample {index} is missing at {path}")
@@ -242,7 +244,7 @@ class CustomDataset(Dataset[Dict[str, Tensor]]):
         return torch.from_numpy(adjacency.astype(np.float32))
 
     def _ensure_serialized_graphs(self) -> None:
-        total = len(self) + 1
+        total = len(self)
         if total == 0:
             return
         missing = any(
@@ -253,7 +255,7 @@ class CustomDataset(Dataset[Dict[str, Tensor]]):
             self._build_graphs()
 
     def _build_graphs(self) -> None:
-        total = len(self) + 1
+        total = len(self)
         for index in tqdm(range(total)):
             dates = self._select_dates(index)
             slice_array = self._collect_slice(dates)

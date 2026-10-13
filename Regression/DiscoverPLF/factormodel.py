@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from utils import cal_cos_similarity
+from .utils import cal_cos_similarity
 import torch.nn.functional as F
 
 
@@ -100,7 +100,7 @@ class FACTORMODEL(nn.Module):
     
     def forward(self, x, concept_matrix, market_value, no_dec=False, fVAE=False):
     
-        device = torch.device(torch.get_device(x))
+        device = x.device
         x_hidden_mu = []
         x_hidden_sigma = []
         x_hidden_sample = []
@@ -351,7 +351,7 @@ class FEATHIST(nn.Module):
         
 
     def forward(self, x_hidden, concept_matrix, market_value):
-        device = torch.device(torch.get_device(x_hidden))
+        device = x_hidden.device
 
         # Predefined Concept Module
        

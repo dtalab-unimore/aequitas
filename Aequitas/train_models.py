@@ -14,7 +14,7 @@ from Aequitas.ui import error_alert
 
 YEAR_RE = re.compile(r"^\d{4}$")
 
-MODELS_WITHOUT_SEQUENCE_LENGTH = {"hist", "finformer"}
+MODELS_WITHOUT_SEQUENCE_LENGTH = {"hist", "finformer", "discoverplf"}
 
 
 def _normalize_model_name(model_name):
@@ -354,7 +354,7 @@ def validate_train_inputs_soft(
             start_valid_update = gr.update(value="")
             end_valid_update = gr.update(value="")
 
-        if end_train_y > start_valid_y:
+        if end_train_y >= start_valid_y:
             errors.append("End Train Year must be before Start Validation Year.")
             end_train_update = gr.update(value="")
             start_valid_update = gr.update(value="")

@@ -12,15 +12,15 @@ def _normalize_model_name(model_name):
 
 def model_accepts_seq_len_arg(model_name) -> bool:
     """
-    HIST non ha proprio il parametro --seq_len.
+    HIST e DiscoverPLF non hanno un parametro configurabile --seq_len.
     """
-    return _normalize_model_name(model_name) not in {"hist"}
+    return _normalize_model_name(model_name) not in {"hist", "discoverplf"}
 
 
 def normalize_seq_len_for_model(model_name, sl_value):
     model_key = _normalize_model_name(model_name)
 
-    if model_key == "hist":
+    if model_key in {"hist", "discoverplf"}:
         return None
 
     if model_key == "finformer":

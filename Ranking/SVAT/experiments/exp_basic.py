@@ -1,4 +1,4 @@
-from utils.args import list_of_param_dicts
+from Ranking.SVAT.utils.args import list_of_param_dicts
 
 class Exp_Basic(object):
     def __init__(self, param_dict, gpus=0):

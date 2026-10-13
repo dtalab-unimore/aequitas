@@ -10,7 +10,7 @@ import torch
 from dateutil import parser
 from tqdm import tqdm
 
-import embedder
+from . import embedder
 from multiprocessing import Pool, cpu_count
 
 import pandas as pd
@@ -20,8 +20,10 @@ from utils.filter_constituents import filter_constituents_by_date
 
 def load_prices(args):
     dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}.csv')
-    constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-    tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+    tickers = getattr(args, 'trained_tickers', None)
+    if not tickers:
+        constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
+        tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
 
     dataset = dataset[(dataset['date'] >= args.start_date) & (dataset['date'] <= args.end_date)]
@@ -143,10 +145,16 @@ def build_news_array(news_dict, dates, tickers, args, num_news=5):
 
     start_year = args.start_date.split('-')[0]
     end_year = args.end_date.split('-')[0]
-    filename = f'{args.data_path}_news/{args.universe}/news_list_y{start_year}_y{end_year}.pkl'
+    filename = f'{args.data_path}_news/{args.universe}/news_list_y{start_year}_y{end_year}_n{num_news}.pkl'
 
-    sample_ticker = tickers[0]
-    sample_arr = np.array(news_dict[sample_ticker]["file"][0])
+    available = [
+        ticker for ticker in tickers
+        if ticker in news_dict and news_dict[ticker].get('file') is not None
+        and len(news_dict[ticker]['file']) > 0
+    ]
+    if not available:
+        raise ValueError('No usable MAN-SF news embeddings were found.')
+    sample_arr = np.asarray(news_dict[available[0]]['file'][0])
     num_features = sample_arr.shape[-1]
 
     grouped = {}
@@ -236,11 +244,13 @@ def filter_adj_matrix(adj, adj_tickers, tickers):
 
 
 def filter_data_by_available_news_tickers(news_tickers, tickers, prices, adj, adj_tickers):
+    news_tickers = list(news_tickers)
     mask = [tick in news_tickers for tick in tickers]
     prices = [p for p, m in zip(prices, mask) if m]
-    adj, adj_tickers = filter_adj_matrix(adj, adj_tickers, tickers)
+    filtered_tickers = [ticker for ticker, keep in zip(tickers, mask) if keep]
+    adj, adj_tickers = filter_adj_matrix(adj, adj_tickers, filtered_tickers)
 
-    return prices, adj, news_tickers, adj_tickers
+    return prices, adj, filtered_tickers, adj_tickers
 
 
 def train_valid_test_split(prices_array, news_list, tickers, dates, args):

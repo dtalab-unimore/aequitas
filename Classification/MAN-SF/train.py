@@ -1,215 +1,203 @@
 import json
 import os
-import pickle
 from argparse import ArgumentParser
 
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, precision_score, recall_score
 from torch import optim
 
-from load_data import encode_news, load_prices, load_adj, build_news_array, filter_data_by_available_news_tickers, \
-    train_valid_test_split, windows_extraction, adj_to_dense_matrix, filter_nan_windows, filter_data_by_available_news
-from model.model import GAT
+from .load_data import (
+    adj_to_dense_matrix,
+    build_news_array,
+    encode_news,
+    filter_data_by_available_news,
+    filter_data_by_available_news_tickers,
+    filter_nan_windows,
+    load_adj,
+    load_prices,
+    train_valid_test_split,
+    windows_extraction,
+)
+from .model.model import GAT
+from utils.load_configuation import create_saving_path
+from utils.save_results import save_results
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 
 def get_metrics(preds, labels):
-    preds = np.argmax(preds, axis=2).reshape(-1)
-    labels = np.concatenate(labels, axis=0).reshape(-1)
-    mask = ~np.isnan(labels)
-    preds = preds[mask]
-    labels = labels[mask]
-
-    metrics = {
-        'F1': f1_score(labels, preds, average='macro'),
-        'Accuracy': accuracy_score(labels, preds),
-        'Precision': precision_score(labels, preds),
-        'Recall': recall_score(labels, preds),
-        'MCC': matthews_corrcoef(labels, preds)
+    predicted_classes = np.asarray(preds).argmax(axis=-1).reshape(-1)
+    true_classes = np.asarray(labels).reshape(-1)
+    mask = ~np.isnan(true_classes)
+    predicted_classes = predicted_classes[mask]
+    true_classes = true_classes[mask]
+    return {
+        "F1": f1_score(true_classes, predicted_classes, average="macro", zero_division=0),
+        "Accuracy": accuracy_score(true_classes, predicted_classes),
+        "Precision": precision_score(true_classes, predicted_classes, average="macro", zero_division=0),
+        "Recall": recall_score(true_classes, predicted_classes, average="macro", zero_division=0),
+        "MCC": matthews_corrcoef(true_classes, predicted_classes),
     }
-    return metrics
 
 
-def train_model(model, prices, news):
-    model.train()
-
-    i = np.random.randint(prices.shape[1])
-    text = news[:, i].to(device)
-    price = prices[:, i, :, :-2].to(device)
-    labels = prices[:, i, -1, -2].long().to(device)
-
-    output = model(text, price, adj)
-
-    return output, labels
+def train_batch(model, prices, news, adjacency, device):
+    time_index = np.random.randint(prices.shape[1])
+    text = news[:, time_index].to(device)
+    price = prices[:, time_index, :, :-2].to(device)
+    labels = prices[:, time_index, -1, -2].long().to(device)
+    return model(text, price, adjacency), labels
 
 
-def eval_model(model, prices, news):
+def eval_model(model, prices, news, adjacency, device):
     model.eval()
-
-    preds = []
-
-    for i in range(prices.shape[1]):
-        text = news[:, i].to(device)
-        price = prices[:, i, :, :-2].to(device)
-
-        output = model(text, price, adj)
-        preds.append(output.detach().cpu().numpy())
-
-    labels = prices[:, :, -1, -1].cpu().numpy()
-    labels = labels.swapaxes(0, 1)
-
-    metrics = get_metrics(preds, labels)
-
-    return metrics, preds, labels
+    predictions = []
+    with torch.no_grad():
+        for time_index in range(prices.shape[1]):
+            text = news[:, time_index].to(device)
+            price = prices[:, time_index, :, :-2].to(device)
+            predictions.append(model(text, price, adjacency).cpu().numpy())
+    labels = prices[:, :, -1, -1].cpu().numpy().swapaxes(0, 1)
+    return get_metrics(predictions, labels), predictions, labels
 
 
-if __name__=='__main__':
-
-    args = ArgumentParser()
-
-    args.add_argument('--data_path', type=str, default='../../Evaluation/data', help='Path to the dataset')
-    args.add_argument('--universe', type=str, default='sp500', help='Universe of stocks to use')
-    args.add_argument('--model_name', type=str, default='MAN-SF', help='Name of the model to use')
-
-    args.add_argument('--pred_len', type=int, default=5, help='Steps for future prediction')
-    args.add_argument('--seq_len', type=int, default=10, help='Lookback length for the model')
-    args.add_argument('--start_date', type=str, default='2019-01-01', help='Start date for the dataset')
-    args.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
-    args.add_argument('--start_valid_date', type=str, default='2022-01-01', help='Start date for validation set')
-    args.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01', help='Start date for the test set')
-    args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
-
-    args.add_argument('--n_news', type=int, default=5, help='Number of news considered for each trading day')
-
-    args.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
-    args.add_argument('--seed', type=int, default=42, help='Random seed.')
-    args.add_argument('--epochs', type=int, default=10000, help='Number of epochs to train.')
-    args.add_argument('--lr', type=float, default=5e-4, help='Initial learning rate.')
-    args.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
-    args.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
-    args.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
-    args.add_argument('--dropout', type=float, default=0.38, help='Dropout rate (1 - keep probability).')
-    args.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-
-    args.add_argument('--early_stopping', type=int, default=50, help='Early stopping criteria.')
-
-    args = args.parse_args()
-
-    device = torch.device("cuda") if torch.cuda.is_available() else 'cpu'
-    np.random.seed(args.seed)
-    torch.random.manual_seed(args.seed)
-
-    os.makedirs(f'{args.data_path}_news/{args.universe}/', exist_ok=True)
-
-    metrics_path = f'./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split("-")[0]}'
-    os.makedirs(metrics_path, exist_ok=True)
-
-    ######################
-    # DATA PREPROCESSING #
-    ######################
-
+def prepare_data(args):
+    os.makedirs(f"{args.data_path}_news/{args.universe}", exist_ok=True)
     prices_array, tickers, dates = load_prices(args)
-
-    if len(tickers) == 0:
+    if not tickers:
         raise ValueError("No tickers found in the specified universe and date range.")
-
-    adj, ordered_tickers = load_adj(tickers, args)
+    adjacency, ordered_tickers = load_adj(tickers, args)
     news_dict = encode_news(tickers, dates, args)
-    news_list, news_tickers = build_news_array(news_dict, dates, tickers, args)
+    news_list, news_tickers = build_news_array(news_dict, dates, tickers, args, num_news=args.n_news)
+    prices_array, adjacency, tickers, ordered_tickers = filter_data_by_available_news_tickers(
+        news_tickers, tickers, prices_array, adjacency, ordered_tickers
+    )
+    split_prices, split_news, split_dates = train_valid_test_split(
+        prices_array, news_list, tickers, dates, args
+    )
+    split_prices, split_news, last_dates, pred_dates = windows_extraction(
+        split_prices, split_news, split_dates, args
+    )
+    split_prices, split_news, last_dates, pred_dates, tickers, ordered_tickers, adjacency = (
+        filter_data_by_available_news(
+            split_prices, split_news, last_dates, pred_dates,
+            list(tickers), ordered_tickers, adjacency
+        )
+    )
+    split_prices, split_news = filter_nan_windows(split_prices, split_news)
+    if any(values.shape[1] == 0 for values in split_news):
+        raise ValueError("No news data is available after MAN-SF preprocessing.")
+    return split_prices, split_news, last_dates, pred_dates, list(tickers), adj_to_dense_matrix(adjacency)
 
-    prices_array, adj, tickers, ordered_tickers = filter_data_by_available_news_tickers(news_tickers, tickers, prices_array, adj, ordered_tickers)
 
-    splitted_prices, splitted_news, dates = train_valid_test_split(prices_array, news_list, tickers, dates, args)
-    splitted_prices, splitted_news, last_dates, pred_dates = windows_extraction(splitted_prices, splitted_news, dates, args)
-    splitted_prices, splitted_news, last_dates, pred_dates, tickers, ordered_tickers, adj = filter_data_by_available_news(
-        splitted_prices, splitted_news, last_dates, pred_dates, tickers, ordered_tickers, adj)
-
-    splitted_prices, splitted_news = filter_nan_windows(splitted_prices, splitted_news)
-
-    if splitted_news[0].shape[1] == 0 or splitted_news[1].shape[1] == 0 or splitted_news[2].shape[1] == 0:
-        raise ValueError("No news data available for training/validation/test after preprocessing.")
-
-    ################################
-    # MODEL INIZIALIZATION & TRAIN #
-    ################################
-
-    model = GAT(
-        nfeat=64,
-        nhid=args.hidden,
-        nclass=2,
-        dropout=args.dropout,
-        nheads=args.nb_heads,
-        alpha=args.alpha,
-        stock_num=len(tickers),
+def create_model(args, stock_count, device):
+    return GAT(
+        nfeat=64, nhid=args.hidden, nclass=2, dropout=args.dropout,
+        nheads=args.nb_heads, alpha=args.alpha, stock_num=stock_count
     ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=5e-4, weight_decay=args.weight_decay)
-    optimizer.zero_grad()
 
-    cross_entropy = nn.CrossEntropyLoss(weight=torch.tensor([1.00, 1.00]).cuda())
+def flatten_dates(date_map):
+    if not date_map:
+        return []
+    values = list(date_map.values())
+    common = set(values[0])
+    for dates in values[1:]:
+        common &= set(dates)
+    return sorted(common)
 
-    adj = adj_to_dense_matrix(adj)
-    adj = adj.to(device)
 
-    best_mcc = None
+def run_train(args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+    model_save_path, metrics_path = create_saving_path(args, "Classification", "MAN-SF", PROJECT_ROOT)
+    prices, news, last_dates, pred_dates, tickers, adjacency = prepare_data(args)
+    args.trained_tickers = tickers
+    with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
+        json.dump(vars(args), handle, indent=4)
+
+    adjacency = adjacency.to(device)
+    model = create_model(args, len(tickers), device)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 1.0], device=device))
+    best_mcc = float("-inf")
     stop = 0
+    checkpoint_path = os.path.join(model_save_path, "model.pth")
+    best_valid_metrics = None
 
     for epoch in range(args.epochs):
-        print(f'[Epoch {epoch}] Training...')
-
-        output, labels = train_model(model, splitted_prices[0], splitted_news[0])
-        loss_train = cross_entropy(output, labels)
-
-        print(f'Train Loss: {loss_train}')
-
-        valid_metrics, _, _ = eval_model(model, splitted_prices[1], splitted_news[1])
-        print(f'Valid metrics: F1 {valid_metrics["F1"]}, Acc {valid_metrics["Accuracy"]}, MCC {valid_metrics["MCC"]}')
-
-        if best_mcc is None or best_mcc < valid_metrics['MCC']:
-            best_mcc = valid_metrics['MCC']
+        model.train()
+        optimizer.zero_grad()
+        output, labels = train_batch(model, prices[0], news[0], adjacency, device)
+        loss = criterion(output, labels)
+        loss.backward()
+        optimizer.step()
+        valid_metrics, _, _ = eval_model(model, prices[1], news[1], adjacency, device)
+        print(
+            f"Epoch {epoch + 1}/{args.epochs}: loss={loss.item():.6f}, "
+            f"val_mcc={valid_metrics['MCC']:.6f}", flush=True
+        )
+        if valid_metrics["MCC"] > best_mcc:
+            best_mcc = valid_metrics["MCC"]
+            best_valid_metrics = valid_metrics
             stop = 0
-
-            valid_metrics = {k: float(v) for k, v in valid_metrics.items()}
-
-            test_metrics, preds, test_labels = eval_model(model, splitted_prices[2], splitted_news[2])
-            test_metrics = {k: float(v) for k, v in test_metrics.items()}
-
-            test_labels = [np.expand_dims(test_labels[i], axis=1) for i in range(test_labels.shape[0])]
-
-            pred_dates = sorted({item for sublist in pred_dates.values() for item in sublist})
-            last_dates = sorted({item for sublist in last_dates.values() for item in sublist})
-
-            results = {
-                'metrics': test_metrics,
-                'preds': preds,
-                'labels': test_labels,
-                'pred_date': pred_dates,
-                'last_date': last_dates,
-                'tickers': [tickers] * len(preds)
-            }
-
-            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(valid_metrics, f, indent=4)
-
-            with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(test_metrics, f, indent=4)
-
-            with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-                pickle.dump(results, f)
-
-            print('Test Metrics:\n', test_metrics)
-
+            torch.save({"model": model.state_dict(), "epoch": epoch + 1}, checkpoint_path)
         else:
             stop += 1
-
         if stop >= args.early_stopping:
             break
 
-        loss_train.backward()
-        optimizer.step()
+    if best_valid_metrics is None:
+        raise RuntimeError("MAN-SF training did not produce a valid checkpoint.")
+    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
+        json.dump({key: float(value) for key, value in best_valid_metrics.items()}, handle, indent=4)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model.load_state_dict(checkpoint["model"])
+    test_metrics, predictions, labels = eval_model(model, prices[2], news[2], adjacency, device)
+    pred_date_values = flatten_dates(pred_dates)
+    last_date_values = flatten_dates(last_dates)
+    metrics, results_pkl, metrics_json = save_results(
+        args, test_metrics, predictions, labels, pred_date_values, last_date_values,
+        [tickers] * len(predictions), metrics_path
+    )
+    return {"model_path": checkpoint_path, "metrics": metrics,
+            "results_path": results_pkl, "metrics_path": metrics_json}
 
 
+def build_parser():
+    parser = ArgumentParser(description="Train the MAN-SF classification model")
+    parser.add_argument("--data_path", default="./Evaluation/data")
+    parser.add_argument("--universe", default="sp500")
+    parser.add_argument("--model_name", default="MAN-SF")
+    parser.add_argument("--pred_len", type=int, default=5)
+    parser.add_argument("--seq_len", type=int, default=10)
+    parser.add_argument("--start_date", default="2019-01-01")
+    parser.add_argument("--end_train_date", default="2021-12-31")
+    parser.add_argument("--start_valid_date", default="2022-01-01")
+    parser.add_argument("--end_valid_date", default="2022-12-31")
+    parser.add_argument("--start_test_date", default="2023-01-01")
+    parser.add_argument("--end_date", default="2023-12-31")
+    parser.add_argument("--n_news", type=int, default=5)
+    parser.add_argument("--sparse", action="store_true", default=False)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=10000)
+    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--weight_decay", type=float, default=5e-4)
+    parser.add_argument("--hidden", type=int, default=64)
+    parser.add_argument("--nb_heads", type=int, default=8)
+    parser.add_argument("--dropout", type=float, default=0.38)
+    parser.add_argument("--alpha", type=float, default=0.2)
+    parser.add_argument("--early_stopping", type=int, default=50)
+    return parser
 
 
+if __name__ == "__main__":
+    output = run_train(build_parser().parse_args())
+    print("__TRAIN_JSON_START__", flush=True)
+    print(json.dumps(output, ensure_ascii=False), flush=True)
+    print("__TRAIN_JSON_END__", flush=True)

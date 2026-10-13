@@ -1,81 +1,64 @@
 import os
-
-import numpy as np
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
-import tensorflow_hub as hub
-
 import queue
 import threading
+
+import numpy as np
+import tensorflow_hub as hub
 
 _global_embed = None
 _global_sess = None
 
+
 def worker_initializer():
     global _global_embed, _global_sess
-    print(f"[Worker {os.getpid()}] Loading USE model only once…")
+    print(f"[Worker {os.getpid()}] Loading Universal Sentence Encoder...")
     _global_embed, _global_sess = init_embedder()
 
 
 def init_embedder():
-    print("Loading Universal Sentence Encoder...")
-    module_url = "https://tfhub.dev/google/universal-sentence-encoder/2"  # VERSIONE TF1 COMPATIBILE
-    cache_dir = "./tfhub_modules"
-
-    os.environ["TFHUB_CACHE_DIR"] = cache_dir
-
+    os.environ.setdefault("TFHUB_CACHE_DIR", "./tfhub_modules")
     try:
-        embed = hub.Module(module_url)
-    except Exception as e:
-        raise RuntimeError("Universal Sentence Encoder not found locally and cannot be downloaded.")
-
-    sess = tf.Session()
-    sess.run([tf.global_variables_initializer(), tf.tables_initializer()])
-
-    return embed, sess
+        model = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
+    except Exception as exc:
+        raise RuntimeError(
+            "Universal Sentence Encoder is not cached locally and could not be downloaded."
+        ) from exc
+    return model, None
 
 
 def async_generator(iterable, max_prefetch=10):
-    q = queue.Queue(max_prefetch)
+    items = queue.Queue(max_prefetch)
 
     def producer():
         for item in iterable:
-            q.put(item)
-        q.put(None)
+            items.put(item)
+        items.put(None)
 
     threading.Thread(target=producer, daemon=True).start()
-
     while True:
-        item = q.get()
+        item = items.get()
         if item is None:
             break
         yield item
 
 
 def batch(iterable, size=512):
-    buf = []
+    values = []
     for item in iterable:
-        buf.append(item)
-        if len(buf) == size:
-            print(f"[batch] full batch ({size})")
-            yield buf
-            buf = []
-    if buf:
-        print(f"[batch] final batch ({len(buf)})")
-        yield buf
+        values.append(item)
+        if len(values) == size:
+            yield values
+            values = []
+    if values:
+        yield values
 
 
-def embed_news_async(news_texts, embed, sess, batch_size=512):
+def embed_news_async(news_texts, embed, sess=None, batch_size=512):
+    del sess
     embeddings = []
-
-    print("[embed] start embedding…")
-
-    for bi, batch_texts in enumerate(batch(async_generator(news_texts), batch_size)):
-        print(f"[embed] batch {bi} → {len(batch_texts)} items")
-        emb = sess.run(embed(batch_texts))
-        embeddings.append(emb)
-
-    final_emb = np.vstack(embeddings)
-    print(f"[embed] done, total embeddings: {final_emb.shape}")
-
-    return final_emb
+    for texts in batch(async_generator(news_texts), batch_size):
+        encoded = embed(texts)
+        embeddings.append(np.asarray(encoded))
+    if not embeddings:
+        return np.empty((0, 512), dtype=np.float32)
+    return np.vstack(embeddings)
