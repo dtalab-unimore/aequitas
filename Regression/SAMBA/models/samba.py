@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .mamba import Mamba
-from config.model_config import ModelArgs
+from ..config.model_config import ModelArgs
 
 class SAMBA(nn.Module):
     def __init__(self, args: ModelArgs, hidden, inp, out, embed, cheb_k):
@@ -43,7 +43,7 @@ class SAMBA(nn.Module):
 
         ADJ = self.gaussian_kernel_graph(self.adj, xx, gamma=self.gamma)
 
-        I = torch.eye(input_ids.size(2)).cuda()
+        I = torch.eye(input_ids.size(2), device=input_ids.device)
 
         support_set = [I, ADJ]
 

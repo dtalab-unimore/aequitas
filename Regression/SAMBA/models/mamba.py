@@ -2,7 +2,7 @@ import json
 import torch
 import torch.nn as nn
 
-from config.model_config import ModelArgs
+from ..config.model_config import ModelArgs
 from .normalization import RMSNorm
 from .mamba_block import MambaBlock
 

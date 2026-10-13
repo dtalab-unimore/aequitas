@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, repeat, einsum
 
-from config.model_config import ModelArgs
+from ..config.model_config import ModelArgs
 from .normalization import RMSNorm
 
 
