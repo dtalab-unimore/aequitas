@@ -10,6 +10,7 @@ import json
 
 from Aequitas.data_load import read_configs
 from Aequitas.train_model_dispatcher import dispatch_train
+from Aequitas.ui import error_alert
 
 YEAR_RE = re.compile(r"^\d{4}$")
 
@@ -359,34 +360,7 @@ def validate_train_inputs_soft(
             start_valid_update = gr.update(value="")
 
     if errors:
-        msg = """
-        <div style="
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            margin: 10px 0;
-        ">
-            <div style="
-                display: inline-block;
-                width: fit-content;
-                max-width: 100%;
-                padding: 10px 14px;
-                border: 1px solid #fecaca;
-                background: #fef2f2;
-                color: #991b1b;
-                border-radius: 10px;
-                font-size: 14px;
-                line-height: 1.4;
-                box-sizing: border-box;
-                text-align: left;
-            ">
-                <b>Invalid training parameters.</b>
-                <ul style="margin: 6px 0 0 18px; padding: 0;">
-                    {}
-                </ul>
-            </div>
-        </div>
-        """.format("".join(f"<li>{e}</li>" for e in errors))
+        msg = error_alert("Invalid training parameters.", errors)
 
         return (
             False,                          # train_validation_state

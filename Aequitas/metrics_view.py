@@ -7,6 +7,8 @@ import pandas as pd
 import tempfile
 import uuid
 
+from Aequitas.ui import empty_state
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
@@ -22,16 +24,7 @@ DATASET_PALETTES = {
 }
 
 def _empty_state_html(message="Select filters and click <b>View Metrics</b> to load results."):
-    return f"""
-    <div class="metrics-empty">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <path d="M3 9h18M9 21V9"/>
-      </svg>
-      <span>{message}</span>
-    </div>
-    """
+    return empty_state(message, icon=True, raw_html=True)
 
 def _hide_metrics_download():
     return gr.update(value=None, visible=False)
@@ -703,8 +696,8 @@ def build_metrics_html_table(df, datasets, metric_cols, row_keys):
     datasets = [d for d in datasets if d in set(df["dataset"])]
 
     html = """
-    <div class="metrics-outer"><div class="metrics-scroll">
-    <table class="mpt"><thead><tr>
+    <div class="aq-table-wrap"><div class="aq-table-scroll">
+    <table class="aq-table"><thead><tr>
         <th rowspan="2">Model</th>
         <th rowspan="2">Config</th>
         <th rowspan="2">SL</th>
@@ -715,7 +708,7 @@ def build_metrics_html_table(df, datasets, metric_cols, row_keys):
     html += "</tr><tr>"
     for _ in datasets:
         for m in metric_cols:
-            html += f'<th class="msub">{m}</th>'
+            html += f'<th class="sub">{m}</th>'
     html += "</tr></thead><tbody>"
 
     model_rowspans = (
@@ -731,7 +724,7 @@ def build_metrics_html_table(df, datasets, metric_cols, row_keys):
         html += "<tr>"
         if model_name not in printed_models:
             rs = model_rowspans.get(model_name, 1)
-            html += f'<td rowspan="{rs}" class="model-cell">{model_name}</td>'
+            html += f'<td rowspan="{rs}" class="index-cell">{model_name}</td>'
             printed_models.add(model_name)
         html += f"<td class='config-cell'>{config}</td><td>{sl}</td><td>{pl}</td>"
         for ds in datasets:

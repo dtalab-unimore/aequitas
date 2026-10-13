@@ -1,24 +1,23 @@
 import os
 import sys
-
 from pathlib import Path
-
-from Aequitas.Tabs.tab_train import build_train_tab
 
 GRADIO_TMP_DIR = Path("./.gradio_tmp").resolve()
 GRADIO_TMP_DIR.mkdir(parents=True, exist_ok=True)
 
+# Must be set before importing gradio
 os.environ["GRADIO_TEMP_DIR"] = str(GRADIO_TMP_DIR)
 
 import gradio as gr
 from Aequitas.Tabs.tab_download import build_tab as build_download_tab
+from Aequitas.Tabs.tab_train import build_train_tab
 from Aequitas.Tabs.tab_test import build_tab as build_test_tab
 from Aequitas.Tabs.tab_evaluation import build_tab as build_evaluation_tab
 from Aequitas.Tabs.tab_metrics import build_tab as build_metrics_tab
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ""))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 EVALUATION_DIR = os.path.join(PROJECT_ROOT, "Evaluation")
+CSS_PATH = os.path.join(PROJECT_ROOT, "Aequitas", "style.css")
 
 os.environ["FINBENCH_ROOT"] = PROJECT_ROOT
 
@@ -41,13 +40,8 @@ theme = gr.themes.Soft(
 # -------------------------------------------------
 # Layout
 # -------------------------------------------------
-with gr.Blocks() as demo:
-    with gr.Column(elem_classes="main-shell"):
-        gr.HTML("""
-        <div class="hero">
-            <h1>Aequitas</h1>
-        </div>
-        """)
+with gr.Blocks(title="Aequitas") as demo:
+    gr.HTML('<div class="hero"><h1>Aequitas</h1></div>')
 
     build_download_tab()
     build_train_tab()
@@ -58,8 +52,6 @@ with gr.Blocks() as demo:
 # -------------------------------------------------
 # Launch
 # -------------------------------------------------
-CSS_PATH = os.path.join(PROJECT_ROOT, "Aequitas", "style.css")
-
 with open(CSS_PATH, "r", encoding="utf-8") as f:
     custom_css = f.read()
 

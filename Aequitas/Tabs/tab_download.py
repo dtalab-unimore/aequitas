@@ -1,18 +1,20 @@
 import gradio as gr
 
-
 from Aequitas.data_load import (
     get_models,
     inspect_required_files,
     download_missing_files,
-    refresh_preview_controls,
     reset_preview_page,
     next_preview_page,
     prev_preview_page,
     empty_preview_table_html,
-    refresh_preview_year_filter, prepare_ticker_preview, reset_preview_page_from_ticker_state,
-    refresh_preview_selector_and_filters, get_preview_file_tooltip
+    refresh_preview_year_filter,
+    prepare_ticker_preview,
+    reset_preview_page_from_ticker_state,
+    refresh_preview_selector_and_filters,
+    get_preview_file_tooltip,
 )
+from Aequitas.ui import section_header, loading_overlay
 
 
 DATASETS = [
@@ -23,32 +25,31 @@ DATASETS = [
     ("[sx5e] EURO STOXX 50", "sx5e"),
 ]
 
+UI_EVENT = dict(show_progress="hidden", queue=False)
+
+
 def build_tab():
-    with (gr.Tab("Download Data", elem_id="main-tabs")):
-        with gr.Column(elem_classes=["download-shell"]):
+    with gr.Tab("Download Data"):
+        with gr.Column(elem_classes=["aq-tab"]):
 
             # ── Top row: controls + required files ────────────────────────
-            with gr.Row(elem_classes=["download-top-row"]):
+            with gr.Row(elem_classes=["aq-row", "download-top-row"]):
 
-                with gr.Column(scale=1, min_width=260, elem_classes=["download-card", "download-controls-card"]):
-                    gr.Markdown(
-                        """<div class="evaluation-output-header">
-                            <span>Configuration</span>
-                        </div>"""
-                    )
+                with gr.Column(scale=1, min_width=260, elem_classes=["aq-card", "download-fixed-card"]):
+                    gr.HTML(section_header("Configuration"))
                     with gr.Row():
                         dataset = gr.Dropdown(
                             choices=DATASETS,
                             label="Universe",
                             value=None,
-                            elem_classes=['dropdown-single-compact']
+                            elem_classes=["dropdown-single-compact"],
                         )
                         models = gr.Dropdown(
                             choices=get_models(),
                             label="Models",
                             value=[],
                             multiselect=True,
-                            elem_classes=["dropdown-multiselect-compact"]
+                            elem_classes=["dropdown-multiselect-compact"],
                         )
 
                     universe_targets_state = gr.State([])
@@ -58,31 +59,18 @@ def build_tab():
                         "Download Missing Files",
                         variant="primary",
                         interactive=False,
-                        elem_id="download-missing-btn",
+                        elem_classes=["aq-primary-btn"],
                     )
 
-                # RIGHT – required files con spinner
                 with gr.Column(
                     scale=2,
-                    elem_classes=["download-card", "download-files-card", "evaluation-loading-host"],
+                    elem_classes=["aq-card", "aq-loading-host", "download-fixed-card"],
                 ):
-                    gr.Markdown(
-                        """<div class="evaluation-output-header">
-                            <span>Required files</span>
-                        </div>"""
-                    )
+                    gr.HTML(section_header("Required files"))
 
                     files_loading = gr.HTML(
-                        """
-                        <div class="evaluation-loading-overlay">
-                            <div class="evaluation-loading-box">
-                                <div class="evaluation-loading-spinner"></div>
-                                <div class="evaluation-loading-text">Downloading files...</div>
-                            </div>
-                        </div>
-                        """,
+                        loading_overlay("Downloading files..."),
                         visible=False,
-                        elem_id="files-loading-overlay",
                     )
 
                     files = gr.Textbox(
@@ -91,21 +79,15 @@ def build_tab():
                         lines=6,
                         max_lines=6,
                         show_label=False,
-                        elem_id="files",
+                        elem_classes=["aq-log"],
                     )
 
-            # ── Bottom row: preview full-width ────────
-            with gr.Row(elem_classes=["download-top-row", "download-preview-row"]):
-                with gr.Column(
-                    elem_classes=["download-card", "download-preview-card", "evaluation-loading-host"],
-                ):
+            # ── Bottom row: full-width preview ────────────────────────────
+            with gr.Row(elem_classes=["aq-row"]):
+                with gr.Column(elem_classes=["aq-card", "aq-loading-host"]):
 
                     with gr.Row(elem_classes=["preview-header-row"]):
-                        gr.Markdown(
-                            """<div class="evaluation-output-header">
-                                <span>Data preview</span>
-                            </div>"""
-                        )
+                        gr.HTML(section_header("Data preview"))
 
                         with gr.Row(elem_classes=["preview-header-controls"]):
 
@@ -115,7 +97,7 @@ def build_tab():
                                 value=None,
                                 show_label=False,
                                 elem_id="preview-selector",
-                                elem_classes=["dropdown-single-compact"],
+                                elem_classes=["dropdown-single-compact", "preview-control"],
                             )
 
                             ticker_input = gr.Textbox(
@@ -125,6 +107,7 @@ def build_tab():
                                 interactive=True,
                                 placeholder="Insert Ticker",
                                 elem_id="ticker-input",
+                                elem_classes=["preview-control"],
                             )
 
                             preview_start_year = gr.Dropdown(
@@ -134,13 +117,10 @@ def build_tab():
                                 show_label=False,
                                 visible=False,
                                 elem_id="preview-start-year",
-                                elem_classes=["dropdown-single-compact"],
+                                elem_classes=["dropdown-single-compact", "preview-control"],
                             )
 
-                            with gr.Column(
-                                scale=0,
-                                elem_classes=["preview-tooltip-slot"],
-                            ):
+                            with gr.Column(scale=0, elem_classes=["preview-tooltip-slot"]):
                                 preview_file_tooltip = gr.HTML(
                                     value="",
                                     visible=True,
@@ -151,8 +131,8 @@ def build_tab():
                     ticker_preview_state = gr.State({"run": True, "ticker": None})
 
                     preview_loading = gr.HTML(
+                        loading_overlay("Loading preview..."),
                         visible=False,
-                        elem_id="preview-loading-overlay",
                     )
 
                     preview = gr.HTML(
@@ -191,226 +171,131 @@ def build_tab():
                             gr.HTML("")
 
         # ── Wiring ────────────────────────────────────────────────────────
+        preview_inputs = [dataset, preview_selector, preview_start_year, ticker_input]
+        preview_outputs = [
+            preview,
+            preview_page_label,
+            btn_prev_preview,
+            btn_next_preview,
+            preview_page_state,
+        ]
+        files_outputs = [
+            files,
+            btn_download_missing,
+            universe_targets_state,
+            market_targets_state,
+        ]
+        selector_inputs = [dataset, universe_targets_state, market_targets_state]
+        selector_outputs = [preview_selector, preview_start_year, ticker_input]
 
-        dataset.change(
-            fn=inspect_required_files,
-            inputs=[dataset, models],
-            outputs=[
-                files,
-                btn_download_missing,
-                universe_targets_state,
-                market_targets_state,
-            ],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=refresh_preview_selector_and_filters,
-            inputs=[
-                dataset,
-                universe_targets_state,
-                market_targets_state,
-            ],
-            outputs=[
-                preview_selector,
-                preview_start_year,
-                ticker_input,
-            ],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=get_preview_file_tooltip,
-            inputs=[preview_selector],
-            outputs=[preview_file_tooltip],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=reset_preview_page,
-            inputs=[
-                dataset,
-                preview_selector,
-                preview_start_year,
-                ticker_input,
-            ],
-            outputs=[
-                preview,
-                preview_page_label,
-                btn_prev_preview,
-                btn_next_preview,
-                preview_page_state,
-            ],
-            show_progress="hidden",
-            queue=False,
-        )
+        def show(component):
+            return dict(fn=lambda: gr.update(visible=True), outputs=[component], **UI_EVENT)
 
-        models.change(
-            fn=inspect_required_files,
-            inputs=[dataset, models],
-            outputs=[
-                files,
-                btn_download_missing,
-                universe_targets_state,
-                market_targets_state,
-            ],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=refresh_preview_selector_and_filters,
-            inputs=[
-                dataset,
-                universe_targets_state,
-                market_targets_state,
-            ],
-            outputs=[
-                preview_selector,
-                preview_start_year,
-                ticker_input,
-            ],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=get_preview_file_tooltip,
-            inputs=[preview_selector],
-            outputs=[preview_file_tooltip],
-            show_progress="hidden",
-            queue=False,
-        ).then(
-            fn=reset_preview_page,
-            inputs=[
-                dataset,
-                preview_selector,
-                preview_start_year,
-                ticker_input,
-            ],
-            outputs=[
-                preview,
-                preview_page_label,
-                btn_prev_preview,
-                btn_next_preview,
-                preview_page_state,
-            ],
-            show_progress="hidden",
-            queue=False,
-        )
+        def hide(component):
+            return dict(fn=lambda: gr.update(visible=False), outputs=[component], **UI_EVENT)
 
-        download_evt = btn_download_missing.click(
-            fn=lambda: gr.update(visible=True),
-            outputs=[files_loading], show_progress="hidden", queue=False,
+        for component in (dataset, models):
+            component.change(
+                fn=inspect_required_files,
+                inputs=[dataset, models],
+                outputs=files_outputs,
+                **UI_EVENT,
+            ).then(
+                fn=refresh_preview_selector_and_filters,
+                inputs=selector_inputs,
+                outputs=selector_outputs,
+                **UI_EVENT,
+            ).then(
+                fn=get_preview_file_tooltip,
+                inputs=[preview_selector],
+                outputs=[preview_file_tooltip],
+                **UI_EVENT,
+            ).then(
+                fn=reset_preview_page,
+                inputs=preview_inputs,
+                outputs=preview_outputs,
+                **UI_EVENT,
+            )
+
+        btn_download_missing.click(
+            **show(files_loading),
         ).then(
             fn=download_missing_files,
             inputs=[dataset, models, universe_targets_state, market_targets_state],
-            outputs=[files, btn_download_missing, universe_targets_state, market_targets_state],
-            show_progress="full", queue=True,
+            outputs=files_outputs,
+            show_progress="full",
+            queue=True,
         ).then(
-            fn=lambda: gr.update(visible=False),
-            outputs=[files_loading], show_progress="hidden", queue=False,
-        )
-
-        download_evt.then(
+            **hide(files_loading),
+        ).then(
             fn=refresh_preview_selector_and_filters,
-            inputs=[dataset, universe_targets_state, market_targets_state],
-            outputs=[preview_selector, preview_start_year, ticker_input],
-            show_progress="hidden",
-            queue=False,
+            inputs=selector_inputs,
+            outputs=selector_outputs,
+            **UI_EVENT,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden",
-            queue=False,
+            inputs=preview_inputs,
+            outputs=preview_outputs,
+            **UI_EVENT,
         )
 
         preview_selector.change(
-            fn=lambda: gr.update(visible=True),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
+            **show(preview_loading),
         ).then(
             fn=refresh_preview_year_filter,
             inputs=[dataset, preview_selector],
             outputs=[preview_start_year, ticker_input],
-            show_progress="hidden", queue=False,
+            **UI_EVENT,
         ).then(
             fn=get_preview_file_tooltip,
             inputs=[preview_selector],
             outputs=[preview_file_tooltip],
-            show_progress="hidden",
-            queue=False,
+            **UI_EVENT,
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
+            inputs=preview_inputs,
+            outputs=preview_outputs,
+            **UI_EVENT,
         ).then(
-            fn=lambda: gr.update(visible=False),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
+            **hide(preview_loading),
         )
 
         preview_start_year.change(
-            fn=lambda: gr.update(visible=True),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
+            **show(preview_loading),
         ).then(
             fn=reset_preview_page,
-            inputs=[dataset, preview_selector, preview_start_year, ticker_input],
-            outputs=[preview, preview_page_label, btn_prev_preview, btn_next_preview, preview_page_state],
-            show_progress="hidden", queue=False,
+            inputs=preview_inputs,
+            outputs=preview_outputs,
+            **UI_EVENT,
         ).then(
-            fn=lambda: gr.update(visible=False),
-            outputs=[preview_loading],
-            show_progress="hidden", queue=False,
+            **hide(preview_loading),
         )
 
         ticker_input.change(
             fn=prepare_ticker_preview,
             inputs=[ticker_input],
             outputs=[ticker_preview_state, preview_loading],
-            show_progress="hidden",
-            queue=False,
+            **UI_EVENT,
         ).then(
             fn=reset_preview_page_from_ticker_state,
-            inputs=[
-                ticker_preview_state,
-                dataset,
-                preview_selector,
-                preview_start_year,
-            ],
-            outputs=[
-                preview,
-                preview_page_label,
-                btn_prev_preview,
-                btn_next_preview,
-                preview_page_state,
-                preview_loading,
-            ],
-            show_progress="hidden",
-            queue=False,
+            inputs=[ticker_preview_state, dataset, preview_selector, preview_start_year],
+            outputs=[*preview_outputs, preview_loading],
             trigger_mode="always_last",
+            **UI_EVENT,
         )
+
+        page_inputs = [dataset, preview_selector, preview_page_state, preview_start_year, ticker_input]
 
         btn_next_preview.click(
             fn=next_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state,preview_start_year, ticker_input],
-            outputs=[
-                preview,
-                preview_page_label,
-                btn_prev_preview,
-                btn_next_preview,
-                preview_page_state,
-            ],
-            show_progress="hidden",
-            queue=False,
+            inputs=page_inputs,
+            outputs=preview_outputs,
+            **UI_EVENT,
         )
 
         btn_prev_preview.click(
             fn=prev_preview_page,
-            inputs=[dataset, preview_selector, preview_page_state,preview_start_year, ticker_input],
-            outputs=[
-                preview,
-                preview_page_label,
-                btn_prev_preview,
-                btn_next_preview,
-                preview_page_state,
-            ],
-            show_progress="hidden",
-            queue=False,
+            inputs=page_inputs,
+            outputs=preview_outputs,
+            **UI_EVENT,
         )

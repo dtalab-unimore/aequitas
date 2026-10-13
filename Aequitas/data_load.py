@@ -12,6 +12,7 @@ import gradio as gr
 import numpy as np
 import pandas as pd
 
+from Aequitas.ui import empty_state
 
 # =============================================================================
 # Project paths
@@ -738,13 +739,7 @@ def _load_preview_file_page_cached(
 # =============================================================================
 
 def empty_preview_table_html(message: str = "Select a dataset and/or a model to preview data.") -> str:
-    return f"""
-    <div class="preview-table-wrap">
-        <div class="preview-empty">
-            <div>{escape(message)}</div>
-        </div>
-    </div>
-    """
+    return empty_state(message)
 
 
 def preview_table_html(df: pd.DataFrame) -> str:
@@ -759,7 +754,7 @@ def preview_table_html(df: pd.DataFrame) -> str:
 
     rows = []
     for display_idx, (_, row) in enumerate(df.iterrows()):
-        td_cells = [f"<td class='row-index'>{display_idx}</td>"]
+        td_cells = [f"<td class='index-cell'>{display_idx}</td>"]
 
         td_cells.extend(
             f"<td>{escape(str(v)) if pd.notna(v) else ''}</td>"
@@ -769,9 +764,9 @@ def preview_table_html(df: pd.DataFrame) -> str:
         rows.append(f"<tr>{''.join(td_cells)}</tr>")
 
     return f"""
-    <div class="preview-table-wrap">
-        <div class="preview-table-scroll">
-            <table class="preview-html-table">
+    <div class="aq-table-wrap">
+        <div class="aq-table-scroll">
+            <table class="aq-table">
                 <thead>
                     <tr>{th_cells}</tr>
                 </thead>

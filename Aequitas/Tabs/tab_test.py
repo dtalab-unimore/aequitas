@@ -9,14 +9,16 @@ from Aequitas.test_models import (
     on_sl_change,
     on_pl_change,
     run_test_with_logs,
-    TEST_YEARS, get_tickers,
+    TEST_YEARS,
+    NO_PARAMS_TEXT,
+    get_tickers,
 )
+from Aequitas.ui import section_header
+
+UI_EVENT = dict(show_progress="hidden", queue=False)
+
 
 def build_tab():
-    UI_EVENT = dict(
-        show_progress="hidden",
-        queue=False,
-    )
 
     def _is_empty(value):
         return value is None or value == ""
@@ -24,11 +26,7 @@ def build_tab():
     def _update_end_years(start):
         if _is_empty(start):
             return (
-                gr.update(
-                    choices=[],
-                    value=None,
-                    interactive=False,
-                ),
+                gr.update(choices=[], value=None, interactive=False),
                 gr.update(interactive=False),
             )
 
@@ -44,42 +42,32 @@ def build_tab():
         )
 
     def _update_test_button(start, end):
-        return gr.update(
-            interactive=not _is_empty(start) and not _is_empty(end)
-        )
+        return gr.update(interactive=not _is_empty(start) and not _is_empty(end))
 
-    with gr.Tab("Test Model", elem_id="main-tabs"):
-        gr.Markdown("## Test Model")
-        gr.Markdown(
-            "Select the desidered model and the test period."
-        )
-
+    with gr.Tab("Test Model"):
         universe_options = get_universe_options()
 
-        # ─────────────────────────────────────────────────────────────
-        # Main configuration area
-        # ─────────────────────────────────────────────────────────────
-        with gr.Row(equal_height=False):
+        with gr.Column(elem_classes=["aq-tab"]):
 
-            # Left side: controls
-            with gr.Column(scale=3):
+            # ── Configuration cards ──────────────────────────────────────
+            with gr.Row(equal_height=True, elem_classes=["aq-row"]):
 
-                with gr.Group():
-                    gr.Markdown("### 1. Model configuration")
+                with gr.Column(scale=3, elem_classes=["aq-card"]):
+                    gr.HTML(section_header("Model configuration"))
 
                     with gr.Row():
                         test_universe = gr.Dropdown(
                             choices=universe_options,
                             value=None,
                             label="Universe",
-                            elem_classes=['dropdown-single-compact']
+                            elem_classes=["dropdown-single-compact"],
                         )
                         test_task = gr.Dropdown(
                             choices=[],
                             value=None,
                             label="Task Type",
                             interactive=False,
-                            elem_classes=['dropdown-single-compact']
+                            elem_classes=["dropdown-single-compact"],
                         )
 
                     with gr.Row():
@@ -88,241 +76,159 @@ def build_tab():
                             value=None,
                             label="Model",
                             interactive=False,
-                            elem_classes=['dropdown-single-compact']
+                            elem_classes=["dropdown-single-compact"],
                         )
                         test_config = gr.Dropdown(
                             choices=[],
                             value=None,
                             label="Configuration",
                             interactive=False,
-                            elem_classes=['dropdown-single-compact']
+                            elem_classes=["dropdown-single-compact"],
                         )
-            with gr.Column(scale=2):
-                with gr.Group():
-                    gr.Markdown("### 2. Sequence settings")
+
+                with gr.Column(scale=2, elem_classes=["aq-card"]):
+                    gr.HTML(section_header("Sequence settings"))
                     sl = gr.Dropdown(
                         choices=[],
                         value=None,
                         label="Sequence length",
                         interactive=False,
-                        elem_classes=['dropdown-single-compact']
+                        elem_classes=["dropdown-single-compact"],
                     )
                     pl = gr.Dropdown(
                         choices=[],
                         value=None,
                         label="Prediction length",
                         interactive=False,
-                        elem_classes=['dropdown-single-compact']
+                        elem_classes=["dropdown-single-compact"],
                     )
-            with gr.Column(scale=1):
-                with gr.Group():
-                    gr.Markdown("### 3. Test period")
 
+                with gr.Column(scale=2, elem_classes=["aq-card"]):
+                    gr.HTML(section_header("Test period"))
                     start_test = gr.Dropdown(
                         choices=[],
                         value=None,
                         label="Start Year",
                         interactive=False,
-                        elem_classes=['dropdown-single-compact']
+                        elem_classes=["dropdown-single-compact"],
                     )
                     end_test = gr.Dropdown(
                         choices=[],
                         value=None,
                         label="End Year",
                         interactive=False,
-                        elem_classes=['dropdown-single-compact']
+                        elem_classes=["dropdown-single-compact"],
                     )
 
-            # Right side: config preview
-            with gr.Column(scale=3):
-                config_info = gr.Textbox(
-                    label="Train model parameters",
-                    value="\n\nNo model parameters selected yet.",
-                    lines=20,
-                    max_lines=20,
-                    interactive=False,
-                    buttons=["copy"],
-                    elem_id="config-text-box",
-                    elem_classes=["model-params-textbox"]
-                )
+                with gr.Column(scale=3, elem_classes=["aq-card"]):
+                    gr.HTML(section_header("Train model parameters"))
+                    config_info = gr.Textbox(
+                        label=None,
+                        show_label=False,
+                        value=NO_PARAMS_TEXT,
+                        lines=8,
+                        max_lines=8,
+                        interactive=False,
+                        buttons=["copy"],
+                        elem_classes=["aq-log"],
+                    )
 
-        # ─────────────────────────────────────────────────────────────
-        # TEST button
-        # ─────────────────────────────────────────────────────────────
-        with gr.Row():
-            with gr.Column(scale=2):
-                gr.HTML("")
-
-            with gr.Column(scale=1, min_width=180):
+            # ── TEST button ──────────────────────────────────────────────
+            with gr.Row(elem_classes=["aq-action-row"]):
                 test_button = gr.Button(
-                    "TEST",
+                    "Test",
                     variant="primary",
-                    min_width=120,
                     interactive=False,
-                    elem_id="test-button",
+                    elem_classes=["aq-primary-btn"],
                 )
 
-            with gr.Column(scale=2):
-                gr.HTML("")
+            # ── Outputs, shown after TEST click ──────────────────────────
+            with gr.Column(visible=False) as test_output_section:
 
-        # ─────────────────────────────────────────────────────────────
-        # Hidden outputs, shown after TEST click
-        # ─────────────────────────────────────────────────────────────
-        with gr.Column(visible=False) as test_output_section:
-            # Riga tickers + download CSV
-            with gr.Row(equal_height=False, elem_classes="tickers-row"):
-                with gr.Column(elem_classes="tickers-card-wrap"):
-                    tickers_info = gr.HTML(
-                        value="",
-                        visible=False,
-                        elem_id="tickers-info",
-                    )
+                with gr.Row(elem_classes=["aq-row"]):
+                    with gr.Column(elem_classes=["tickers-card-wrap"]):
+                        tickers_info = gr.HTML(value="", visible=False)
 
-                    tickers_download = gr.DownloadButton(
-                        label="Download tickers info ↓",
-                        value=None,
-                        visible=False,
-                        variant="secondary",
-                        elem_id="download-tickers-button",
-                    )
+                        tickers_download = gr.DownloadButton(
+                            label="Download tickers info ↓",
+                            value=None,
+                            visible=False,
+                            variant="secondary",
+                            elem_classes=["aq-chip-btn", "ticker-download-btn"],
+                        )
 
-            # Riga logs + results
-            with gr.Row(equal_height=True, elem_classes="test-results-row"):
-                with gr.Column(scale=1, elem_classes="test-output-card"):
-                    gr.HTML("""
-                    <div class="test-output-header">
-                        <span class="test-output-icon">▶</span>
-                        <span>Test Progress</span>
-                    </div>
-                    """)
+                with gr.Row(equal_height=True, elem_classes=["aq-row"]):
+                    with gr.Column(scale=1, elem_classes=["aq-card"]):
+                        gr.HTML(section_header("Test progress"))
 
-                    test_logs = gr.Textbox(
-                        label=None,
-                        value="",
-                        lines=10,
-                        max_lines=10,
-                        interactive=False,
-                        autoscroll=True,
-                        show_label=False,
-                        elem_id="test-logs-box",
-                    )
+                        test_logs = gr.Textbox(
+                            label=None,
+                            value="",
+                            lines=10,
+                            max_lines=10,
+                            interactive=False,
+                            autoscroll=True,
+                            show_label=False,
+                            elem_classes=["aq-log", "aq-log-fixed"],
+                        )
 
-                with gr.Column(scale=1, elem_classes="test-output-card"):
-                    gr.HTML("""
-                    <div class="test-output-header">
-                        <span class="test-output-icon">{ }</span>
-                        <span>Test Result</span>
-                    </div>
-                    """)
+                    with gr.Column(scale=1, elem_classes=["aq-card"]):
+                        gr.HTML(section_header("Test result"))
 
-                    test_result = gr.Code(
-                        label=None,
-                        language="json",
-                        value=None,
-                        interactive=False,
-                        show_label=False,
-                        elem_id="test-result-code",
-                        buttons=['download'],
-                    )
+                        test_result = gr.Code(
+                            label=None,
+                            language="json",
+                            value=None,
+                            interactive=False,
+                            show_label=False,
+                            elem_id="test-result-code",
+                            buttons=["download"],
+                        )
 
-        # ─────────────────────────────────────────────────────────────
-        # Wiring
-        # IMPORTANT:
-        # - queue=False on read callbacks prevents lag.
-        # - input() prevents callbacks triggered by programmatic updates.
-        # ─────────────────────────────────────────────────────────────
-
+        # ── Wiring ───────────────────────────────────────────────────────
+        # queue=False on read callbacks prevents lag; .input() avoids
+        # re-triggering on programmatic updates.
         test_universe.input(
             fn=on_universe_change,
             inputs=[test_universe],
-            outputs=[
-                test_task,
-                test_model,
-                test_config,
-                sl,
-                pl,
-                start_test,
-                end_test,
-                config_info,
-                test_button,
-            ],
+            outputs=[test_task, test_model, test_config, sl, pl,
+                     start_test, end_test, config_info, test_button],
             **UI_EVENT,
         )
 
         test_task.input(
             fn=on_task_change,
             inputs=[test_universe, test_task],
-            outputs=[
-                test_model,
-                test_config,
-                sl,
-                pl,
-                start_test,
-                end_test,
-                config_info,
-                test_button,
-            ],
+            outputs=[test_model, test_config, sl, pl,
+                     start_test, end_test, config_info, test_button],
             **UI_EVENT,
         )
 
         test_model.input(
             fn=on_model_change,
             inputs=[test_universe, test_task, test_model],
-            outputs=[
-                test_config,
-                sl,
-                pl,
-                start_test,
-                end_test,
-                config_info,
-                test_button,
-            ],
+            outputs=[test_config, sl, pl, start_test, end_test, config_info, test_button],
             **UI_EVENT,
         )
 
         test_config.input(
             fn=on_config_change,
             inputs=[test_universe, test_task, test_model, test_config],
-            outputs=[
-                sl,
-                pl,
-                start_test,
-                end_test,
-                config_info,
-                test_button,
-            ],
+            outputs=[sl, pl, start_test, end_test, config_info, test_button],
             **UI_EVENT,
         )
 
         sl.input(
             fn=on_sl_change,
             inputs=[test_universe, test_task, test_model, test_config, sl],
-            outputs=[
-                pl,
-                start_test,
-                end_test,
-                config_info,
-                test_button,
-            ],
+            outputs=[pl, start_test, end_test, config_info, test_button],
             **UI_EVENT,
         )
 
         pl.input(
             fn=on_pl_change,
-            inputs=[
-                test_universe,
-                test_task,
-                test_model,
-                test_config,
-                sl,
-                pl,
-            ],
-            outputs=[
-                config_info,
-                start_test,
-                end_test,
-                test_button,
-            ],
+            inputs=[test_universe, test_task, test_model, test_config, sl, pl],
+            outputs=[config_info, start_test, end_test, test_button],
             **UI_EVENT,
         )
 
@@ -340,43 +246,19 @@ def build_tab():
             **UI_EVENT,
         )
 
-        show_tickers = test_button.click(
+        test_button.click(
             fn=get_tickers,
             inputs=[test_universe, start_test],
             outputs=[tickers_info, tickers_download],
             show_progress="hidden",
-        )
-
-        show_outputs_evt = show_tickers.then(
-            fn=lambda: (
-                gr.update(visible=True),
-                gr.update(value=""),
-                gr.update(value=None),
-            ),
+        ).then(
+            fn=lambda: (gr.update(visible=True), gr.update(value=""), gr.update(value=None)),
             inputs=[],
-            outputs=[
-                test_output_section,
-                test_logs,
-                test_result,
-            ],
-            show_progress="hidden",
-            queue=False,
-        )
-
-        show_outputs_evt.then(
+            outputs=[test_output_section, test_logs, test_result],
+            **UI_EVENT,
+        ).then(
             fn=run_test_with_logs,
-            inputs=[
-                test_universe,
-                test_task,
-                test_model,
-                test_config,
-                sl,
-                pl,
-                start_test,
-                end_test,
-            ],
-            outputs=[
-                test_logs,
-                test_result,
-            ],
+            inputs=[test_universe, test_task, test_model, test_config,
+                    sl, pl, start_test, end_test],
+            outputs=[test_logs, test_result],
         )

@@ -10,6 +10,7 @@ from openai import OpenAI
 
 from Aequitas.eval_config import EVALUATION_DIR, OPENAI_API_KEY, OPENAI_EXPLANATION_MODEL
 from Aequitas.eval_scan import normalize_column_name
+from Aequitas.ui import empty_state
 
 TARGET_METRICS = [
     "Cumulative Return",
@@ -85,13 +86,7 @@ def prettify_output_dataframe(df) -> pd.DataFrame:
 # -------------------------------------------------
 
 def empty_evaluation_table_html(message: str = "No evaluation output yet.") -> str:
-    return f"""
-    <div class="metrics-table-wrap evaluation-metrics-table-wrap">
-        <div class="metrics-empty">
-            <div>{escape(message)}</div>
-        </div>
-    </div>
-    """
+    return empty_state(message)
 
 
 def format_display_value(value) -> str:
@@ -165,7 +160,7 @@ def dataframe_to_metrics_html(df) -> str:
 
     # 5.  Build the HTML manually.
     html = []
-    html.append('<table class="mpt evaluation-output-table">')
+    html.append('<table class="aq-table">')
 
     html.append("<thead><tr>")
     for pretty_col in kept_pretty_cols:
@@ -226,8 +221,8 @@ def dataframe_to_metrics_html(df) -> str:
     table_html = "\n".join(html)
 
     return f"""
-    <div class="metrics-table-wrap evaluation-metrics-table-wrap">
-        <div class="metrics-outer metrics-scroll">
+    <div class="aq-table-wrap">
+        <div class="aq-table-scroll">
             {table_html}
         </div>
     </div>

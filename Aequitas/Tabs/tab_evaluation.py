@@ -27,32 +27,20 @@ from Aequitas.eval_run import (
     show_chatgpt_explanation_loading,
     hide_chatgpt_explanation_loading,
 )
+from Aequitas.ui import section_header, loading_overlay, loading_inline
 
 
 def build_tab():
-    with gr.Tab("Evaluation", elem_id="main-tabs"):
-        with gr.Column(elem_classes=["evaluation-shell"]):
+    with gr.Tab("Evaluation"):
+        with gr.Column(elem_classes=["aq-tab"]):
 
-            with gr.Row(elem_classes=["evaluation-main-layout"]):
+            with gr.Row(elem_classes=["aq-row", "evaluation-main-layout"]):
 
                 # ── LEFT COLUMN ─────────────────────────────────────────────
-                with gr.Column(
-                    scale=1,
-                    elem_classes=["evaluation-left-col"],
-                ):
+                with gr.Column(scale=1, elem_classes=["aq-stack"]):
 
-                    # Assessment type
-                    with gr.Group(elem_classes=["evaluation-mode-card"]):
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-mode-title-wrap">
-                                <div class="evaluation-section-title evaluation-mode-title">
-                                    <span class="evaluation-section-dot"></span>
-                                    Assessment type
-                                </div>
-                            </div>
-                            """
-                        )
+                    with gr.Column(elem_classes=["aq-card", "evaluation-mode-card"]):
+                        gr.HTML(section_header("Assessment type"))
 
                         eval_mode = gr.Radio(
                             choices=EVAL_MODES,
@@ -64,19 +52,9 @@ def build_tab():
                             elem_classes=["evaluation-radio"],
                         )
 
-                    with gr.Group(
-                        visible=False,
-                        elem_classes=["evaluation-panel"],
-                    ) as params_group:
+                    with gr.Column(visible=False, elem_classes=["aq-card"]) as params_group:
+                        gr.HTML(section_header("Result selection"))
 
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-section-title">
-                                <span class="evaluation-section-dot"></span>
-                                Result selection
-                            </div>
-                            """
-                        )
                         with gr.Row():
                             task_type = gr.Dropdown(
                                 choices=[],
@@ -84,7 +62,7 @@ def build_tab():
                                 label="Task type",
                                 interactive=False,
                                 multiselect=True,
-                                elem_classes=['dropdown-multiselect-compact']
+                                elem_classes=["dropdown-multiselect-compact"],
                             )
                             model = gr.Dropdown(
                                 choices=[],
@@ -96,13 +74,12 @@ def build_tab():
                             )
 
                         with gr.Row():
-
                             universe = gr.Dropdown(
                                 choices=[],
                                 value=None,
                                 label="Universe",
                                 interactive=False,
-                                elem_classes=['dropdown-single-compact']
+                                elem_classes=["dropdown-single-compact"],
                             )
                             configuration = gr.Dropdown(
                                 choices=[],
@@ -113,14 +90,7 @@ def build_tab():
                                 elem_classes=["dropdown-multiselect-compact"],
                             )
 
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-section-title evaluation-section-spaced">
-                                <span class="evaluation-section-dot"></span>
-                                Evaluation window
-                            </div>
-                            """
-                        )
+                        gr.HTML(section_header("Evaluation window", spaced=True))
 
                         with gr.Row():
                             year_start = gr.Dropdown(
@@ -128,15 +98,14 @@ def build_tab():
                                 value=None,
                                 label="Year start",
                                 interactive=False,
-                                elem_classes=['dropdown-single-compact']
+                                elem_classes=["dropdown-single-compact"],
                             )
-
                             year_end = gr.Dropdown(
                                 choices=[],
                                 value=None,
                                 label="Year end",
                                 interactive=False,
-                                elem_classes=['dropdown-single-compact']
+                                elem_classes=["dropdown-single-compact"],
                             )
 
                         length_pair = gr.CheckboxGroup(
@@ -144,60 +113,41 @@ def build_tab():
                             value=[],
                             label="Sequence / prediction length",
                             interactive=False,
-                            elem_classes=["evaluation-length-checkbox"],
                         )
 
-                        with gr.Group(
-                            visible=False,
-                            elem_classes=["evaluation-portfolio-card"],
-                        ) as top_short_row:
+                        with gr.Column(visible=False, elem_classes=["aq-plain"]) as top_short_row:
+                            gr.HTML(section_header("Portfolio construction", spaced=True))
 
-                            gr.Markdown(
-                                """
-                                <div class="evaluation-section-title">
-                                    <span class="evaluation-section-dot"></span>
-                                    Portfolio construction
-                                </div>
-                                """
-                            )
                             with gr.Row():
-
                                 top_k = gr.Dropdown(
                                     choices=[],
                                     value=None,
                                     label="Top K",
                                     interactive=False,
-                                    elem_classes=['dropdown-single-compact']
+                                    elem_classes=["dropdown-single-compact"],
                                 )
-
                                 short_k = gr.Dropdown(
                                     choices=[],
                                     value=None,
                                     label="Short K",
                                     interactive=False,
-                                    elem_classes=['dropdown-single-compact']
+                                    elem_classes=["dropdown-single-compact"],
                                 )
 
                     run_btn = gr.Button(
                         "Run evaluation",
                         variant="primary",
                         interactive=False,
-                        elem_id="evaluation-run-button",
+                        elem_classes=["aq-primary-btn"],
                     )
 
-                    with gr.Group(elem_classes=["evaluation-output-card", "evaluation-log-card"]):
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-output-header">
-                                <span>Execution log</span>
-                            </div>
-                            """
-                        )
+                    with gr.Column(elem_classes=["aq-card"]):
+                        gr.HTML(section_header("Execution log"))
 
                         with gr.Accordion(
                             "Show command details",
                             open=False,
-                            elem_classes=["evaluation-log-accordion"],
+                            elem_classes=["aq-accordion"],
                         ):
                             log_box = gr.Textbox(
                                 label=None,
@@ -205,39 +155,17 @@ def build_tab():
                                 lines=12,
                                 max_lines=12,
                                 show_label=False,
-                                elem_id="execution-log",
+                                elem_classes=["aq-log"],
                             )
 
                 # ── RIGHT COLUMN ────────────────────────────────────────────
-                with gr.Column(
-                    scale=3,
-                    elem_classes=["evaluation-right-col"],
-                ):
+                with gr.Column(scale=3, elem_classes=["aq-stack"]):
 
-                    with gr.Group(
-                        elem_classes=[
-                            "evaluation-output-card",
-                            "evaluation-table-card",
-                            "evaluation-loading-host",
-                        ],
-                    ):
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-output-header">
-                                <span>Evaluation output</span>
-                            </div>
-                            """
-                        )
+                    with gr.Column(elem_classes=["aq-card", "aq-loading-host"]):
+                        gr.HTML(section_header("Evaluation output"))
 
                         table_loading = gr.HTML(
-                            """
-                            <div class="evaluation-loading-overlay">
-                                <div class="evaluation-loading-box">
-                                    <div class="evaluation-loading-spinner"></div>
-                                    <div class="evaluation-loading-text">Running evaluation...</div>
-                                </div>
-                            </div>
-                            """,
+                            loading_overlay("Running evaluation..."),
                             visible=False,
                         )
 
@@ -246,72 +174,38 @@ def build_tab():
                             elem_id="evaluation-output-table",
                         )
 
-                        with gr.Row(
-                            elem_classes=[
-                                "metrics-download-row",
-                                "evaluation-download-row",
-                            ]
-                        ):
+                        with gr.Row(elem_classes=["aq-chip-row"]):
                             download_evaluation_button = gr.DownloadButton(
-                                "Download CSV ⭣",
+                                "Download CSV ↓",
                                 value=None,
                                 visible=False,
-                                elem_id="download-evaluation-button",
+                                elem_classes=["aq-chip-btn"],
                             )
 
                             explain_evaluation_button = gr.Button(
                                 "Explain with ChatGPT",
                                 visible=False,
                                 interactive=False,
-                                elem_id="explain-evaluation-button",
+                                elem_classes=["aq-chip-btn"],
                             )
 
                         chatgpt_loading = gr.HTML(
-                            """
-                            <div class="evaluation-chatgpt-inline-loading">
-                                <div class="evaluation-loading-spinner"></div>
-                                <div class="evaluation-loading-text">Generating explanation...</div>
-                            </div>
-                            """,
+                            loading_inline("Generating explanation..."),
                             visible=False,
                         )
 
-                        with gr.Group(
-                            visible=False,
-                            elem_id="chatgpt-explanation-wrapper",
-                            elem_classes=["evaluation-chatgpt-explanation-card"],
-                        ) as chatgpt_explanation_group:
+                        with gr.Column(visible=False, elem_classes=["aq-plain"]) as chatgpt_explanation_group:
                             chatgpt_explanation = gr.Markdown(
                                 value="",
                                 elem_id="evaluation-chatgpt-explanation",
                                 buttons="copy",
                             )
 
-                    with gr.Group(
-                        visible=True,
-                        elem_classes=[
-                            "evaluation-output-card",
-                            "evaluation-plot-card",
-                            "evaluation-loading-host",
-                        ],
-                    ):
-                        gr.Markdown(
-                            """
-                            <div class="evaluation-output-header">
-                                <span>Evaluation plot</span>
-                            </div>
-                            """
-                        )
+                    with gr.Column(elem_classes=["aq-card", "aq-loading-host", "evaluation-plot-card"]):
+                        gr.HTML(section_header("Evaluation plot"))
 
                         plot_loading = gr.HTML(
-                            """
-                            <div class="evaluation-loading-overlay">
-                                <div class="evaluation-loading-box">
-                                    <div class="evaluation-loading-spinner"></div>
-                                    <div class="evaluation-loading-text">Building plot...</div>
-                                </div>
-                            </div>
-                            """,
+                            loading_overlay("Building plot..."),
                             visible=False,
                         )
 
