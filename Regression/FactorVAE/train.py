@@ -1,33 +1,25 @@
+import argparse
 import json
-import pickle
+import os
 
 import numpy as np
-import torch
 import pandas as pd
-import os
-from tqdm.auto import tqdm
-import argparse
-from .module import FactorVAE, FeatureExtractor, FactorDecoder, FactorEncoder, FactorPredictor, AlphaLayer, BetaLayer
+import torch
+
 from .dataset import init_data_loader
-from .model import train, validate, test
-from .utils import set_seed, DataArgument
-import wandb
+from .model import train, validate
+from .module import FactorVAE, FeatureExtractor, FactorDecoder, FactorEncoder, FactorPredictor, AlphaLayer, BetaLayer
+from .utils import set_seed
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
+from utils.save_results import save_results
 from utils.z_score import RobustZScoreNormalization
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
-def create_saving_path(args):
-    model_save_path = f"./model_params/{args.universe}/{args.model_name}/{args.seed}"
-    metrics_path = f"./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-
-    if not os.path.exists(model_save_path):
-        os.makedirs(model_save_path)
-
-    if not os.path.exists(metrics_path):
-        os.makedirs(metrics_path)
-
-    return model_save_path, metrics_path
 
 def extract_labels(df, args, pred_len):
     df_close = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}.csv')[['date', 'instrument', 'adj_close']]
@@ -38,11 +30,13 @@ def extract_labels(df, args, pred_len):
     df = df.merge(df_close[['datetime', 'instrument', 'Label']], on=['datetime', 'instrument'], how='left')
     return df
 
+
 def select_valid_ticker(df, start_date, end_date):
     df_train = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
     tickers = df_train['instrument'].drop_duplicates().tolist()
     df = df[df['instrument'].isin(tickers)]
     return df
+
 
 def cs_zscore(df, clip=None):
     def zscore(group):
@@ -55,13 +49,34 @@ def cs_zscore(df, clip=None):
 
     return df.groupby(level='datetime')['Label'].transform(zscore)
 
-def main(args, metrics_path, data_args):
-    set_seed(args.seed)
-    # make directory to save model
-    if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
 
-    # create model
+def prepare_dataset(args):
+    """Alpha158 features + labels, robust z-scored on the training period."""
+    dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha158.csv')
+    tickers = filter_constituents_by_date(
+        pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date
+    )
+    dataset = dataset[dataset['instrument'].isin(tickers['EODHD'].tolist())].copy()
+
+    dataset.rename(columns={'date': 'datetime'}, inplace=True)
+    dataset['datetime'] = pd.to_datetime(dataset['datetime'])
+
+    dataset = extract_labels(dataset, args, pred_len=args.seq_len)
+    dataset = select_valid_ticker(dataset, pd.to_datetime(args.start_date), pd.to_datetime(args.end_train_date))
+
+    dataset.set_index(['datetime', 'instrument'], inplace=True)
+    dataset = dataset.reorder_levels(['datetime', 'instrument']).sort_index()
+    dates = dataset.index.get_level_values('datetime')
+    train_mask = (dates >= pd.to_datetime(args.start_date)) & (dates <= pd.to_datetime(args.end_train_date))
+    robust_z = RobustZScoreNormalization(dataset[train_mask])
+    dataset = robust_z.robust_zscore(dataset)
+
+    dataset = dataset[dataset['Label'].notna()].fillna(0)
+    dataset['Label'] = cs_zscore(dataset, clip=3.0)
+    return dataset
+
+
+def build_model(args):
     feature_extractor = FeatureExtractor(num_latent=args.num_latent, hidden_size=args.hidden_size)
     factor_encoder = FactorEncoder(num_factors=args.num_factor, num_portfolio=args.num_portfolio,
                                    hidden_size=args.hidden_size)
@@ -69,147 +84,118 @@ def main(args, metrics_path, data_args):
     beta_layer = BetaLayer(args.hidden_size, args.num_factor)
     factor_decoder = FactorDecoder(alpha_layer, beta_layer)
     factor_predictor = FactorPredictor(args.hidden_size, args.num_factor)
-    factorVAE = FactorVAE(feature_extractor, factor_encoder, factor_decoder, factor_predictor)
+    return FactorVAE(feature_extractor, factor_encoder, factor_decoder, factor_predictor)
 
-    # Load dataset
-    dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha158.csv')
-    tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
-    dataset = dataset[dataset['instrument'].isin(tickers['EODHD'].tolist())].copy()
 
-    dataset.rename(columns={'date': 'datetime'}, inplace=True)
-    dataset['datetime'] = pd.to_datetime(dataset['datetime'])
+def loader(dataset, args, start, end, shuffle=False):
+    return init_data_loader(dataset, shuffle=shuffle, step_len=args.seq_len, start=start, end=end)
 
-    # Convert date strings to datetime objects
-    args.start_date = pd.to_datetime(args.start_date)
-    args.end_train_date = pd.to_datetime(args.end_train_date)
-    args.start_valid_date = pd.to_datetime(args.start_valid_date)
-    args.end_valid_date = pd.to_datetime(args.end_valid_date)
-    args.start_test_date = pd.to_datetime(args.start_test_date)
-    args.end_date = pd.to_datetime(args.end_date)
 
-    # Extract labels and select valid tickers
-    dataset = extract_labels(dataset, args, pred_len=args.seq_len)
-    dataset = select_valid_ticker(dataset, args.start_date, args.end_train_date)
+@torch.no_grad()
+def predict(model, dataloader, all_dates, pred_len, device):
+    """
+    Out-of-sample predictions, one batch per date.
 
-    # Filter dataset by date range and apply robust z-score normalization
-    dataset.set_index(['datetime', 'instrument'], inplace=True)
-    dataset = dataset.reorder_levels(['datetime', 'instrument']).sort_index()
-    train_mask = (dataset.index.get_level_values('datetime') >= args.start_date) & \
-                 (dataset.index.get_level_values('datetime') <= args.end_train_date)
-    robust_z = RobustZScoreNormalization(dataset[train_mask])
-    dataset = robust_z.robust_zscore(dataset)
+    Predictions are the reconstruction of the forward pass, as in the
+    original code.
+    Dates follow the original convention: pred_date is the sample date and
+    last_date the date pred_len trading days before it.
+    """
+    model.eval()
+    date_pos = {date: i for i, date in enumerate(all_dates)}
+    preds, labels, pred_dates, last_dates, tickers = [], [], [], [], []
 
-    # Filter out rows with NaN labels and fill NaN values with 0
-    dataset = dataset[dataset['Label'].notna()].fillna(0)
-    dataset['Label'] = cs_zscore(dataset, clip=3.0)
+    for char_with_label, index in dataloader:
+        inputs = char_with_label[:, :, :-1].to(device).float()
+        label = char_with_label[:, -1, -1].reshape(-1, 1)
 
-    # Extract dates for validation and test sets considering the seq_len parameter
-    all_dates = dataset.index.get_level_values('datetime').drop_duplicates().sort_values()
-    mask_test = all_dates <= args.end_valid_date
-    idx = np.where(mask_test)[0][np.argmax(all_dates[mask_test])]
-    last_valid_date = all_dates[idx - args.seq_len - args.pred_len + 1]
-    test_dates = all_dates[(all_dates >= last_valid_date) & (all_dates <= args.end_date)].to_list()
-    dates = test_dates[args.seq_len + args.pred_len:]
-    last_seq_date = test_dates[args.seq_len: -args.pred_len]
+        _, rec, _, _, _, _ = model(inputs, label.to(device).float())
+        preds.append(rec.cpu().numpy().reshape(-1, 1))
+        labels.append(label.numpy())
 
-    index = dataset[dataset.index.get_level_values('datetime').isin(pd.to_datetime(dates))].index
-    unique_dates = sorted(index.get_level_values('datetime').unique())
-    ticker_per_date = [
-        index[index.get_level_values('datetime') == date].get_level_values('instrument').tolist()
-        for date in unique_dates
-    ]
+        # Each sample's index lists the (datetime, instrument) of every row of
+        # its input window; the last one is the sample itself.
+        date = pd.Timestamp(index[0][-1][0])
+        pred_dates.append(date.strftime('%Y-%m-%d'))
+        last_dates.append(pd.Timestamp(all_dates[date_pos[date] - pred_len]).strftime('%Y-%m-%d'))
+        tickers.append([window[-1][1] for window in index])
 
-    train_dataloader = init_data_loader(dataset,
-                                        shuffle=True,
-                                        step_len=data_args.seq_len,
-                                        start=data_args.start_time,
-                                        end=data_args.fit_end_time,
-                                        select_feature=data_args.select_feature)
+    return preds, labels, pred_dates, last_dates, tickers
 
-    valid_dataloader = init_data_loader(dataset,
-                                        shuffle=False,
-                                        step_len=data_args.seq_len,
-                                        start=data_args.val_start_time,
-                                        end=data_args.val_end_time,
-                                        select_feature=data_args.select_feature)
 
-    test_dataloader = init_data_loader(dataset,
-                                        shuffle=False,
-                                        step_len=data_args.seq_len,
-                                        start=args.start_test_date.strftime('%Y-%m-%d'),
-                                        end=args.end_date.strftime('%Y-%m-%d'),
-                                        select_feature=data_args.select_feature)
+def metrics_of(preds, labels):
+    from sklearn.metrics import r2_score
 
-    T_max = len(train_dataloader) * args.num_epochs
+    preds_flat, labels_flat = np.concatenate(preds), np.concatenate(labels)
+    return {
+        'MSE': float(np.mean((preds_flat - labels_flat) ** 2)),
+        'MAE': float(np.mean(np.abs(preds_flat - labels_flat))),
+        'RMSE': float(np.sqrt(np.mean((preds_flat - labels_flat) ** 2))),
+        'R2': float(r2_score(preds_flat, labels_flat)),
+    }
+
+
+def run_train(args):
+    set_seed(args.seed)
+    model_save_path, metrics_path = create_saving_path(args, "Regression", "FactorVAE", PROJECT_ROOT)
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
+    dataset = prepare_dataset(args)
+    all_dates = dataset.index.get_level_values('datetime').unique().sort_values()
+
+    train_loader = loader(dataset, args, args.start_date, args.end_train_date, shuffle=True)
+    valid_loader = loader(dataset, args, args.start_valid_date, args.end_valid_date)
+    test_loader = loader(dataset, args, args.start_test_date, args.end_date)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"*************** Using {device} ***************")
+    print(f"Using {device}", flush=True)
     args.device = device
 
-    factorVAE.to(device)
-    best_val_loss = 10000.0
-    optimizer = torch.optim.Adam(factorVAE.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max)
+    model = build_model(args).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader) * args.num_epochs)
+    checkpoint_path = os.path.join(model_save_path, 'model.pth')
 
     if args.wandb:
+        import wandb
         wandb.init(project="FactorVAE", config=args, name=f"{args.run_name}")
-        wandb.config.update(args)
 
-    # Start Trainig
-    for epoch in tqdm(range(args.num_epochs)):
-        train_loss = train(factorVAE, train_dataloader, optimizer, scheduler, args)
-        val_loss, val_metrics, val_preds, val_labels = validate(factorVAE, valid_dataloader, args)
-        test_loss, test_metrics, preds, labels = test(factorVAE, test_dataloader, args)
+    best_val_loss = float('inf')
+    for epoch in range(args.num_epochs):
+        train_loss = train(model, train_loader, optimizer, scheduler, args)
+        val_loss, val_metrics, _, _ = validate(model, valid_loader, args)
+        print(f"Epoch {epoch + 1}/{args.num_epochs}: train_loss={train_loss:.4f}, valid_loss={val_loss:.4f}", flush=True)
 
-        print(f"Epoch {epoch + 1}: Train Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}")
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-
-            # save_root = os.path.join(args.save_dir, f'{args.run_name}_factor_{args.num_factor}_hdn_{args.hidden_size}_port_{args.num_portfolio}_seed_{args.seed}.pt')
-            # torch.save(factorVAE.state_dict(), save_root)
-            # print(f"Model saved at {save_root}")
-
-            test_metrics = {k: float(v) for k, v in test_metrics.items()}
-            val_metrics = {k: float(v) for k, v in val_metrics.items()}
-
-            results = {
-                'metrics': test_metrics,
-                'preds': preds,
-                'labels': labels,
-                'pred_date': dates,
-                'last_date': last_seq_date,
-                'tickers': ticker_per_date
-            }
-
-            with open(f'{metrics_path}/results_sl{args.seq_len}_pl{args.pred_len}.pkl', 'wb') as f:
-                pickle.dump(results, f)
-
-            with open(f'{metrics_path}/metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(test_metrics, f, indent=4)
-
+            torch.save(model.state_dict(), checkpoint_path)
             with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(val_metrics, f, indent=4)
+                json.dump({k: float(v) for k, v in val_metrics.items()}, f, indent=4)
 
         if args.wandb:
-            wandb.log(
-                {"Train Loss": train_loss, "Validation Loss": val_loss, "Learning Rate": scheduler.get_last_lr()[0]})
-
-        print(f"Train Loss: {train_loss:.4f}")
-        print(f"Validation Loss: {val_loss:.4f}")
-        print(f"Test Loss: {test_loss:.4f}")
-
+            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss,
+                       "Learning Rate": scheduler.get_last_lr()[0]})
 
     if args.wandb:
         wandb.log({"Best Validation Loss": best_val_loss})
         wandb.finish()
 
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    preds, labels, pred_dates, last_dates, tickers = predict(model, test_loader, all_dates, args.pred_len, device)
+    metrics, results_pkl, metrics_json = save_results(
+        args, metrics_of(preds, labels), preds, labels, pred_dates, last_dates, tickers, metrics_path
+    )
+    return {"model_path": checkpoint_path, "metrics": metrics,
+            "results_path": results_pkl, "metrics_path": metrics_json}
 
-if __name__ == '__main__':
+
+def build_parser():
     parser = argparse.ArgumentParser(description='Train a FactorVAE model on stock data')
 
-    parser.add_argument('--data_path', type=str, default='../../Evaluation/data', help='path to the dataset')
+    parser.add_argument('--data_path', type=str, default='./Evaluation/data', help='path to the dataset')
     parser.add_argument('--universe', type=str, default='sp500')
-    parser.add_argument('--model_name', type=str, default='FactorVAE1_sp500')
+    parser.add_argument('--model_name', type=str, default='FactorVAE')
 
     parser.add_argument('--num_epochs', type=int, default=30, help='number of epochs to train for')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
@@ -222,30 +208,19 @@ if __name__ == '__main__':
     parser.add_argument('--num_factor', type=int, default=96, help='number of factors')
     parser.add_argument('--hidden_size', type=int, default=64, help='hidden size')
 
-    parser.add_argument('--start_date', type=str, default='2010-01-01', help='start time')
-    parser.add_argument('--end_train_date', type=str, default='2010-01-31', help='fit end time')
-    parser.add_argument('--start_valid_date', type=str, default='2010-02-01', help='validation start time')
-    parser.add_argument('--end_valid_date', type=str, default='2010-02-28', help='validation end time')
-    parser.add_argument('--start_test_date', type=str, default='2010-03-01', help='test start time')
-    parser.add_argument('--end_date', type=str, default='2010-03-31', help='end time')
+    parser.add_argument('--start_date', type=str, default='2018-01-01', help='start time')
+    parser.add_argument('--end_train_date', type=str, default='2021-12-31', help='fit end time')
+    parser.add_argument('--start_valid_date', type=str, default='2022-01-01', help='validation start time')
+    parser.add_argument('--end_valid_date', type=str, default='2022-12-31', help='validation end time')
+    parser.add_argument('--start_test_date', type=str, default='2023-01-01', help='test start time')
+    parser.add_argument('--end_date', type=str, default='2023-12-31', help='end time')
 
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--run_name', type=str, default='VAE-Revision2', help='name of the run')
-    parser.add_argument('--save_dir', type=str, default='./best_models', help='directory to save model')
-    parser.add_argument('--num_workers', type=int, default=4, help='number of workers for dataloader')
     parser.add_argument('--wandb', action='store_true', help='whether to use wandb')
-    args = parser.parse_args()
+    return parser
 
-    # Create saving paths
-    model_save_path, metrics_path = create_saving_path(args)
 
-    data_args = DataArgument(
-        start_time=args.start_date,
-        end_time=args.end_date,
-        fit_end_time=args.end_train_date,
-        val_start_time=args.start_valid_date,
-        val_end_time=args.end_valid_date,
-        seq_len=args.seq_len
-    )
-
-    main(args, metrics_path, data_args)
+if __name__ == '__main__':
+    output = run_train(build_parser().parse_args())
+    emit_result(output)

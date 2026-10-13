@@ -1,7 +1,7 @@
 import numpy as np
 import random
 from dataclasses import dataclass, field
-from module import *
+from .module import *
 
 
 def set_seed(seed):
