@@ -17,6 +17,7 @@ from .trainer.trainer import train_epoch, bce_loss, eval_model
 from .model.Thgnn import StockHeteGAT
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -196,6 +197,13 @@ if __name__=='__main__':
     )
 
     print(f"Test Metrics: {test_metrics}")
+
+    emit_result({
+        "model_path": os.path.join(model_save_path, "model.pth"),
+        "metrics": metrics,
+        "results_path": results_pkl,
+        "metrics_path": metrics_json,
+    })
 
 
 

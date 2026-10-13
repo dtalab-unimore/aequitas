@@ -16,6 +16,7 @@ from .lr_scheduler import ChainedScheduler
 from .model.MATCC import MATCC
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 from utils.z_score import RobustZScoreNormalization
 
@@ -291,7 +292,27 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
     print("SAVING LAST EPOCH RESULT AS THE TEST RESULT!")
     torch.save(model.state_dict(),f'{model_save_path}/model.pth')
 
+    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
+    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
+    metrics, results_pkl, metrics_json = save_results(
+        args,
+        test_metrics,
+        preds,
+        labels,
+        output_dates,
+        input_dates,
+        dl_test.tickers_to_date,
+        metrics_path
+    )
+
     print("\n" + "==" * 10 + " Training Over " + "==" * 10)
+
+    return {
+        "model_path": f"{model_save_path}/model.pth",
+        "metrics": metrics,
+        "results_path": results_pkl,
+        "metrics_path": metrics_json,
+    }
 
 
 if __name__=='__main__':
@@ -385,11 +406,5 @@ if __name__=='__main__':
                                     last_epoch=-1, max_lr=args.lr, warmup_steps=args.warmUp_epoch,
                                     gamma=args.gamma, coef=args.coef, step_size=3, cosine_period=args.cosine_period)
 
-    train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler)
-
-
-
-
-
-
-
+    output = train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler)
+    emit_result(output)

@@ -7,6 +7,7 @@ import time
 import pandas as pd
 import torch
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 from .load_dataset import CSVDataset
 from .master import MASTERModel
@@ -198,3 +199,10 @@ if __name__ == '__main__':
     )
 
     print('Test Metrics:\n', metrics)
+
+    emit_result({
+        "model_path": f"{model_save_path}/model.pth",
+        "metrics": metrics,
+        "results_path": results_pkl,
+        "metrics_path": metrics_json,
+    })

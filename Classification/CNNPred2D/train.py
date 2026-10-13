@@ -17,6 +17,7 @@ from .load_data import construct_data_warehouse_2d, split_train_val_test, extrac
 from tensorflow.keras import backend as K, callbacks
 
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 
 
@@ -158,7 +159,12 @@ def run_cnn_ann(data_warehouse, checkpoint_dir, n_features, dates, args):
         metrics_path
     )
 
-    return metrics
+    return {
+        "model_path": join(checkpoint_dir, 'model.weights.h5'),
+        "metrics": metrics,
+        "results_path": results_pkl,
+        "metrics_path": metrics_json,
+    }
 
 
 if __name__=='__main__':
@@ -215,7 +221,8 @@ if __name__=='__main__':
     data_warehouse, n_stocks, n_features = construct_data_warehouse_2d(args)
     data_warehouse, dates = split_train_val_test(data_warehouse, args)
 
-    test_metrics = run_cnn_ann(data_warehouse, model_save_path, n_features, dates, args)
+    output = run_cnn_ann(data_warehouse, model_save_path, n_features, dates, args)
 
     shutil.rmtree(tmpdir)
-    print('Test Metrics:\n', test_metrics)
+    print('Test Metrics:\n', output["metrics"])
+    emit_result(output)

@@ -10,6 +10,7 @@ from .evaluator import get_metrics
 from .load_datasets import load_dataset, load_incidence_matrix, save_dates
 from .model import ReRaLSTM
 from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
 from utils.save_results import save_results
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -110,3 +111,10 @@ if __name__=='__main__':
     )
 
     print(f'Metrics: {test_metrics}')
+
+    emit_result({
+        "model_path": f"{model_save_path}/model.pth",
+        "metrics": metrics,
+        "results_path": results_pkl,
+        "metrics_path": metrics_json,
+    })
