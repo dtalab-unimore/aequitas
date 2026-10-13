@@ -175,6 +175,12 @@ button {
 }
 
 /* ── Section header pill ───────────────────────────────────── */
+/* Gradio lets every block in a column grow; the header block never should,
+   otherwise it pushes the card content down when the row stretches. */
+.aq-card > .block:has(.aq-header) {
+    flex-grow: 0 !important;
+}
+
 .aq-header {
     display: inline-flex;
     align-items: center;
@@ -301,10 +307,27 @@ button {
     resize: none !important;
 }
 
+/* Streamed log box: at least --aq-log-height tall, and it fills the rest of
+   its card when a sibling card in the same row is taller. */
+.aq-card .form:has(> .aq-log-fixed) {
+    flex-grow: 1 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.aq-log-fixed,
+.aq-log-fixed label,
+.aq-log-fixed .input-container {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+}
+
 .aq-log-fixed textarea {
-    height: var(--aq-log-height) !important;
+    flex: 1 1 auto !important;
+    height: 100% !important;
     min-height: var(--aq-log-height) !important;
-    max-height: var(--aq-log-height) !important;
+    max-height: none !important;
 }
 
 .aq-accordion,
@@ -708,6 +731,45 @@ table.aq-table td.better-than-benchmark {
     color: #047857;
     border: 1px solid #a7f3d0;
     font-weight: 800;
+}
+
+/* "+N more" chip: expands in place to show the remaining tickers */
+.ticker-expand[open] {
+    flex-basis: 100%;
+}
+
+.ticker-expand > summary {
+    display: inline-block;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ticker-expand > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ticker-expand > summary:hover {
+    background: #d1fae5;
+}
+
+.ticker-expand .ticker-less,
+.ticker-expand[open] .ticker-more-label {
+    display: none;
+}
+
+.ticker-expand[open] .ticker-less {
+    display: inline;
+}
+
+.ticker-list-rest {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 7px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .tickers-card-wrap .ticker-download-btn {

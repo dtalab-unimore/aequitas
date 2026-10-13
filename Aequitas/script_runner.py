@@ -7,12 +7,13 @@ utils/logger.py and which is returned to the caller.
 """
 import json
 import os
-import queue
 import subprocess
 import sys
 import threading
 import time
 import traceback
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from utils.logger import RESULT_START, RESULT_END
@@ -99,47 +100,83 @@ def _timestamped(msg: str) -> str:
     return f"[{datetime.now():%H:%M:%S}] {msg}"
 
 
-def stream_job_logs(job, action: str):
-    """
-    Run `job(log_fn)` in a background thread and stream its progress.
+# Finished jobs kept in memory, so a reloaded page can still show their outcome.
+FINISHED_JOBS_KEPT = 20
 
-    `action` names the job in the status lines ("Training", "Test").
-    Yields `(logs_text, result_text, running)` tuples until the job ends;
-    on success the result is the job's return value as JSON, on failure
-    the traceback.
-    """
-    logs = []
-    log_queue = queue.Queue()
-    done_queue = queue.Queue()
 
-    def push_log(msg):
-        log_queue.put(_timestamped(msg))
+@dataclass
+class Job:
+    action: str
+    meta: dict
+    logs: list = field(default_factory=list)
+    status: str = "running"  # "running", "ok" or "error"
+    result_text: str = ""
+    started_at: float = field(default_factory=time.time)
+
+
+_JOBS: dict[str, Job] = {}
+_JOBS_LOCK = threading.Lock()
+
+
+def start_job(job_fn, action: str, meta: dict | None = None) -> str:
+    """
+    Run `job_fn(log_fn)` in a background thread and return the job id.
+
+    The job lives in a server-side registry, independent of the browser
+    request that started it: closing or reloading the page does not stop it,
+    and `follow_job(job_id)` can re-attach to it at any time.
+    `action` names the job in the status lines ("Training", "Test");
+    `meta` holds whatever the UI needs to restore its view of the run.
+    """
+    job_id = uuid.uuid4().hex
+    job = Job(action=action, meta=meta or {})
+
+    with _JOBS_LOCK:
+        _JOBS[job_id] = job
+        finished = [jid for jid, j in _JOBS.items() if j.status != "running"]
+        for jid in finished[:-FINISHED_JOBS_KEPT]:
+            del _JOBS[jid]
+
+    def log_fn(msg):
+        job.logs.append(_timestamped(msg))
 
     def worker():
+        log_fn(f"{action} started.")
         try:
-            push_log(f"{action} started.")
-            done_queue.put(("ok", job(push_log)))
+            output = job_fn(log_fn)
+            job.result_text = json.dumps(output, indent=2, ensure_ascii=False)
+            log_fn(f"{action} completed successfully.")
+            job.status = "ok"
         except Exception:
-            push_log(f"{action} failed.")
-            done_queue.put(("error", traceback.format_exc()))
+            job.result_text = traceback.format_exc()
+            log_fn(f"{action} failed.")
+            job.status = "error"
 
     threading.Thread(target=worker, daemon=True).start()
+    return job_id
+
+
+def get_job(job_id) -> Job | None:
+    return _JOBS.get(job_id) if job_id else None
+
+
+def follow_job(job_id):
+    """Yield `(logs_text, result_text, running)` for a job until it ends."""
+    job = get_job(job_id)
+    if job is None:
+        return
 
     while True:
-        while not log_queue.empty():
-            logs.append(log_queue.get())
+        # Read the status first: the worker sets it after the last log line.
+        running = job.status == "running"
+        yield "\n".join(job.logs), job.result_text, running
 
-        if not done_queue.empty() and log_queue.empty():
-            status, payload = done_queue.get()
-
-            if status == "ok":
-                logs.append(_timestamped(f"{action} completed successfully."))
-                result_text = json.dumps(payload, indent=2, ensure_ascii=False)
-            else:
-                result_text = payload
-
-            yield "\n".join(logs), result_text, False
+        if not running:
             return
 
-        yield "\n".join(logs), "", True
         time.sleep(0.1)
+
+
+def stream_job_logs(job_fn, action: str):
+    """Start a job and follow it (for callers that don't need to re-attach)."""
+    yield from follow_job(start_job(job_fn, action))

@@ -1,9 +1,11 @@
 import re
+import time
 
 import gradio as gr
 
 from Aequitas.data_load import read_configs
-from Aequitas.script_runner import stream_job_logs
+from Aequitas.script_runner import start_job, follow_job, get_job
+from Aequitas.test_models import get_tickers
 from Aequitas.train_model_dispatcher import dispatch_train
 from Aequitas.ui import error_alert
 
@@ -170,6 +172,8 @@ def train_model_with_logs(
             gr.update(value="Missing parameters."),
             "",
             gr.update(visible=False),
+            gr.skip(),
+            gr.skip(),
         )
         return
 
@@ -193,12 +197,100 @@ def train_model_with_logs(
             log_fn=log_fn,
         )
 
-    for logs_text, result_text, running in stream_job_logs(job, "Training"):
+    form_values = {
+        "universe": universe,
+        "task_type": task_type,
+        "model_name": model_name,
+        "config_name": config_name,
+        "sl_value": sl_value,
+        "pl_value": pl_value,
+        "start_train_year": start_train_year,
+        "end_train_year": end_train_year,
+        "start_valid_year": start_valid_year,
+        "end_valid_year": end_valid_year,
+    }
+
+    job_id = start_job(job, "Training", meta=form_values)
+    yield from follow_training(job_id)
+
+
+# -------------------------------------------------
+# Re-attaching to a run after a page reload
+# -------------------------------------------------
+# The job id of the latest run is kept in the browser (gr.BrowserState), the
+# job itself in the server-side registry of script_runner.
+
+def follow_training(job_id):
+    """
+    Stream a training job into the Train tab.
+
+    Yields: train_logs, train_result, train_loading, train_job_state, train_button.
+    The Train button stays disabled while the job is running.
+    """
+    first = True
+    for logs_text, result_text, running in follow_job(job_id):
         yield (
             gr.update(value=logs_text),
             result_text,
             gr.update(visible=running),
+            job_id if first else gr.skip(),
+            gr.update(interactive=not running),
         )
+        first = False
+
+
+def restore_training_view(job_id, run_shown):
+    """
+    When the Train tab is opened after a page reload, put the form, the
+    tickers and the output section back as they were for the browser's last
+    training run. Does nothing if this page already shows a run.
+
+    Outputs: universe, task, model, config, sl, pl, start_train, end_train,
+    start_valid, end_valid, train_output_section, tickers_info, tickers_download,
+    resume_token, run_shown.
+
+    Following the logs is not done here but by the `resume_token` change
+    event, so this event returns immediately.
+    """
+    job = get_job(job_id)
+    if job is None or run_shown:
+        return (*(gr.update(),) * 13, gr.update(), run_shown)
+
+    m = job.meta
+    uses_sl = model_uses_sequence_length(m["model_name"])
+    models = list(read_configs(m["task_type"]).keys())
+    tickers_info, tickers_download = get_tickers(m["universe"], m["end_valid_year"])
+
+    return (
+        gr.update(value=m["universe"]),
+        gr.update(value=m["task_type"]),
+        gr.update(choices=models, value=m["model_name"], interactive=True),
+        gr.update(value=m["config_name"]),
+        gr.update(
+            value=m["sl_value"] if uses_sl else None,
+            interactive=uses_sl,
+            placeholder="Insert the sequence length" if uses_sl else "Not used by this model",
+        ),
+        gr.update(value=m["pl_value"]),
+        gr.update(value=m["start_train_year"]),
+        gr.update(value=m["end_train_year"]),
+        gr.update(value=m["start_valid_year"]),
+        gr.update(value=m["end_valid_year"]),
+        gr.update(visible=True),
+        tickers_info,
+        tickers_download,
+        f"{job_id}:{time.time()}",
+        True,
+    )
+
+
+def resume_training(job_id):
+    """After a page reload, re-attach the log box to the browser's last training run."""
+    if get_job(job_id) is None:
+        yield (gr.skip(),) * 5
+        return
+
+    yield from follow_training(job_id)
 
 
 def _is_empty(value):
@@ -352,6 +444,8 @@ def train_model_with_logs_if_valid(
             gr.skip(),
             gr.skip(),
             gr.update(visible=False),
+            gr.skip(),
+            gr.skip(),
         )
         return
 

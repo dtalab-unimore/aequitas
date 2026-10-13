@@ -7,6 +7,8 @@ from Aequitas.train_models import (
     train_model_with_logs_if_valid,
     get_models_train,
     on_train_model_change,
+    restore_training_view,
+    resume_training,
 )
 from Aequitas.ui import section_header, loading_badge, AUTOSCROLL_LOG_JS
 
@@ -27,8 +29,16 @@ def build_train_tab():
     def show_train_loading_if_valid(is_valid):
         return gr.update(visible=bool(is_valid))
 
-    with gr.Tab("Train Model"):
+    # Job id of this browser's latest run, kept in localStorage across page
+    # reloads. Declared outside the tab: Gradio mounts a tab's components only
+    # when the tab is opened, and BrowserState reads its value on mount.
+    train_job_state = gr.BrowserState(None, storage_key="aequitas_train_job")
+
+    with gr.Tab("Train Model") as train_tab:
         train_validation_state = gr.State(False)
+        resume_token = gr.State(None)
+        # True once this page has shown a run (restored or started here).
+        run_shown_state = gr.State(False)
 
         with gr.Column(elem_classes=["aq-tab"]):
 
@@ -189,14 +199,16 @@ def build_train_tab():
 
         train_logs.change(fn=None, js=AUTOSCROLL_LOG_JS, **UI_EVENT)
 
-        train_task.change(
+        # .input (user edits only): restoring a run after a reload sets these
+        # values programmatically and must not trigger the reset cascade.
+        train_task.input(
             fn=get_models_train,
             inputs=[train_task],
             outputs=[train_model, sl, train_button],
             **UI_EVENT,
         )
 
-        train_model.change(
+        train_model.input(
             fn=on_train_model_change,
             inputs=required_train_inputs,
             outputs=[sl, train_button],
@@ -218,6 +230,8 @@ def build_train_tab():
                     outputs=train_button,
                     **UI_EVENT,
                 )
+
+        train_button.click(fn=lambda: True, outputs=[run_shown_state], **UI_EVENT)
 
         train_button.click(
             fn=validate_train_inputs_soft,
@@ -250,6 +264,26 @@ def build_train_tab():
         ).then(
             fn=train_model_with_logs_if_valid,
             inputs=[train_validation_state, *required_train_inputs],
-            outputs=[train_logs, train_result, train_loading],
+            outputs=[train_logs, train_result, train_loading, train_job_state, train_button],
+            show_progress="hidden",
+        )
+
+        # After a page reload, opening the tab shows the run this browser
+        # started (if any). This runs on tab select rather than page load:
+        # Gradio 6 mounts a tab only when it is opened, and updating an
+        # unmounted tab on load can leave the app-wide loading overlay stuck.
+        # The log stream itself runs off resume_token's change event.
+        train_tab.select(
+            fn=restore_training_view,
+            inputs=[train_job_state, run_shown_state],
+            outputs=[*required_train_inputs, train_output_section, tickers_info, tickers_download,
+                     resume_token, run_shown_state],
+            show_progress="hidden",
+        )
+
+        resume_token.change(
+            fn=resume_training,
+            inputs=[train_job_state],
+            outputs=[train_logs, train_result, train_loading, train_job_state, train_button],
             show_progress="hidden",
         )

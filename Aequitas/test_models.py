@@ -449,8 +449,21 @@ def get_tickers(universe: str, start_test_year: str):
         for ticker in preview_tickers
     )
 
+    rest_chips = "".join(
+        f'<span class="ticker-chip">{ticker}</span>'
+        for ticker in ticker_list[len(preview_tickers):]
+    )
+
     more_text = (
-        f'<span class="ticker-more">+{remaining} more</span>'
+        f"""
+        <details class="ticker-expand">
+            <summary class="ticker-more">
+                <span class="ticker-more-label">+{remaining} more</span>
+                <span class="ticker-less">Show less</span>
+            </summary>
+            <div class="ticker-list-rest">{rest_chips}</div>
+        </details>
+        """
         if remaining > 0
         else ""
     )
