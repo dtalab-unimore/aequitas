@@ -1,20 +1,22 @@
 # -*-Encoding: utf-8 -*-
 import argparse
-import glob
 import json
-import pickle
+import os
+import random
 import shutil
 
-import torch
 import numpy as np
-import random
-
+import torch
 from sklearn.metrics import r2_score
 
-from exp.exp_model import Exp_Model
-import os
+from .exp.exp_model import Exp_Model
+from .preprocessing import load_dataset, ticker_csv_name
+from utils.load_configuation import create_saving_path
+from utils.logger import emit_result
+from utils.save_results import save_results
 
-from preprocessing import load_dataset
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 
 
 def get_metrics(preds, labels):
@@ -27,27 +29,131 @@ def get_metrics(preds, labels):
         'RMSE': np.sqrt(np.mean((preds_flat - labels_flat) ** 2)),
         'R2': r2_score(preds_flat, labels_flat)
     }
-    return metrics
+    return {k: float(v) for k, v in metrics.items()}
 
 
-if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='generating')
+def as_2d(values):
+    """(samples, pred_len), also for pred_len 1: the Evaluation step slices [:, :pl]."""
+    return np.array(values).reshape(len(values), -1)
+
+
+def ticker_checkpoint(model_save_path, ticker):
+    return os.path.join(model_save_path, "tickers", f"{ticker.replace('.', '_')}.pth")
+
+
+def set_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+
+def check_lengths(args):
+    # The hierarchical VAE decodes the latent into a target sequence as long as
+    # the input, halving the resolution at each scale: other lengths fail deep
+    # inside the network with a tensor size mismatch.
+    if args.prediction_length != args.sequence_length or args.sequence_length % 2:
+        raise ValueError(
+            f"D-Va needs prediction length = sequence length, and an even length "
+            f"(got sequence length {args.sequence_length}, prediction length {args.prediction_length})."
+        )
+
+
+def run_train(args):
+    """D-Va trains one model per ticker; each best checkpoint is kept for test.py."""
+    check_lengths(args)
+    set_seed(args.seed)
+    args.use_gpu = bool(torch.cuda.is_available() and args.use_gpu)
+    args.seq_len, args.pred_len = args.sequence_length, args.prediction_length
+
+    model_save_path, metrics_path = create_saving_path(args, "Regression", "D-Va", PROJECT_ROOT)
+    os.makedirs(os.path.join(model_save_path, "tickers"), exist_ok=True)
+
+    data_path = args.data_path
+    args.root_path = os.path.join(model_save_path, "data_preprocessed")
+    args.checkpoints = os.path.join(model_save_path, "checkpoints")
+
+    tickers = load_dataset(args.start_date, args.end_date, args.end_train_date, args.end_valid_date,
+                           args.start_test_date, data_path, args.universe, args.root_path,
+                           args.batch_size, args.sequence_length, args.prediction_length)
+    tickers = sorted(set(tickers))
+    print(f"{len(tickers)} tickers with enough data", flush=True)
+
+    results = {"preds": [], "labels": [], "pred_date": [], "last_date": [], "tickers": []}
+    val_preds, val_labels = [], []
+    trained = []
+
+    for i, ticker in enumerate(tickers, start=1):
+        print(f"Training ticker {ticker} ({i}/{len(tickers)})", flush=True)
+
+        args.data_path = ticker_csv_name(ticker)
+        setting = f"{args.data_path}_sl{args.sequence_length}_pl{args.prediction_length}_seed{args.seed}"
+        exp = Exp_Model(args)
+        exp.train(setting)
+        pred, label, pred_date, last_date = exp.test(setting, args.sequence_length, args.prediction_length)
+
+        if np.isnan(pred).any() or np.isnan(label).any():
+            print(f'NaN predictions for ticker {ticker}, skipping...', flush=True)
+        else:
+            # exp.train leaves the best checkpoint loaded in denoise_net
+            torch.save(exp.denoise_net.state_dict(), ticker_checkpoint(model_save_path, ticker))
+            trained.append(ticker)
+
+            results["preds"].extend(pred)
+            results["labels"].extend(label)
+            results["pred_date"].extend(pred_date)
+            results["last_date"].extend(last_date)
+            results["tickers"].extend([ticker] * len(pred))
+
+            val_pred, val_label, _, _ = exp.validate(setting, args.sequence_length, args.prediction_length)
+            val_preds.extend(val_pred)
+            val_labels.extend(val_label)
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        os.remove(os.path.join(args.root_path, args.data_path))
+        shutil.rmtree(os.path.join(args.checkpoints, setting), ignore_errors=True)
+
+    shutil.rmtree(args.root_path, ignore_errors=True)
+    shutil.rmtree(args.checkpoints, ignore_errors=True)
+
+    if not results["preds"]:
+        raise RuntimeError("No ticker had enough data to produce D-Va predictions.")
+
+    args.data_path = data_path
+    args.trained_tickers = trained
+    with open(f'{model_save_path}/config_params.json', 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
+    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
+        json.dump(get_metrics(val_preds, val_labels), f, indent=4)
+
+    metrics, results_pkl, metrics_json = save_results(
+        args, get_metrics(results["preds"], results["labels"]),
+        as_2d(results["preds"]), as_2d(results["labels"]),
+        results["pred_date"], results["last_date"], results["tickers"], metrics_path,
+    )
+    return {"model_path": os.path.join(model_save_path, "tickers"), "metrics": metrics,
+            "results_path": results_pkl, "metrics_path": metrics_json}
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description='Train D-Va (one model per ticker)')
 
     # Load data
     parser.add_argument('--universe', type=str, default='sx5e')
     parser.add_argument('--model_name', type=str, default='DVa')
-    parser.add_argument('--data_path', type=str, default='../../Evaluation/data', help='root path of the data files')
-    parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
-    parser.add_argument('--job_id', type=int, default=0, help='job id')
+    parser.add_argument('--data_path', type=str, default='./Evaluation/data', help='root path of the data files')
 
-    parser.add_argument('--sequence_length', type=int, default=2, help='length of input sequence')
-    parser.add_argument('--prediction_length', type=int, default=None, help='prediction sequence length')
-    parser.add_argument('--start_date', type=str, default='2016-01-01', help='start date')
-    parser.add_argument('--end_train_date', type=str, default='2019-12-31', help='train end date')
-    parser.add_argument('--start_valid_date', type=str, default='2020-01-01', help='validation start date')
-    parser.add_argument('--end_valid_date', type=str, default='2020-12-31', help='validation end date')
-    parser.add_argument('--start_test_date', type=str, default='2021-01-01', help='test start date')
-    parser.add_argument('--end_date', type=str, default='2021-12-31', help='end date')
+    parser.add_argument('--seq_len', '--sequence_length', dest='sequence_length', type=int, default=2,
+                        help='length of input sequence')
+    parser.add_argument('--pred_len', '--prediction_length', dest='prediction_length', type=int, default=1,
+                        help='prediction sequence length')
+    parser.add_argument('--start_date', type=str, default='2018-01-01', help='start date')
+    parser.add_argument('--end_train_date', type=str, default='2021-12-31', help='train end date')
+    parser.add_argument('--start_valid_date', type=str, default='2022-01-01', help='validation start date')
+    parser.add_argument('--end_valid_date', type=str, default='2022-12-31', help='validation end date')
+    parser.add_argument('--start_test_date', type=str, default='2023-01-01', help='test start date')
+    parser.add_argument('--end_date', type=str, default='2023-12-31', help='end date')
 
     parser.add_argument('--target_dim', type=int, default=1, help='dimension of target')
     parser.add_argument('--input_dim', type=int, default=6, help='dimension of input')
@@ -90,105 +196,9 @@ if __name__=='__main__':
     # Device
     parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
     parser.add_argument('--gpu', type=int, default=0, help='gpu')
-
-    args = parser.parse_args()
-
-    metrics_path = f"./results/{args.universe}/{args.model_name}/{args.seed}/y{args.start_test_date.split('-')[0]}"
-    os.makedirs(metrics_path, exist_ok=True)
-
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-
-    if args.prediction_length is None:
-        args.prediction_length = args.sequence_length
-
-    print('Args in experiment:')
-    print(args)
-    args.root_path = f'./data_preprocessed/{args.universe}/preprocessed_{args.job_id}'
-
-    tickers = load_dataset(args.start_date, args.end_date, args.end_train_date, args.end_valid_date, args.start_test_date,
-                           args.data_path, args.universe,args.root_path, args.batch_size, args.sequence_length, args.prediction_length)
-    tickers = set(tickers)
-    tickers = list(tickers)
-
-    Exp = Exp_Model
-    train_setting = f'tp{args.universe}_sl{ args.sequence_length}_seed{args.seed}_jobid{args.job_id}'
-
-    preds = []
-    labels = []
-    pred_dates = []
-    last_dates = []
-    all_tickers = []
-
-    val_preds = []
-    val_labels = []
-    val_pred_dates = []
-    val_last_dates = []
-    val_tickers = []
-
-    for ticker in tickers:
-        print('-----------------------------------------')
-        print('Training model for ticker:', ticker)
-        print('-----------------------------------------')
-
-        args.data_path = f"{ticker.replace('.', '_')}.csv"
-
-        setting = args.data_path + '_' + train_setting
-        exp = Exp(args)
-        print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-        exp.train(setting)
-        print('>>>>>>>start testing : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-        pred, label, pred_date, last_date = exp.test(setting, args.sequence_length, args.prediction_length)
-
-        if np.isnan(pred).any() or np.isnan(label).any():
-            print(f'NaN predictions for ticker {ticker}, skipping...')
-            continue
-
-        preds.extend(pred)
-        labels.extend(label)
-        pred_dates.extend(pred_date)
-        last_dates.extend(last_date)
-        all_tickers.extend([ticker] * len(pred))
-
-        print('>>>>>>>start validation : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-        val_pred, val_label, val_pred_date, val_last_date = exp.validate(setting, args.sequence_length, args.prediction_length)
-
-        val_preds.extend(val_pred)
-        val_labels.extend(val_label)
-        val_pred_dates.extend(val_pred_date)
-        val_last_dates.extend(val_last_date)
-        val_tickers.extend([ticker] * len(val_pred))
-
-        torch.cuda.empty_cache()
-
-        os.remove(os.path.join(args.root_path, f"{ticker.replace('.','_')}.csv"))
-        shutil.rmtree(os.path.join(args.checkpoints, setting))
-
-    metrics = get_metrics(preds, labels)
-    metrics = {k: float(v) for k, v in metrics.items()}
-
-    val_metrics = get_metrics(val_preds, val_labels)
-    val_metrics = {k: float(v) for k, v in val_metrics.items()}
-
-    results = {
-        'metrics': metrics,
-        'preds': np.array(preds),
-        'labels': np.array(labels),
-        'pred_date': pred_dates,
-        'last_date': last_dates,
-        'tickers': all_tickers
-    }
-
-    with open(f'{metrics_path}/results_sl{args.sequence_length}_pl{args.prediction_length}.pkl', 'wb') as f:
-        pickle.dump(results, f)
-
-    with open(f'{metrics_path}/metrics_sl{args.sequence_length}_pl{args.prediction_length}.json', 'w') as f:
-        json.dump(metrics, f, indent=4)
-
-    with open(f'{metrics_path}/val_metrics_sl{args.sequence_length}_pl{args.prediction_length}.json', 'w') as f:
-        json.dump(val_metrics, f, indent=4)
+    return parser
 
 
+if __name__ == '__main__':
+    output = run_train(build_parser().parse_args())
+    emit_result(output)
