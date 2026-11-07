@@ -1,5 +1,7 @@
 # AEQUITAS: A Toolkit for Stock Market Prediction and Portfolio Evaluation
 
+The full paper is available at this [link](https://dl.acm.org/doi/10.1145/3799682.3840240)
+
 _This paper has been accepted at CIKM 2026, Rome, Italy_
 
 ```
