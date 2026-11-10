@@ -69,6 +69,7 @@ def show_evaluation_loading():
         gr.update(visible=False, interactive=False),  # explain_evaluation_button
         gr.update(visible=False),              # chatgpt_explanation_group
         "",                                    # chatgpt_explanation
+        empty_plot(),                          # plot_output: the overlay must not sit over the old plot
     )
 
 

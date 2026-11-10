@@ -278,6 +278,7 @@ def build_tab():
                 table_loading, plot_loading, run_btn,
                 download_evaluation_button, explain_evaluation_button,
                 chatgpt_explanation_group, chatgpt_explanation,
+                plot_output,
             ],
             show_progress="hidden",
             queue=False,

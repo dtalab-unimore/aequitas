@@ -30,8 +30,8 @@ if __name__=='__main__':
     args.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
     args.add_argument('--start_valid_date', type=str, default='2022-01-01', help='Start date for validation set')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01', help='Start date for the test set')
-    args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
+    args.add_argument('--start_test_date', type=str, default='2024-01-01', help='Start date for the test set')
+    args.add_argument('--end_date', type=str, default='2024-12-31', help='End date for the dataset')
 
     args.add_argument('--lr', type=float, default=0.001,  help='learning rate')
     args.add_argument('--a', type=float, default=0.1, help='alpha, the weight of ranking loss')

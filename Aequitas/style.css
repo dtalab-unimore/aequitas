@@ -391,6 +391,13 @@ button {
     position: relative !important;
 }
 
+/* Gradio wraps each gr.HTML in a .block with position: relative: without
+   this the overlay would be positioned inside that (empty) wrapper instead
+   of covering the card, and its pill would sit over the content below. */
+.aq-loading-host *:has(.aq-loading-overlay) {
+    position: static !important;
+}
+
 .aq-loading-overlay {
     position: absolute;
     inset: 54px 14px 14px 14px;
