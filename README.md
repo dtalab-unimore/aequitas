@@ -1,5 +1,42 @@
 # AEQUITAS: A Toolkit for Stock Market Prediction and Portfolio Evaluation
 
+The full paper is available at this [link](https://dl.acm.org/doi/10.1145/3799682.3840240)
+
+_This paper has been accepted at CIKM 2026, Rome, Italy_
+
+```
+@inproceedings{10.1145/3799682.3840240,
+  author = {Pederzoli, Sara and Santacroce, Marta and Del Buono, Francesco and Bergianti, Marco and Guerra, Francesco},
+  title = {AEQUITAS: A Toolkit for Stock Market Prediction and Portfolio Evaluation},
+  year = {2026},
+  isbn = {9798400725395},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3799682.3840240},
+  doi = {10.1145/3799682.3840240},
+  booktitle = {Proceedings of the 35th ACM International Conference on Information and Knowledge Management},
+  pages = {9218–9222},
+  numpages = {5},
+  location = {Rome, Italy},
+  series = {CIKM '26}
+}
+
+@inproceedings{10.1145/3770855.3817595,
+   author = {Pederzoli, Sara and Santacroce, Marta and Guerra, Francesco and Bergianti, Marco and Del Buono, Francesco},
+   title = {FinBench: A Benchmarking Framework for Stock Market Prediction and Portfolio Allocation},
+   year = {2026},
+   isbn = {9798400722592},
+   publisher = {Association for Computing Machinery},
+   address = {New York, NY, USA},
+   url = {https://doi.org/10.1145/3770855.3817595},
+   doi = {10.1145/3770855.3817595},
+   pages = {9661–9672},
+   numpages = {12},
+   location = {Republic of Korea},
+   series = {KDD '26}
+}
+```
+
 **AEQUITAS** (An Evaluation toolkit for QUantItative and Trading AnalySis) is an interactive environment for stock market prediction and portfolio evaluation, built on top of the [FinBench](https://github.com/softlab-unimore/finbench) benchmarking framework. It supports the complete evaluation workflow from reusable dataset construction to model execution and portfolio-level result analysis and exposes it through a configurable backend and a Gradio-based graphical interface with LLM-assisted result interpretation. The demonstration video is avaible on [Youtube](https://www.youtube.com/watch?v=kzshWMwvhjM).
 
 ![AEQUITAS Architecture](aequitas.png)
