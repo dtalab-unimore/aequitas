@@ -193,9 +193,6 @@ class Exp_SVAT(Exp_Basic):
         best_perf = {'sharpe5': -np.inf}
         best_valid_loss = np.inf
 
-        best_preds = None
-        best_gt = None
-        mask = None
 
         best_valid_pred = None
         best_valid_labels = None
@@ -316,12 +313,6 @@ class Exp_SVAT(Exp_Basic):
                     best_valid_pred = cur_valid_pred.copy()
                     best_valid_labels = cur_valid_labels.copy()
 
-                    end_idx = self.trade_dates - args.history_len - args.pred_len + 1
-                    if self.test_index < end_idx:
-                        _, _, best_preds, best_gt, mask = self.valid(
-                            self.test_index, end_idx, args
-                        )
-
                 print('Valid Rank Loss: {}'.format(cur_valid_loss))
                 print('====> Valid preformance: btl5: {}, sharpe5: {}'.format(cur_valid_perf['btl5'], cur_valid_perf['sharpe5']))
 
@@ -330,7 +321,8 @@ class Exp_SVAT(Exp_Basic):
         print('====> Best valid preformance:')
         print('{}'.format(best_perf))
 
-        return best_preds, best_gt, mask, best_valid_pred, best_valid_labels, valid_mask
+        # No test here: test.py runs it on the period chosen in the Test tab
+        return best_valid_pred, best_valid_labels, valid_mask
 
     def test(self, model_save_path):
         args = Args(self.params[0])

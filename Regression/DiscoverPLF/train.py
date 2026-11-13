@@ -17,7 +17,7 @@ from .utils import cal_beta, metric_fn, mse, select_valid_ticker
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -111,6 +111,14 @@ def test_epoch(model, data_loader, args, concept_matrix, prefix="Test"):
 
 
 def create_loaders(args):
+    """
+    Train, valid and (test.py only) test loaders. In training there is no
+    test period: the data ends with validation, the test loader is None and
+    the test dates are empty.
+    """
+    with_test = bool(getattr(args, "start_test_date", None))
+    end_date = args.end_date if with_test else args.end_valid_date
+
     alpha = pd.read_csv(f"{args.data_path}/{args.universe}/{args.universe}_alpha360.csv")
     trained_tickers = getattr(args, "trained_tickers", None)
     if trained_tickers:
@@ -118,7 +126,7 @@ def create_loaders(args):
     else:
         constituents = pd.read_csv(f"{args.data_path}/constituents/eodhd/{args.universe}.csv")
         selected_tickers = filter_constituents_by_date(
-            constituents, args.start_test_date
+            constituents, ticker_selection_date(args)
         )["EODHD"].tolist()
     alpha = alpha[alpha["instrument"].isin(selected_tickers)]
 
@@ -138,7 +146,7 @@ def create_loaders(args):
     )
     alpha = alpha.groupby("instrument", group_keys=False).apply(lambda frame: frame.iloc[:-args.pred_len])
     alpha = normalizer.robust_zscore(alpha).fillna(0)
-    alpha = alpha[(alpha["datetime"] >= args.start_date) & (alpha["datetime"] <= args.end_date)]
+    alpha = alpha[(alpha["datetime"] >= args.start_date) & (alpha["datetime"] <= end_date)]
     alpha = alpha.set_index(["datetime", "instrument"])
 
     concept_data = np.load(f"{args.data_path}/{args.universe}/{args.universe}_inc_matrix.npz")
@@ -158,9 +166,7 @@ def create_loaders(args):
     market_value = market_value[["market_cap"]] / 1_000_000_000
     all_dates = pd.to_datetime(alpha.index.get_level_values("datetime").unique().sort_values())
     valid_index = all_dates.searchsorted(pd.to_datetime(args.start_valid_date))
-    test_index = all_dates.searchsorted(pd.to_datetime(args.start_test_date))
     valid_context = all_dates[max(0, valid_index - args.pred_len)].strftime("%Y-%m-%d")
-    test_context = all_dates[max(0, test_index - args.pred_len)].strftime("%Y-%m-%d")
 
     def prepare_frame(frame):
         frame = frame.join(market_value, how="inner").rename(columns={"market_cap": "market_value"})
@@ -178,16 +184,20 @@ def create_loaders(args):
     valid_frame = valid_frame.groupby(level="instrument", group_keys=False).apply(
         lambda frame: frame.iloc[:-args.pred_len]
     ).sort_index(level=["datetime", "instrument"])
-    test_frame = prepare_frame(alpha[
-        (alpha.index.get_level_values("datetime") >= test_context)
-        & (alpha.index.get_level_values("datetime") <= args.end_date)
-    ])
-    unique_test_dates = test_frame.index.get_level_values("datetime").unique().tolist()
-    last_dates = unique_test_dates[:-args.pred_len]
-    pred_dates = unique_test_dates[args.pred_len:]
-    test_frame = test_frame.groupby(level="instrument", group_keys=False).apply(
-        lambda frame: frame.iloc[:-args.pred_len]
-    ).sort_index(level=["datetime", "instrument"])
+    test_frame, last_dates, pred_dates = None, [], []
+    if with_test:
+        test_index = all_dates.searchsorted(pd.to_datetime(args.start_test_date))
+        test_context = all_dates[max(0, test_index - args.pred_len)].strftime("%Y-%m-%d")
+        test_frame = prepare_frame(alpha[
+            (alpha.index.get_level_values("datetime") >= test_context)
+            & (alpha.index.get_level_values("datetime") <= end_date)
+        ])
+        unique_test_dates = test_frame.index.get_level_values("datetime").unique().tolist()
+        last_dates = unique_test_dates[:-args.pred_len]
+        pred_dates = unique_test_dates[args.pred_len:]
+        test_frame = test_frame.groupby(level="instrument", group_keys=False).apply(
+            lambda frame: frame.iloc[:-args.pred_len]
+        ).sort_index(level=["datetime", "instrument"])
 
     def loader(frame, batch_size=-1):
         return DataLoader(
@@ -197,7 +207,8 @@ def create_loaders(args):
         )
 
     return (
-        loader(train_frame, args.batch_size), loader(valid_frame), loader(test_frame),
+        loader(train_frame, args.batch_size), loader(valid_frame),
+        loader(test_frame) if test_frame is not None else None,
         concept_data["inc_matrix"], stock_index, last_dates, pred_dates, used_tickers,
     )
 
@@ -239,20 +250,19 @@ def run_train(args):
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
-    model_save_path, metrics_path = create_saving_path(
+    model_save_path, _ = create_saving_path(
         args, "Regression", "DiscoverPLF", PROJECT_ROOT
     )
     loaders = create_loaders(args)
-    train_loader, valid_loader, test_loader, concept_matrix, stock_index, last_dates, pred_dates, used_tickers = loaders
+    train_loader, valid_loader, _, concept_matrix, stock_index, _, _, used_tickers = loaders
     args.trained_tickers = list(used_tickers)
     with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
         json.dump(vars(args), handle, indent=4)
-    inverse_stock_index = {value: key for key, value in stock_index.items()}
     concept_matrix = torch.as_tensor(concept_matrix, dtype=torch.float32, device=DEVICE)
     model = create_model(args)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     best_selection, best_epoch, stop_round, best_param = None, -1, 0, None
-    best_result = None
+    valid_metrics, valid_path = None, None
     parameter_history = collections.deque(maxlen=args.smooth_steps)
     evaluation_start_epoch = min(max(0, args.warmup_epochs), args.n_epochs - 1)
 
@@ -266,11 +276,9 @@ def run_train(args):
             continue
         model.load_state_dict(averaged_params)
         valid_output = test_epoch(model, valid_loader, args, concept_matrix, prefix="Valid")
-        test_output = test_epoch(model, test_loader, args, concept_matrix, prefix="Test")
         model.load_state_dict(current_params)
         valid_predictions, valid_labels, _, valid_loss, valid_score, _ = valid_output
-        test_predictions, test_labels, test_stock_indexes, test_loss, _, test_mask = test_output
-        pprint(f"Valid loss: {valid_loss:.4f}, Test loss: {test_loss:.4f}")
+        pprint(f"Valid loss: {valid_loss:.4f}")
         selection = checkpoint_selection(valid_score, valid_loss)
         if selection is not None and (
             best_selection is None or selection[0] > best_selection[0]
@@ -279,33 +287,19 @@ def run_train(args):
             pprint(f"Checkpoint updated using {selection[1]}: {selection[2]:.6f}")
             best_param = copy.deepcopy(averaged_params)
             valid_metrics = get_metrics(valid_predictions, valid_labels)
-            test_metrics = get_metrics(test_predictions, test_labels)
-            tickers = [[inverse_stock_index.get(int(value), str(value)) for value in row] for row in test_stock_indexes]
-            filtered_pred_dates = [date for index, date in enumerate(pred_dates) if test_mask[index]]
-            filtered_last_dates = [date for index, date in enumerate(last_dates) if test_mask[index]]
-            prediction_rows = [np.expand_dims(value, axis=1) for value in test_predictions]
-            label_rows = [np.expand_dims(value, axis=1) for value in test_labels]
-            with open(os.path.join(metrics_path, f"val_metrics_sl1_pl{args.pred_len}.json"), "w") as handle:
-                json.dump({key: float(value) for key, value in valid_metrics.items()}, handle, indent=4)
-            metrics, results_pkl, metrics_json = save_results(
-                args, test_metrics, prediction_rows, label_rows,
-                filtered_pred_dates, filtered_last_dates, tickers, metrics_path
-            )
-            best_result = (metrics, results_pkl, metrics_json)
+            valid_path = save_valid_metrics(valid_metrics, model_save_path, 1, args.pred_len)
         else:
             stop_round += 1
             if stop_round >= args.early_stop:
                 pprint("early stop")
                 break
 
-    if best_param is None or best_result is None:
+    if best_param is None:
         raise RuntimeError("DiscoverPLF training produced neither a finite validation IC nor a finite validation loss.")
     checkpoint_path = os.path.join(model_save_path, "model.pth")
     torch.save(best_param, checkpoint_path)
     pprint(f"best {best_selection[1]}: {best_selection[2]:.6f} @ {best_epoch + 1}")
-    metrics, results_pkl, metrics_json = best_result
-    return {"model_path": checkpoint_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    return training_result(checkpoint_path, valid_metrics, valid_path)
 
 
 def build_parser():
@@ -317,8 +311,6 @@ def build_parser():
     parser.add_argument("--end_train_date", default="2018-12-31")
     parser.add_argument("--start_valid_date", default="2019-01-01")
     parser.add_argument("--end_valid_date", default="2019-12-31")
-    parser.add_argument("--start_test_date", default="2023-01-01")
-    parser.add_argument("--end_date", default="2023-12-31")
     parser.add_argument("--pred_len", type=int, default=5)
     parser.add_argument("--d_feat", type=int, default=6)
     parser.add_argument("--hidden_size", type=int, default=128)

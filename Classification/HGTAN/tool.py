@@ -1,4 +1,3 @@
-import json
 import os
 
 import numpy as np
@@ -9,6 +8,7 @@ import torch.utils.data as Data
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, matthews_corrcoef
 
 from .load_data import get_batch
+from utils.training import save_valid_metrics
 
 
 def cal_performance(pred, gold, smoothing=False):
@@ -147,14 +147,15 @@ def eval_epoch(model, validation_data, adj, H, device,args):
     return epoch_loss, accuracy, valid_pred, all_gt
 
 
-def train(model, training_data, validation_data, adj, H, optimizer, device, args, model_save_path, metrics_path):
-    ''' Start training '''
+def train(model, training_data, validation_data, adj, H, optimizer, device, args, model_save_path):
+    ''' Start training; returns the validation metrics of the best checkpoint and their file '''
 
     valid_accus = []
     Train_Loss_list = []
     Train_Accuracy_list = []
     Val_Loss_list = []
     Val_Accuracy_list = []
+    best_val_metrics, val_metrics_path = None, None
 
     for epoch_i in range(args.n_epochs):
         print('[ Epoch', epoch_i, ']')
@@ -192,14 +193,12 @@ def train(model, training_data, validation_data, adj, H, optimizer, device, args
                 torch.save(checkpoint, model_name)
                 print('    - [Info] The checkpoint file has been updated.')
 
-                val_metrics = get_metrics(val_preds, val_labels)
-                val_metrics = {k: float(v) for k, v in val_metrics.items()}
-
-                with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                    json.dump(val_metrics, f, indent=4)
+                best_val_metrics = get_metrics(val_preds, val_labels)
+                val_metrics_path = save_valid_metrics(best_val_metrics, model_save_path, args.seq_len, args.pred_len)
 
     print('{Best:3.3f}\n'.format(Best=100 * max(valid_accus)))
     print('{Best_epoch: 4.0f}\n'.format(Best_epoch=valid_accus.index(max(valid_accus))))
+    return best_val_metrics, val_metrics_path
 
 def exctract_gt(eod_data, gt_data, args):
     EOD, GT = [], []

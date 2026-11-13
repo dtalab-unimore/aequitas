@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import first_test_day
 
 
 def find_max_values(df):
@@ -22,10 +23,17 @@ def dataset_normalization(dataset, max_values):
 
 
 def load_dataset(data_path, universe, start_date, end_train_date, end_valid_date, start_test_date, end_date, pred_len, lookback_length):
+    """
+    start_test_date / end_date are None in training: the data then ends with
+    the validation period and test_index marks the end of validation. The
+    labels are computed before the date filter, so the last validation days
+    still have them.
+    """
+    end_date = end_date or end_valid_date
 
     dataset = pd.read_csv(f'{data_path}/{universe}/{universe}.csv')
     constituents = pd.read_csv(f'{data_path}/constituents/eodhd/{universe}.csv')
-    tickers = filter_constituents_by_date(constituents, start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, start_test_date or first_test_day(end_valid_date))['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
 
     dataset = dataset[['date', 'instrument', 'adj_close']]
@@ -68,8 +76,15 @@ def load_dataset(data_path, universe, start_date, end_train_date, end_valid_date
             price_data.append(df['adj_close'])
 
     dates = dates[(dates >= start_date) & (dates <= end_date)].reset_index(drop=True)
-    valid_index = pd.to_datetime(dates[dates > end_train_date]).idxmin() - lookback_length - pred_len + 1
-    test_index = pd.to_datetime(dates[dates > end_valid_date]).idxmin() - lookback_length - pred_len + 1
+    lookback = lookback_length + pred_len - 1
+    # Offset of the first sample whose target falls after the given date
+    # (counting the dates also works when the data stops right there)
+    valid_index = int((dates <= end_train_date).sum()) - lookback
+    if start_test_date:
+        # The test starts at start_test_date, not necessarily right after validation
+        test_index = int((dates < start_test_date).sum()) - lookback
+    else:
+        test_index = int((dates <= end_valid_date).sum()) - lookback
 
     return np.array(all_data), np.array(gt_data), np.array(price_data), valid_index, test_index, dates, available_tickers
 

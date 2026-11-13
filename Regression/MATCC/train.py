@@ -17,7 +17,7 @@ from .model.MATCC import MATCC
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -179,7 +179,8 @@ def select_valid_ticker(df, start_date, end_date):
     return df
 
 
-def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
+def train(args, model_save_path, train_optimizer, lr_scheduler):
+    """Train for n_epoch epochs and keep the last one; the test is run by test.py."""
     if not os.path.exists(args.data_path):
         raise FileExistsError('Data dir not exists')
 
@@ -187,7 +188,7 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
         os.makedirs('./checkpoints', exist_ok=True)
 
         df_alpha = pd.read_csv(f"{args.data_path}/{args.universe}/{args.universe}_alpha158.csv")
-        tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
+        tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), ticker_selection_date(args))
         df_alpha = df_alpha[df_alpha['instrument'].isin(tickers['EODHD'].tolist())]
 
         market_index = pd.read_csv(f'{args.data_path}/{args.nation}_market.csv')
@@ -221,25 +222,13 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
             z_score=robust_z_score,
             period='valid'
         )
-
-        dl_test = CSVDataset(
-            df_alpha=df_alpha,
-            seq_len=args.seq_len,
-            pred_len=args.pred_len,
-            start_date=args.start_test_date,
-            end_date=args.end_date,
-            z_score=robust_z_score,
-            period='test'
-        )
-
-        #save_datasets(dl_train, dl_valid, dl_test, args.universe, args.seq_len, args.pred_len)
+        # No test here: test.py runs it on the period chosen in the Test tab
 
     else:
-        dl_train, dl_valid, dl_test = open_datasets(args.universe, args.seq_len, args.pred_len)
+        dl_train, dl_valid, _ = open_datasets(args.universe, args.seq_len, args.pred_len)
 
     train_loader = _init_data_loader(dl_train, shuffle=True, drop_last=True, num_workers=args.num_workers)
     valid_loader = _init_data_loader(dl_valid, shuffle=False, drop_last=False, num_workers=args.num_workers)
-    test_loader = _init_data_loader(dl_test, shuffle=False, drop_last=False, num_workers=args.num_workers)
 
     print("==" * 10 + f" Now is Training {args.model_name}_{args.seed} " + "==" * 10 + "\n")
 
@@ -247,19 +236,11 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
         train_loss = train_epoch(train_loader, train_optimizer=train_optimizer, lr_scheduler=lr_scheduler, model=model, device=device)
 
         val_loss, valid_metrics, _, _, _ = valid_epoch(valid_loader, model, device)
-        test_loss, test_metrics, preds, labels, mask = valid_epoch(test_loader, model, device)
 
         print("==" * 10 + f" {args.model_name}_{args.seed} Epoch {step} " + "==" * 10)
-        print("Epoch %d, train_loss %.6f, valid_loss %.6f, test_loss %.6f " %(step, train_loss, val_loss, test_loss))
+        print("Epoch %d, train_loss %.6f, valid_loss %.6f " %(step, train_loss, val_loss))
         print("Valid Dataset Metrics performance:{}\n".format(valid_metrics))
-        print("Test Dataset Metrics performance:{}\n".format(test_metrics))
         print("Learning rate :{}\n\n".format(train_optimizer.param_groups[0]['lr']))
-
-        print(f"\n===== Epoch {step} =====\ntrain loss:{train_loss}, "
-                f"valid loss:{val_loss},test loss:{test_loss}\n"
-                f"valid metrics:{valid_metrics}\n"
-                f"test metrics:{test_metrics}\n"
-                f"learning rate:{train_optimizer.param_groups[0]['lr']}\n")
 
         if step <= 10: # Warm up phase
             continue
@@ -268,51 +249,14 @@ def train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler):
             model_param = copy.deepcopy(model.state_dict())
             torch.save(model_param,f'{model_save_path}/{args.model_name}_model_params_epoch_{step}_seed_{args.seed}.pth')
 
-            valid_metrics = {k: float(v) for k, v in valid_metrics.items()}
-
-            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump(valid_metrics, f, indent=4)
-
-            output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
-            input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
-
-            metrics, results_pkl, metrics_json = save_results(
-                args,
-                test_metrics,
-                preds,
-                labels,
-                output_dates,
-                input_dates,
-                dl_test.tickers_to_date,
-                metrics_path
-            )
-
-            print('Test Metrics:\n', metrics)
-
-    print("SAVING LAST EPOCH RESULT AS THE TEST RESULT!")
+    print("SAVING THE LAST EPOCH AS THE MODEL!")
     torch.save(model.state_dict(),f'{model_save_path}/model.pth')
-
-    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
-    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
-    metrics, results_pkl, metrics_json = save_results(
-        args,
-        test_metrics,
-        preds,
-        labels,
-        output_dates,
-        input_dates,
-        dl_test.tickers_to_date,
-        metrics_path
-    )
+    # Validation metrics of the saved (last) epoch
+    valid_path = save_valid_metrics(valid_metrics, model_save_path, args.seq_len, args.pred_len)
 
     print("\n" + "==" * 10 + " Training Over " + "==" * 10)
 
-    return {
-        "model_path": f"{model_save_path}/model.pth",
-        "metrics": metrics,
-        "results_path": results_pkl,
-        "metrics_path": metrics_json,
-    }
+    return training_result(f"{model_save_path}/model.pth", valid_metrics, valid_path)
 
 
 if __name__=='__main__':
@@ -331,8 +275,6 @@ if __name__=='__main__':
     args.add_argument('--end_train_date', type=str, default='2020-06-31')
     args.add_argument('--start_valid_date', type=str, default='2021-01-01')
     args.add_argument('--end_valid_date', type=str, default='2021-01-30')
-    args.add_argument('--start_test_date', type=str, default='2022-03-01')
-    args.add_argument('--end_date', type=str, default='2022-03-31')
 
     # Model Hyperparameters
     args.add_argument('--gpu', type=int, default=0)
@@ -382,7 +324,7 @@ if __name__=='__main__':
     args.gate_input_end_index = shape_m + shape_a - 3
 
     torch.cuda.manual_seed(args.seed)
-    model_save_path, metrics_path = create_saving_path(args, "Regression", "MATCC", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Regression", "MATCC", PROJECT_ROOT)
     print(model_save_path)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
@@ -406,5 +348,5 @@ if __name__=='__main__':
                                     last_epoch=-1, max_lr=args.lr, warmup_steps=args.warmUp_epoch,
                                     gamma=args.gamma, coef=args.coef, step_size=3, cosine_period=args.cosine_period)
 
-    output = train(args, model_save_path, metrics_path, train_optimizer, lr_scheduler)
+    output = train(args, model_save_path, train_optimizer, lr_scheduler)
     emit_result(output)

@@ -45,7 +45,9 @@ def run_test(
     corr_matrix = dict(np.load(f'{args.data_path}/{args.universe}/{args.universe}_corr_matrix.npz', allow_pickle=True))
 
     dataset = extract_labels(dataset, args)
-    dataset, corr_matrix, tickers, dates = select_valid_ticker(dataset, corr_matrix, args.start_date, args.end_date)
+    # Tickers with data before the start and after the start of the test (the
+    # end of the test may be the last date in the data)
+    dataset, corr_matrix, tickers, dates = select_valid_ticker(dataset, corr_matrix, args.start_date, args.start_test_date)
 
     all_keys = pd.DataFrame(tickers, columns=['instrument']).merge(dates, how='cross')
     dataset = pd.merge(all_keys, dataset, on=['instrument', 'date'], how='left')

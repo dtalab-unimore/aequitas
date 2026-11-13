@@ -13,7 +13,7 @@ from .exp.exp_model import Exp_Model
 from .preprocessing import load_dataset, ticker_csv_name
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -65,20 +65,20 @@ def run_train(args):
     args.use_gpu = bool(torch.cuda.is_available() and args.use_gpu)
     args.seq_len, args.pred_len = args.sequence_length, args.prediction_length
 
-    model_save_path, metrics_path = create_saving_path(args, "Regression", "D-Va", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Regression", "D-Va", PROJECT_ROOT)
     os.makedirs(os.path.join(model_save_path, "tickers"), exist_ok=True)
 
     data_path = args.data_path
     args.root_path = os.path.join(model_save_path, "data_preprocessed")
     args.checkpoints = os.path.join(model_save_path, "checkpoints")
 
-    tickers = load_dataset(args.start_date, args.end_date, args.end_train_date, args.end_valid_date,
-                           args.start_test_date, data_path, args.universe, args.root_path,
+    # No test period: the data ends with validation (test.py writes its own test files)
+    tickers = load_dataset(args.start_date, None, args.end_train_date, args.end_valid_date,
+                           None, data_path, args.universe, args.root_path,
                            args.batch_size, args.sequence_length, args.prediction_length)
     tickers = sorted(set(tickers))
     print(f"{len(tickers)} tickers with enough data", flush=True)
 
-    results = {"preds": [], "labels": [], "pred_date": [], "last_date": [], "tickers": []}
     val_preds, val_labels = [], []
     trained = []
 
@@ -89,22 +89,15 @@ def run_train(args):
         setting = f"{args.data_path}_sl{args.sequence_length}_pl{args.prediction_length}_seed{args.seed}"
         exp = Exp_Model(args)
         exp.train(setting)
-        pred, label, pred_date, last_date = exp.test(setting, args.sequence_length, args.prediction_length)
+        val_pred, val_label, _, _ = exp.validate(setting, args.sequence_length, args.prediction_length)
 
-        if np.isnan(pred).any() or np.isnan(label).any():
+        if np.isnan(val_pred).any() or np.isnan(val_label).any():
             print(f'NaN predictions for ticker {ticker}, skipping...', flush=True)
         else:
             # exp.train leaves the best checkpoint loaded in denoise_net
             torch.save(exp.denoise_net.state_dict(), ticker_checkpoint(model_save_path, ticker))
             trained.append(ticker)
 
-            results["preds"].extend(pred)
-            results["labels"].extend(label)
-            results["pred_date"].extend(pred_date)
-            results["last_date"].extend(last_date)
-            results["tickers"].extend([ticker] * len(pred))
-
-            val_pred, val_label, _, _ = exp.validate(setting, args.sequence_length, args.prediction_length)
             val_preds.extend(val_pred)
             val_labels.extend(val_label)
 
@@ -116,7 +109,7 @@ def run_train(args):
     shutil.rmtree(args.root_path, ignore_errors=True)
     shutil.rmtree(args.checkpoints, ignore_errors=True)
 
-    if not results["preds"]:
+    if not trained:
         raise RuntimeError("No ticker had enough data to produce D-Va predictions.")
 
     args.data_path = data_path
@@ -124,16 +117,9 @@ def run_train(args):
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
-    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(get_metrics(val_preds, val_labels), f, indent=4)
-
-    metrics, results_pkl, metrics_json = save_results(
-        args, get_metrics(results["preds"], results["labels"]),
-        as_2d(results["preds"]), as_2d(results["labels"]),
-        results["pred_date"], results["last_date"], results["tickers"], metrics_path,
-    )
-    return {"model_path": os.path.join(model_save_path, "tickers"), "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    val_metrics = get_metrics(val_preds, val_labels)
+    valid_path = save_valid_metrics(val_metrics, model_save_path, args.seq_len, args.pred_len)
+    return training_result(os.path.join(model_save_path, "tickers"), val_metrics, valid_path)
 
 
 def build_parser():
@@ -152,8 +138,6 @@ def build_parser():
     parser.add_argument('--end_train_date', type=str, default='2021-12-31', help='train end date')
     parser.add_argument('--start_valid_date', type=str, default='2022-01-01', help='validation start date')
     parser.add_argument('--end_valid_date', type=str, default='2022-12-31', help='validation end date')
-    parser.add_argument('--start_test_date', type=str, default='2023-01-01', help='test start date')
-    parser.add_argument('--end_date', type=str, default='2023-12-31', help='end date')
 
     parser.add_argument('--target_dim', type=int, default=1, help='dimension of target')
     parser.add_argument('--input_dim', type=int, default=6, help='dimension of input')

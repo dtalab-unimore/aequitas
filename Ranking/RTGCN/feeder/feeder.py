@@ -5,6 +5,7 @@ import torch
 # operation
 from . import tools
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 class Feeder(torch.utils.data.Dataset):
@@ -46,15 +47,18 @@ class Feeder(torch.utils.data.Dataset):
             self.end_date = self.arg.end_valid_date
 
     def extract_idx(self, flag):
+        """
+        Window offsets of the period: the targets (seq_len + pred_len - 1 days
+        after the window start) fall after start_date and up to end_date.
+        Counting the dates also works when the data ends with the period.
+        """
         self.dates = self.dates.reset_index(drop=True)
+        lookback = self.arg.seq_len + self.arg.pred_len - 1
         if flag == 'train':
             start_idx = 0
-            end_idx = pd.to_datetime(
-                self.dates[self.dates > self.end_date]).idxmin() - self.arg.seq_len - self.arg.pred_len + 1
         else:
-            start_idx = pd.to_datetime(
-                self.dates[self.dates > self.start_date]).idxmin() - self.arg.seq_len - self.arg.pred_len + 1
-            end_idx = self.dates.index.max() - self.arg.seq_len - self.arg.pred_len + 2
+            start_idx = int((self.dates <= self.start_date).sum()) - lookback
+        end_idx = int((self.dates <= self.end_date).sum()) - lookback
 
         return start_idx, end_idx
 
@@ -85,14 +89,16 @@ class Feeder(torch.utils.data.Dataset):
     def load_data(self, flag):
         dataset = pd.read_csv(f'{self.arg.data_path}/{self.arg.universe}/{self.arg.universe}.csv')
         constituents = pd.read_csv(f'{self.arg.data_path}/constituents/eodhd/{self.arg.universe}.csv')
-        tickers = filter_constituents_by_date(constituents, self.arg.start_test_date)['EODHD'].tolist()
+        tickers = filter_constituents_by_date(constituents, ticker_selection_date(self.arg))['EODHD'].tolist()
         dataset = dataset[dataset['instrument'].isin(tickers)]
         dataset = dataset[['instrument', 'date', 'adj_close']]
         dataset = dataset.sort_values(by=['instrument', 'date'])
 
         # Filter by date
         all_dates = dataset['date'].drop_duplicates().sort_values()
-        self.dates = all_dates[(all_dates >= self.arg.start_date) & (all_dates <= self.arg.end_date)]
+        # In training there is no test period: the data ends with validation
+        end_date = self.arg.end_date or self.arg.end_valid_date
+        self.dates = all_dates[(all_dates >= self.arg.start_date) & (all_dates <= end_date)]
 
         dates_df = pd.DataFrame({'date': self.dates})
 

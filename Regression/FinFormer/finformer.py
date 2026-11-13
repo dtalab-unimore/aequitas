@@ -1,5 +1,4 @@
 import copy
-import json
 
 import numpy as np
 import pandas as pd
@@ -13,7 +12,7 @@ from Regression.FinFormer.model import Finformer
 from Regression.FinFormer.utils import edgeIndexTransform, pprint
 from audtorch.metrics.functional import concordance_cc
 
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 
 def metric_fn_2(preds):
@@ -115,7 +114,8 @@ class Finformer_Model:
 
         return np.mean(losses), ic, rank_ic, predictions, labels, tickers
 
-    def fit(self, args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path):
+    def fit(self, args, train_loader, valid_loader, adj_matrix, ticker_list, model_save_path):
+        """Train with early stopping on validation; the test is run by test.py."""
 
         optimizer = torch.optim.Adam(self.finformer.parameters(), lr=args.lr)
         stop_round = 0
@@ -123,6 +123,7 @@ class Finformer_Model:
         best_score = -math.inf
         best_epoch = -1
         best_param = 0
+        val_metrics, valid_path = None, None
 
         for epoch in tqdm(range(args.n_epochs)):
             pprint('Running Epoch:', epoch)
@@ -130,11 +131,10 @@ class Finformer_Model:
             self.trainer(train_loader, optimizer, adj_matrix, ticker_list)
 
             valid_loss, valid_score, valid_rank_ic, val_preds, val_labels, _ = self.tester(valid_loader, adj_matrix, ticker_list)
-            test_loss, test_score, test_rank_ic, preds, labels, tickers = self.tester(test_loader, adj_matrix, ticker_list)
 
-            pprint('valid_loss {:.6f}, test_loss {:.6f}'.format(valid_loss, test_loss))
-            pprint('valid_score {:.6f}, test_score {:.6f}'.format(valid_score, test_score))
-            pprint('valid_rank_ic {:.6f}, test_rank_ic {:.6f}'.format(valid_rank_ic, test_rank_ic))
+            pprint('valid_loss {:.6f}'.format(valid_loss))
+            pprint('valid_score {:.6f}'.format(valid_score))
+            pprint('valid_rank_ic {:.6f}'.format(valid_rank_ic))
 
             if valid_score > best_score:
                 best_score = valid_score
@@ -144,28 +144,7 @@ class Finformer_Model:
                 stop_round = 0
 
                 val_metrics = self.get_metrics(val_preds, val_labels)
-                val_metrics = {k: float(v) for k, v in val_metrics.items()}
-
-                with open(f'{metrics_path}/val_metrics_sl1_pl{args.pred_len}.json', 'w') as f:
-                    json.dump(val_metrics, f, indent=4)
-
-                test_metrics = self.get_metrics(preds, labels)
-
-                preds = [np.expand_dims(i, axis=1) for i in preds]
-                labels = [np.expand_dims(i, axis=1) for i in labels]
-
-                metrics, results_pkl, metrics_json = save_results(
-                    args,
-                    test_metrics,
-                    preds,
-                    labels,
-                    test_loader.dataset.valid_dates[args.pred_len:],
-                    test_loader.dataset.valid_dates[:-args.pred_len],
-                    tickers,
-                    metrics_path
-                )
-
-                print('Test Metrics:\n', metrics)
+                valid_path = save_valid_metrics(val_metrics, model_save_path, 1, args.pred_len)
 
             else:
                 stop_round += 1
@@ -176,9 +155,7 @@ class Finformer_Model:
         pprint('best score:', best_score, '@', best_epoch)
         torch.save(best_param, f'{model_save_path}/model.pth')
 
-        return {
-            "Model:": f"{args.model_name} saved to {model_save_path}",
-        }
+        return training_result(f'{model_save_path}/model.pth', val_metrics, valid_path)
 
 
 

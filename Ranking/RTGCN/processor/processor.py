@@ -61,12 +61,13 @@ class Processor(IO):
             num_workers=self.arg.num_worker * torchlight.ngpu(
                 self.arg.device),
             drop_last=True)
-        self.data_loader['test'] = torch.utils.data.DataLoader(
-            dataset=Feeder(self.arg, flag='test'),
-            batch_size=self.arg.test_batch_size,
-            shuffle=False,
-            num_workers=self.arg.num_worker * torchlight.ngpu(
-                self.arg.device))
+        if self.arg.start_test_date:  # test.py only: training has no test period
+            self.data_loader['test'] = torch.utils.data.DataLoader(
+                dataset=Feeder(self.arg, flag='test'),
+                batch_size=self.arg.test_batch_size,
+                shuffle=False,
+                num_workers=self.arg.num_worker * torchlight.ngpu(
+                    self.arg.device))
         self.data_loader['valid'] = torch.utils.data.DataLoader(
             dataset=Feeder(self.arg, flag='valid'),
             batch_size=self.arg.test_batch_size,
@@ -113,7 +114,8 @@ class Processor(IO):
         self.show_epoch_info()
         return {}, [], [], None
 
-    def start(self, model_save_path, metrics_path):
+    def start(self, model_save_path):
+        """Train, save the model and return the validation metrics (also written to model_save_path)."""
         self.io.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
         self.best_performance = {'mean_loss':99999, 'mrr':0, 'top1':0, 'top5':0, 'top10':0}
         # training phase
@@ -127,12 +129,11 @@ class Processor(IO):
 
         self.save_model(self.model, model_save_path, 'model.pth')
 
-        # evaluation
+        # evaluation on the validation set; the test is run by test.py
         self.io.print_log('Evaluation Start:')
-        _, _, _, _ = self.test(metrics_path, flag='valid')
-        metrics, preds, labels, dataset = self.test(metrics_path, flag='test')
+        metrics, _, _, _ = self.test(model_save_path, flag='valid')
 
-        return metrics, preds, labels, dataset
+        return metrics
 
     def save_model(self, model, model_save_path, name):
         model_path = '{}/{}'.format(model_save_path, name)
@@ -159,8 +160,9 @@ class Processor(IO):
         parser.add_argument('--end_train_date', type=str, default='2020-12-31', help='End date for training set')
         parser.add_argument('--start_valid_date', type=str, default='2021-01-01', help='Start date for validation set')
         parser.add_argument('--end_valid_date', type=str, default='2021-12-31', help='End date for validation set')
-        parser.add_argument('--start_test_date', type=str, default='2022-01-01', help='Start date for the test set')
-        parser.add_argument('--end_date', type=str, default='2024-12-31', help='End date for the dataset')
+        # Test period: set only by test.py; in training the data ends with validation
+        parser.add_argument('--start_test_date', type=str, default=None, help='Start date for the test set')
+        parser.add_argument('--end_date', type=str, default=None, help='End date for the test set')
 
         # processor
         parser.add_argument('--phase', default='train', help='must be train or test')

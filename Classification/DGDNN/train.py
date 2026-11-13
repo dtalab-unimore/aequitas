@@ -7,7 +7,7 @@ import os
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,7 @@ from .model.dgdnn import DGDNN
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parents[1]
@@ -34,7 +34,7 @@ class ExperimentConfig:
     market: str
     train_range: Tuple[str, str]
     val_range: Tuple[str, str]
-    test_range: Tuple[str, str]
+    test_range: Optional[Tuple[str, str]]  # None in training
     window: int = 19
     pred_len: int = 1
     fast_approximation: bool = False
@@ -73,7 +73,7 @@ def prepare_market_data(args):
     else:
         constituents = pd.read_csv(f"{args.data_path}/constituents/eodhd/{args.universe}.csv")
         requested_tickers = filter_constituents_by_date(
-            constituents, args.start_test_date
+            constituents, ticker_selection_date(args)
         )["EODHD"].tolist()
     df = df[df["instrument"].isin(requested_tickers)]
     df = df[["open", "close", "high", "low", "volume", "instrument", "date"]]
@@ -81,8 +81,9 @@ def prepare_market_data(args):
     periods = [
         (args.start_date, args.end_train_date),
         (args.start_valid_date, args.end_valid_date),
-        (args.start_test_date, args.end_date),
     ]
+    if getattr(args, "start_test_date", None):  # test.py only
+        periods.append((args.start_test_date, args.end_date))
     valid = set(requested_tickers)
     minimum_rows = args.seq_len + args.pred_len
     for start, end in periods:
@@ -106,7 +107,7 @@ def build_experiment(args):
         market=args.universe,
         train_range=(args.start_date, args.end_train_date),
         val_range=(args.start_valid_date, args.end_valid_date),
-        test_range=(args.start_test_date, args.end_date),
+        test_range=(args.start_test_date, args.end_date) if getattr(args, "start_test_date", None) else None,
         epochs=args.n_epochs,
         expansion_step=args.expansion_step,
     )
@@ -194,7 +195,7 @@ def result_dates(dataset, pred_len):
 
 def run_train(args):
     set_seed(args.seed)
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "DGDNN", str(PROJECT_ROOT))
+    model_save_path, _ = create_saving_path(args, "Classification", "DGDNN", str(PROJECT_ROOT))
     ticker_dict, tickers = prepare_market_data(args)
     args.trained_tickers = tickers
     with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
@@ -203,7 +204,6 @@ def run_train(args):
     experiment = build_experiment(args)
     train_dataset = build_dataset(experiment, "train", experiment.train_range, ticker_dict)
     valid_dataset = build_dataset(experiment, "validation", experiment.val_range, ticker_dict)
-    test_dataset = build_dataset(experiment, "test", experiment.test_range, ticker_dict)
     model = build_model(experiment, len(tickers), experiment.window)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=experiment.learning_rate, weight_decay=experiment.weight_decay
@@ -215,16 +215,8 @@ def run_train(args):
     checkpoint = os.path.join(model_save_path, "model.pth")
     torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": experiment.epochs}, checkpoint)
     valid_metrics, _, _ = evaluate(model, valid_dataset)
-    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
-        json.dump({key: float(value) for key, value in valid_metrics.items()}, handle, indent=4)
-    test_metrics, predictions, labels = evaluate(model, test_dataset)
-    last_dates, pred_dates = result_dates(test_dataset, args.pred_len)
-    metrics, results_pkl, metrics_json = save_results(
-        args, test_metrics, predictions, labels, pred_dates, last_dates,
-        [tickers] * len(predictions), metrics_path
-    )
-    return {"model_path": checkpoint, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    valid_path = save_valid_metrics(valid_metrics, model_save_path, args.seq_len, args.pred_len)
+    return training_result(checkpoint, valid_metrics, valid_path)
 
 
 def build_parser():
@@ -236,8 +228,6 @@ def build_parser():
     parser.add_argument("--end_train_date", default="2018-12-31")
     parser.add_argument("--start_valid_date", default="2019-01-01")
     parser.add_argument("--end_valid_date", default="2019-12-31")
-    parser.add_argument("--start_test_date", default="2020-01-01")
-    parser.add_argument("--end_date", default="2020-12-31")
     parser.add_argument("--seq_len", type=int, default=5)
     parser.add_argument("--pred_len", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)

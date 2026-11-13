@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from Ranking.RTGCN.processor.recognition import REC_Processor
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -35,27 +35,16 @@ def run_train(
 
     p = REC_Processor(processor_args)
 
-    model_save_path, metrics_path = create_saving_path(p.arg, "Ranking", "RTGCN", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(p.arg, "Ranking", "RTGCN", PROJECT_ROOT)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(p.arg), f, indent=4)
 
-    metrics, preds, labels, dataset = p.start(model_save_path, metrics_path)
+    # Writes val_metrics_sl*_pl*.json in model_save_path
+    valid_metrics = p.start(model_save_path)
+    valid_path = os.path.join(model_save_path, f"val_metrics_sl{p.arg.seq_len}_pl{p.arg.pred_len}.json")
 
-    metrics, results_pkl, metrics_json = save_results(
-        p.arg,
-        metrics,
-        preds,
-        labels,
-        dataset.dates_gt.to_list(),
-        dataset.last_seq_date.to_list(),
-        [dataset.tickers] * len(preds),
-        metrics_path
-    )
-
-    return {
-        "Model:": f"{model_name} saved to {model_save_path}",
-    }
+    return training_result(os.path.join(model_save_path, "model.pth"), valid_metrics, valid_path)
 
 
 if __name__ == '__main__':

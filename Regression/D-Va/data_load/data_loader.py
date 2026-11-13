@@ -50,7 +50,11 @@ class Dataset_Custom(Dataset):
 
         num_train = (df_raw['date'] <= self.args.end_train_date).sum()
         num_vali = ((df_raw['date'] >= self.args.start_valid_date) & (df_raw['date'] <= self.args.end_valid_date)).sum()
-        num_test = ((df_raw['date'] >= self.args.start_test_date) & (df_raw['date'] <= self.args.end_date)).sum()
+        # No test rows in training (no start_test_date / end_date)
+        if getattr(self.args, 'start_test_date', None) and getattr(self.args, 'end_date', None):
+            num_test = ((df_raw['date'] >= self.args.start_test_date) & (df_raw['date'] <= self.args.end_date)).sum()
+        else:
+            num_test = 0
 
         border1s = [0, num_train-self.seq_len, num_train+num_vali-self.seq_len]
         border2s = [num_train, num_train+num_vali, num_train+num_vali+num_test]

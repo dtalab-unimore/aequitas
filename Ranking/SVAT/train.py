@@ -3,17 +3,15 @@ import os
 from argparse import ArgumentParser
 from datetime import date
 
-import numpy as np
 import torch
 
 from Ranking.SVAT.experiments.exp_svat import Exp_SVAT
 from Ranking.SVAT.utils.config import build_param_dict
-from Ranking.SVAT.utils.load_data import save_dates
 from Ranking.SVAT.utils.metric import get_metrics
 from Ranking.SVAT.utils.optimize import set_seed
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -35,7 +33,7 @@ def validate_training_dates(args):
 def run_train(args):
     validate_training_dates(args)
 
-    model_save_path, metrics_path = create_saving_path(
+    model_save_path, _ = create_saving_path(
         args, "Ranking", "SVAT", PROJECT_ROOT
     )
 
@@ -47,41 +45,15 @@ def run_train(args):
 
     set_seed(args.seed)
     exp = Exp_SVAT(build_param_dict(args), gpus=gpus)
-    test_pred, test_gt, _, valid_pred, valid_gt, _ = exp.train(model_save_path)
+    valid_pred, valid_gt, _ = exp.train(model_save_path)
 
     valid_pred = valid_pred.swapaxes(0, 1)
     valid_gt = valid_gt.swapaxes(0, 1)
-    valid_metrics = {k: float(v) for k, v in get_metrics(valid_gt, valid_pred).items()}
-
-    with open(
-        os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"),
-        "w",
-    ) as f:
-        json.dump(valid_metrics, f, indent=4)
-
-    if test_pred is not None and test_pred.size > 0:
-        test_pred = test_pred.swapaxes(0, 1)
-        test_gt = test_gt.swapaxes(0, 1)
-        test_metrics = get_metrics(test_gt, test_pred)
-        predictions = [np.expand_dims(row, axis=1) for row in test_pred]
-        labels = [np.expand_dims(row, axis=1) for row in test_gt]
-        dates_gt, last_seq_date, tickers = save_dates(
-            exp.dates, exp.tickers, exp.test_index, args.pred_len, args.seq_len
-        )
-
-        save_results(
-            args,
-            test_metrics,
-            predictions,
-            labels,
-            dates_gt,
-            last_seq_date,
-            tickers,
-            metrics_path,
-        )
+    valid_metrics = get_metrics(valid_gt, valid_pred)
+    valid_path = save_valid_metrics(valid_metrics, model_save_path, args.seq_len, args.pred_len)
 
     torch.cuda.empty_cache()
-    return {"Model:": f"{args.model_name} saved to {model_save_path}"}
+    return training_result(os.path.join(model_save_path, "model.pth"), valid_metrics, valid_path)
 
 
 def build_parser():
@@ -95,8 +67,6 @@ def build_parser():
     parser.add_argument("--end_train_date", type=str, default="2021-12-31")
     parser.add_argument("--start_valid_date", type=str, default="2022-01-01")
     parser.add_argument("--end_valid_date", type=str, default="2022-12-31")
-    parser.add_argument("--start_test_date", type=str, default="2023-01-01")
-    parser.add_argument("--end_date", type=str, default="2023-12-31")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--epochs", type=int, default=500)
