@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 def find_max_values(df):
@@ -35,7 +36,12 @@ def compute_split_indices(all_dates, args):
         )
 
     valid_index = int(valid_candidates[0]) - args.history_len - args.pred_len + 1
-    test_candidates = np.flatnonzero(date_values > pd.Timestamp(args.end_valid_date))
+    # End of validation in training; in test.py the test starts at
+    # start_test_date, not necessarily right after validation
+    if getattr(args, 'start_test_date', None):
+        test_candidates = np.flatnonzero(date_values >= pd.Timestamp(args.start_test_date))
+    else:
+        test_candidates = np.flatnonzero(date_values > pd.Timestamp(args.end_valid_date))
     test_index = (
         int(test_candidates[0]) - args.history_len - args.pred_len + 1
         if len(test_candidates) > 0
@@ -51,9 +57,12 @@ def compute_split_indices(all_dates, args):
 
 
 def load_stock_features(args):
+    # In training there is no test period: the data ends with validation
+    end_date = getattr(args, 'end_date', None) or args.end_valid_date
+
     dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}.csv')
     constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-    tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
     dataset = dataset[['instrument', 'date', 'close']]
     dataset = dataset.sort_values(by=['date', 'instrument'])
@@ -73,14 +82,14 @@ def load_stock_features(args):
         if ticker == 'SBNY.US':
             continue
 
-        if df['date'].min() <= args.start_date and df['date'].max() >= args.end_date:
+        if df['date'].min() <= args.start_date and df['date'].max() >= end_date:
 
             df['ma5'] = df['close'].rolling(5).mean()
             df['ma10'] = df['close'].rolling(10).mean()
             df['ma20'] = df['close'].rolling(20).mean()
             df['ma30'] = df['close'].rolling(30).mean()
 
-            mask = (df['date'] >= args.start_date) & (df['date'] <= args.end_date)
+            mask = (df['date'] >= args.start_date) & (df['date'] <= end_date)
             df = df[mask]
 
             df = df.bfill().infer_objects()
@@ -105,7 +114,7 @@ def load_stock_features(args):
     return_ratios = np.array(return_ratios)
     base_price = np.array(base_price)
 
-    all_dates = all_dates[(all_dates >= args.start_date) & (all_dates <= args.end_date)].reset_index(drop=True)
+    all_dates = all_dates[(all_dates >= args.start_date) & (all_dates <= end_date)].reset_index(drop=True)
     valid_index, test_index = compute_split_indices(all_dates, args)
 
 

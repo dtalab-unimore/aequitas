@@ -22,6 +22,7 @@ from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
 from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 
 ESTIMATE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(ESTIMATE_DIR, "..", ".."))
@@ -54,9 +55,9 @@ def preprocess(args, work_dir, tickers=None):
     """
     Write baseline_data.npy and ticker_info.csv into <work_dir>/data_estimate/preprocess.
 
-    Training selects the tickers (constituents at the test start, with enough
-    history); the test reuses the trained list as is, in the same order,
-    because the model is built for that exact set of stocks.
+    Training selects the tickers (constituents right after validation, with
+    enough data in validation); the test reuses the trained list as is, in the
+    same order, because the model is built for that exact set of stocks.
     Returns the list of tickers written.
     """
     preprocess_dir = os.path.join(work_dir, "data_estimate", "preprocess")
@@ -67,9 +68,9 @@ def preprocess(args, work_dir, tickers=None):
 
     if tickers is None:
         constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-        members = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+        members = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
         df = df[df['instrument'].isin(members)]
-        df, _ = select_valid_ticker(df, args.start_date, args.start_test_date, args.end_date, args.seq_len)
+        df, _ = select_valid_ticker(df, args.start_date, args.start_valid_date, args.end_valid_date, args.seq_len)
         candidates = sorted(df['instrument'].unique())
     else:
         df = df[df['instrument'].isin(tickers)]
@@ -102,26 +103,36 @@ def preprocess(args, work_dir, tickers=None):
 
 
 def run_estimate(args, work_dir, checkpoint_dir, train):
-    """Run execute.py (train+test, or test only) in work_dir; returns the results file it writes."""
+    """
+    Run execute.py in work_dir, to train (train=True) or to test.
+    Returns the file it writes: the validation metrics when training, the
+    test results otherwise.
+    """
+    if train:
+        # Training has no test period, but ESTIMATE's data loader always builds
+        # a test split: give it the validation period. It is never evaluated
+        # (no --test) and its cache is removed by clear_data_cache.
+        start_test, end_test = args.start_valid_date, args.end_valid_date
+    else:
+        start_test, end_test = args.start_test_date, args.end_date
+
     cmd = [
         sys.executable, "-u", os.path.join(ESTIMATE_DIR, "execute.py"),
-        "--test",
+        "--train" if train else "--test",
         "--run_name", args.model_name,
         "--model", "estimate",
         "--start_train", args.start_date,
         "--end_train", args.end_train_date,
         "--start_valid", args.start_valid_date,
         "--end_valid", args.end_valid_date,
-        "--start_test", args.start_test_date,
-        "--end_test", args.end_date,
+        "--start_test", start_test,
+        "--end_test", end_test,
         "--n_step_ahead", str(args.pred_len),
         "--history_window", str(args.seq_len),
         "--pretrained_log", checkpoint_dir,
         "--config_path", BACKTEST_CONFIG,
         "--save_best",
     ]
-    if train:
-        cmd.append("--train")
     for name in FORWARDED_ARGS:
         cmd += [f"--{name}", str(getattr(args, name))]
 
@@ -129,9 +140,11 @@ def run_estimate(args, work_dir, checkpoint_dir, train):
     env = {**os.environ, "PYTHONPATH": ESTIMATE_DIR}
     subprocess.run(cmd, cwd=work_dir, env=env, check=True)
 
-    year = args.start_test_date.split('-')[0]
-    return os.path.join(work_dir, "results", args.universe, "estimate", str(args.seed), f"y{year}",
-                        f"results_sl{args.seq_len}_pl{args.pred_len}.pkl")
+    # The supervisor names the folder after the start year of its test window
+    year = start_test.split('-')[0]
+    name = (f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json" if train
+            else f"results_sl{args.seq_len}_pl{args.pred_len}.pkl")
+    return os.path.join(work_dir, "results", args.universe, "estimate", str(args.seed), f"y{year}", name)
 
 
 def clear_data_cache(checkpoint_dir):
@@ -157,7 +170,7 @@ def save_estimate_results(args, results_file, metrics_path, log_fn=None):
 
 
 def run_train(args):
-    model_save_path, metrics_path = create_saving_path(args, "Regression", "ESTIMATE", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Regression", "ESTIMATE", PROJECT_ROOT)
     work_dir = os.path.join(model_save_path, "work")
     shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -166,17 +179,18 @@ def run_train(args):
     with open(os.path.join(model_save_path, "config_params.json"), "w") as f:
         json.dump(vars(args), f, indent=4)
 
-    results_file = run_estimate(args, work_dir, model_save_path, train=True)
+    val_file = run_estimate(args, work_dir, model_save_path, train=True)
 
-    val_file = os.path.join(os.path.dirname(results_file), f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json")
+    # Written when a best checkpoint is saved (validation accuracy improved)
+    valid_metrics, valid_path = None, None
     if os.path.exists(val_file):
-        shutil.copy(val_file, metrics_path)
+        with open(val_file) as f:
+            valid_metrics = json.load(f)
+        valid_path = save_valid_metrics(valid_metrics, model_save_path, args.seq_len, args.pred_len)
 
-    metrics, results_pkl, metrics_json = save_estimate_results(args, results_file, metrics_path)
     shutil.rmtree(work_dir, ignore_errors=True)
     clear_data_cache(model_save_path)
-    return {"model_path": os.path.join(model_save_path, "model-best.pth"), "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    return training_result(os.path.join(model_save_path, "model-best.pth"), valid_metrics, valid_path)
 
 
 def build_parser():
@@ -192,8 +206,6 @@ def build_parser():
     args.add_argument('--end_train_date', default='2021-12-31')
     args.add_argument('--start_valid_date', default='2022-01-01')
     args.add_argument('--end_valid_date', default='2022-12-31')
-    args.add_argument('--start_test_date', default='2023-01-01')
-    args.add_argument('--end_date', default='2023-12-31')
 
     # ESTIMATE data / indicators
     args.add_argument('--target_col', default='trend_return')

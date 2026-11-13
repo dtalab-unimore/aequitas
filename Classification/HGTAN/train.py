@@ -8,11 +8,11 @@ from torch import optim
 
 from .model.Optim import ScheduledOptim
 from .model.models import HGTAN
-from .tool import train, eval_model, get_metrics, prepare_data
-from .load_data import load_data, load_matrices, extract_dates
+from .tool import train, prepare_data
+from .load_data import load_data, load_matrices
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -30,8 +30,6 @@ if __name__ == '__main__':
     args.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
     args.add_argument('--start_valid_date', type=str, default='2022-01-01', help='Start date for validation set')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01', help='Start date for the test set')
-    args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
 
     args.add_argument('--feature', type=int, default=9, help='Number of features to use')
     args.add_argument('--n_class', type=int, default=3, help='Number of classes to use')
@@ -62,20 +60,18 @@ if __name__ == '__main__':
 
     args.d_word_vec = args.d_model
 
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "HGTAN", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Classification", "HGTAN", PROJECT_ROOT)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     print('Extracting data...')
+    # Without a test period, test_index is the end of validation
     eod_data, ground_truth, valid_index, test_index, dates, tickers = load_data(args)
-    pred_dates, last_dates = extract_dates(test_index, dates, args)
     adj, H = load_matrices(tickers, args)
 
-    len_data = eod_data.shape[1] - args.seq_len - args.pred_len + 1
     train_loader = prepare_data(eod_data, ground_truth, 0, valid_index, args)
     valid_loader = prepare_data(eod_data, ground_truth, valid_index, test_index, args, flag='valid')
-    test_loader = prepare_data(eod_data, ground_truth, test_index, len_data, args, flag='test')
 
     model = HGTAN(
         rnn_unit=args.rnn_unit,
@@ -97,28 +93,9 @@ if __name__ == '__main__':
             betas=(0.9, 0.98), eps=1e-09),
         args.d_model, args.n_warmup_steps)
 
-    train(model, train_loader, valid_loader, adj, H, optimizer, device, args, model_save_path,metrics_path)
+    val_metrics, val_metrics_path = train(model, train_loader, valid_loader, adj, H, optimizer, device, args,
+                                          model_save_path)
 
-    preds, labels = eval_model(model, test_loader, adj, H, device, args, model_save_path)
+    print('Validation Metrics:\n', val_metrics)
 
-    metrics = get_metrics(preds, labels)
-
-    metrics, results_pkl, metrics_json = save_results(
-        args,
-        metrics,
-        preds,
-        labels,
-        pred_dates.dt.strftime("%Y-%m-%d").to_list(),
-        last_dates.dt.strftime("%Y-%m-%d").to_list(),
-        [tickers] * len(preds),
-        metrics_path
-    )
-
-    print('Test Metrics:\n', metrics)
-
-    emit_result({
-        "model_path": f"{model_save_path}/model.pth",
-        "metrics": metrics,
-        "results_path": results_pkl,
-        "metrics_path": metrics_json,
-    })
+    emit_result(training_result(f"{model_save_path}/model.pth", val_metrics, val_metrics_path))

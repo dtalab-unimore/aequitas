@@ -6,6 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import first_test_day
 
 
 def extract_data_divided_per_ticker(data, raw_data, start_date, end_date, tickers, pred_len):
@@ -126,11 +127,14 @@ def date_to_weekday(df):
 
 
 def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_valid_date, seq_len=5, pred_len=1,
-                 start_test_date=None):
-    """start_test_date: first test date; by default the test follows the validation period."""
-    
+                 start_test_date=None, with_test=True):
+    """
+    start_test_date: first test date; by default the test follows the validation period.
+    with_test=False (training): no test split, the test arrays come back empty.
+    """
+
     constituents = pd.read_csv(f'{data_path}/constituents/eodhd/{universe}.csv')
-    constituents = filter_constituents_by_date(constituents, start_test_date or end_valid_date)
+    constituents = filter_constituents_by_date(constituents, start_test_date or first_test_day(end_valid_date))
 
     data = pd.read_csv(f'{data_path}/{universe}/{universe}_tech.csv')
     data = data[data['instrument'].isin(constituents['EODHD'].tolist())]
@@ -174,7 +178,7 @@ def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_
             valid_labels.append(df_valid_label)
             valid_dates.append(date_to_weekday(df_valid))
 
-        if df_test is not None:
+        if with_test and df_test is not None:
             test_samples.append(df_test[:, :, 1:-1])
             test_labels.append(df_test_label)
             test_dates.append(date_to_weekday(df_test))
@@ -188,9 +192,12 @@ def load_dataset(data_path, universe, start_date, end_date, end_train_date, end_
     valid_samples = np.concatenate(valid_samples, axis=0)
     valid_labels = np.concatenate(valid_labels, axis=0)
     valid_dates = np.concatenate(valid_dates, axis=0)
-    test_samples = np.concatenate(test_samples, axis=0)
-    test_labels = np.concatenate(test_labels, axis=0)
-    test_dates = np.concatenate(test_dates, axis=0)
+    if test_samples:
+        test_samples = np.concatenate(test_samples, axis=0)
+        test_labels = np.concatenate(test_labels, axis=0)
+        test_dates = np.concatenate(test_dates, axis=0)
+    else:
+        test_samples, test_labels, test_dates = np.empty((0,)), np.empty((0, 1)), np.empty((0,))
     test_tickers = list(chain.from_iterable(test_tickers))
     test_dates_str = list(chain.from_iterable(test_dates_str))
     test_last_dates_str = list(chain.from_iterable(test_last_dates_str))

@@ -17,6 +17,7 @@ from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
 from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -66,10 +67,14 @@ def load_frame(args):
     df = df.merge(df_cnnpred, on='date', how='inner')
 
     constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-    tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
     df = df[df['instrument'].isin(tickers)]
 
-    df = df[(df['date'] >= args.start_date) & (df['date'] <= args.end_date)]
+    df = df[df['date'] >= args.start_date]
+    # Training has no end_date: the rows after validation are kept, as the
+    # labels of the last validation days look pred_len days ahead.
+    if getattr(args, 'end_date', None):
+        df = df[df['date'] <= args.end_date]
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.fillna(0)
     return df, tickers
@@ -144,7 +149,7 @@ def run_train(args):
     np.random.seed(args.seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    model_save_path, metrics_path = create_saving_path(args, "Regression", "SAMBA", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Regression", "SAMBA", PROJECT_ROOT)
     os.makedirs(os.path.join(model_save_path, "tickers"), exist_ok=True)
 
     df, tickers = load_frame(args)
@@ -153,7 +158,6 @@ def run_train(args):
     trainer_args = {**vars(args), "device": device, "debug": True,
                     "log_dir": model_save_path, "model": "SAMBA"}
 
-    results = {"preds": [], "labels": [], "pred_date": [], "last_date": [], "tickers": []}
     val_preds, val_labels = [], []
     trained = []
 
@@ -164,11 +168,10 @@ def run_train(args):
 
         train_dataset = period_dataset(df_ticker, args, args.start_date, args.end_train_date, 'train')
         valid_dataset = period_dataset(df_ticker, args, args.start_valid_date, args.end_valid_date, 'valid')
-        test_dataset = period_dataset(df_ticker, args, args.start_test_date, args.end_date, 'test')
 
-        if valid_dataset.idx <= 0 or test_dataset.idx <= 0:
+        if valid_dataset.idx <= 0:
             continue
-        if any(len(ds.windows) < args.batch_size for ds in (train_dataset, valid_dataset, test_dataset)):
+        if any(len(ds.windows) < args.batch_size for ds in (train_dataset, valid_dataset)):
             print(f'Not enough data for ticker {ticker}. Skipping...', flush=True)
             continue
 
@@ -178,8 +181,6 @@ def run_train(args):
                                   num_workers=args.num_workers, pin_memory=True)
         val_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                 num_workers=args.num_workers, pin_memory=True)
-        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
-                                 num_workers=args.num_workers, pin_memory=True)
 
         model = build_model(args, train_dataset.windows.shape[2], device)
         for p in model.parameters():
@@ -204,20 +205,14 @@ def run_train(args):
                 gamma=0.1
             )
 
-        trainer = Trainer(model, loss, optimizer, train_loader, val_loader, test_loader, args=trainer_args,
+        # No test loader: the Trainer uses it only when there is no validation loader
+        trainer = Trainer(model, loss, optimizer, train_loader, val_loader, None, args=trainer_args,
                           lr_scheduler=lr_scheduler)
         trainer.train()  # leaves the best validation state loaded in the model
         torch.save(model.state_dict(), ticker_checkpoint(model_save_path, ticker))
         trained.append(ticker)
 
-        y_pred, y_true = predict(model, test_dataset, args, device)
         val_y_pred, val_y_true = predict(model, valid_dataset, args, device)
-
-        results["preds"].extend(y_pred)
-        results["labels"].extend(y_true)
-        results["tickers"].extend([ticker] * len(y_pred))
-        results["pred_date"].extend(test_dataset.dates)
-        results["last_date"].extend(test_dataset.last_dates)
         val_preds.extend(val_y_pred)
         val_labels.extend(val_y_true)
 
@@ -225,12 +220,11 @@ def run_train(args):
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
-    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(get_metrics(val_preds, val_labels), f, indent=4)
-
-    metrics, results_pkl, metrics_json = collect_results(results, args, metrics_path)
-    return {"model_path": os.path.join(model_save_path, "tickers"), "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    if not trained:
+        raise RuntimeError("No ticker had enough data to train SAMBA.")
+    val_metrics = get_metrics(val_preds, val_labels)
+    valid_path = save_valid_metrics(val_metrics, model_save_path, args.seq_len, args.pred_len)
+    return training_result(os.path.join(model_save_path, "tickers"), val_metrics, valid_path)
 
 
 def build_parser():
@@ -248,8 +242,6 @@ def build_parser():
     args.add_argument('--end_train_date', type=str, default='2021-12-31')
     args.add_argument('--start_valid_date', type=str, default='2022-01-01')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01')
-    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--batch_size', type=int, default=64)

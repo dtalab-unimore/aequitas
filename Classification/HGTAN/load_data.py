@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 def find_max_values(df):
@@ -36,13 +37,20 @@ def dataset_normalization(dataset, max_values):
 
 
 def load_data(args):
+    """
+    In training (no start_test_date / end_date) the data stops at the end of
+    validation; the labels are computed before the date filter, so the last
+    validation days still have them.
+    """
+    end_date = getattr(args, 'end_date', None) or args.end_valid_date
+
     dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}.csv')
     constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-    tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
 
     dates = dataset['date'].drop_duplicates().sort_values()
-    dates = dates[(dates >= args.start_date) & (dates <= args.end_date)]
+    dates = dates[(dates >= args.start_date) & (dates <= end_date)]
 
     min_days = int(len(dates) * 0.98)
 
@@ -64,7 +72,7 @@ def load_data(args):
         df['label'] = np.where(df['label'] >= 0.0055, 1, np.where(df['label'] < -0.005, 2, 0))
 
         # Filtering
-        df = df[(df['date'] >= args.start_date) & (df['date'] <= args.end_date)]
+        df = df[(df['date'] >= args.start_date) & (df['date'] <= end_date)]
         df['date'], dates = pd.to_datetime(df['date']), pd.to_datetime(dates)
         df = pd.merge_asof(pd.DataFrame({'date': dates}), df.sort_values('date'), on='date', direction='backward')
 
@@ -87,8 +95,15 @@ def load_data(args):
         all_data.append(df)
 
     dates = dates.reset_index(drop=True)
-    valid_index = pd.to_datetime(dates[dates > args.end_train_date]).idxmin() - args.seq_len - args.pred_len + 1
-    test_index = pd.to_datetime(dates[dates > args.end_valid_date]).idxmin() - args.seq_len - args.pred_len + 1
+    lookback = args.seq_len + args.pred_len - 1
+    # Offset of the first sample whose target falls after the given date
+    # (counting the dates also works when the data stops right there)
+    valid_index = int((dates <= pd.Timestamp(args.end_train_date)).sum()) - lookback
+    # End of validation; in test.py the test starts at start_test_date
+    if getattr(args, 'start_test_date', None):
+        test_index = int((dates < pd.Timestamp(args.start_test_date)).sum()) - lookback
+    else:
+        test_index = int((dates <= pd.Timestamp(args.end_valid_date)).sum()) - lookback
 
     return np.array(all_data), np.array(gt_data), valid_index, test_index, dates, valid_instruments
 

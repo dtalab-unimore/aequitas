@@ -16,6 +16,12 @@ from multiprocessing import Pool, cpu_count
 import pandas as pd
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
+
+
+def data_end_date(args):
+    """Last date loaded: end of the test in test.py, end of validation in training."""
+    return getattr(args, 'end_date', None) or args.end_valid_date
 
 
 def load_prices(args):
@@ -23,10 +29,10 @@ def load_prices(args):
     tickers = getattr(args, 'trained_tickers', None)
     if not tickers:
         constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-        tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+        tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
 
-    dataset = dataset[(dataset['date'] >= args.start_date) & (dataset['date'] <= args.end_date)]
+    dataset = dataset[(dataset['date'] >= args.start_date) & (dataset['date'] <= data_end_date(args))]
     dates = dataset['date'].drop_duplicates().sort_values()
 
     tickers = dataset['instrument'].drop_duplicates().sort_values().tolist()
@@ -92,7 +98,7 @@ def encode_news(tickers, dates, args, batch_size=512):
     dir_path = f'{args.data_path}/news'
 
     start_year = args.start_date.split('-')[0]
-    end_year = args.end_date.split('-')[0]
+    end_year = data_end_date(args).split('-')[0]
     file_emb = f'{args.data_path}_news/{args.universe}/news_embeddings_y{start_year}_y{end_year}.pkl'
 
     if os.path.exists(file_emb):
@@ -144,7 +150,7 @@ def get_news_for_day(ticker_dict, date_index, dates, num_news, num_features):
 def build_news_array(news_dict, dates, tickers, args, num_news=5):
 
     start_year = args.start_date.split('-')[0]
-    end_year = args.end_date.split('-')[0]
+    end_year = data_end_date(args).split('-')[0]
     filename = f'{args.data_path}_news/{args.universe}/news_list_y{start_year}_y{end_year}_n{num_news}.pkl'
 
     available = [
@@ -254,6 +260,12 @@ def filter_data_by_available_news_tickers(news_tickers, tickers, prices, adj, ad
 
 
 def train_valid_test_split(prices_array, news_list, tickers, dates, args):
+    """
+    Train, valid and, in test.py (args with start_test_date), test splits.
+    Each split after the first starts seq_len + pred_len - 1 rows early, as lookback.
+    """
+    with_test = bool(getattr(args, 'start_test_date', None))
+    lookback = args.seq_len + args.pred_len - 1
 
     train_prices = []
     valid_prices = []
@@ -268,10 +280,10 @@ def train_valid_test_split(prices_array, news_list, tickers, dates, args):
     test_dates = {}
 
     for i, tick in enumerate(tickers):
-        end_train_idx = next((i for i, d in enumerate(dates[tick]) if d > args.end_train_date), None)
-        start_valid_idx = end_train_idx - args.seq_len - args.pred_len + 1
-        end_valid_idx = next((i for i, d in enumerate(dates[tick]) if d > args.end_valid_date), None)
-        start_test_idx = end_valid_idx - args.seq_len - args.pred_len + 1
+        n_dates = len(dates[tick])
+        end_train_idx = next((i for i, d in enumerate(dates[tick]) if d > args.end_train_date), n_dates)
+        start_valid_idx = end_train_idx - lookback
+        end_valid_idx = next((i for i, d in enumerate(dates[tick]) if d > args.end_valid_date), n_dates)
 
         train_prices.append(prices_array[i][:end_train_idx])
         train_news.append(news_list[i][:end_train_idx])
@@ -281,13 +293,21 @@ def train_valid_test_split(prices_array, news_list, tickers, dates, args):
         valid_news.append(news_list[i][start_valid_idx:end_valid_idx])
         valid_dates[tick] = dates[tick][start_valid_idx:end_valid_idx]
 
-        test_prices.append(prices_array[i][start_test_idx:])
-        test_news.append(news_list[i][start_test_idx:])
-        test_dates[tick] = dates[tick][start_test_idx:]
+        if with_test:
+            # The test starts at start_test_date (not necessarily right after validation)
+            first_test_idx = next((i for i, d in enumerate(dates[tick]) if d >= args.start_test_date), n_dates)
+            start_test_idx = first_test_idx - lookback
+            test_prices.append(prices_array[i][start_test_idx:])
+            test_news.append(news_list[i][start_test_idx:])
+            test_dates[tick] = dates[tick][start_test_idx:]
 
-    splitted_prices = [np.array(train_prices), np.array(valid_prices), np.array(test_prices)]
-    splitted_news = [np.array(train_news), np.array(valid_news), np.array(test_news)]
-    dates = [train_dates, valid_dates, test_dates]
+    splitted_prices = [np.array(train_prices), np.array(valid_prices)]
+    splitted_news = [np.array(train_news), np.array(valid_news)]
+    dates = [train_dates, valid_dates]
+    if with_test:
+        splitted_prices.append(np.array(test_prices))
+        splitted_news.append(np.array(test_news))
+        dates.append(test_dates)
     return splitted_prices, splitted_news, dates
 
 
@@ -315,8 +335,11 @@ def windows_extraction(splitted_prices, splitted_news, dates, args):
 
 def filter_data_by_available_news(splitted_prices, splitted_news, last_dates, pred_dates, tickers, adj_tickers, adj):
 
+    # Tickers without any news in train or validation are dropped. The test
+    # split is left out of this choice, so train.py (which has no test) and
+    # test.py keep the same tickers; windows without news are dropped below.
     ticker_without_news = []
-    for i, (p, n) in enumerate(zip(splitted_prices, splitted_news)):
+    for i, (p, n) in enumerate(zip(splitted_prices[:2], splitted_news[:2])):
         mask = (n == 0).all(dim=(1, 2, 3, 4))
         ticker_without_news.append(mask)
 
@@ -330,9 +353,11 @@ def filter_data_by_available_news(splitted_prices, splitted_news, last_dates, pr
         splitted_prices[i] = p[:, mask]
         splitted_news[i] = n[:, mask]
 
-        if i == 2:
+        if i == len(splitted_prices) - 1:
             tickers = [t for t, m in zip(tickers, ticker_without_news) if m]
             adj, adj_tickers = filter_adj_matrix(adj, adj_tickers, tickers)
+
+        if i == 2:  # test split (test.py only)
             last_dates = {k: v for (k, v), m in zip(last_dates.items(), ticker_without_news) if m}
             last_dates = {k: [d for d, m in zip(v, mask) if m] for k, v in last_dates.items()}
             pred_dates = {k: v for (k, v), m in zip(pred_dates.items(), ticker_without_news) if m}

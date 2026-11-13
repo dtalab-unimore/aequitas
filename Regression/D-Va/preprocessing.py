@@ -4,6 +4,7 @@ import os
 import pandas as pd
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import first_test_day
 
 
 def ticker_csv_name(ticker):
@@ -38,9 +39,16 @@ def reset_dir(root_path):
 
 
 def load_dataset(start_date, end_date, train_end_date, val_end_date, start_test_date, path, universe, root_path, batch_size, pred_len, seq_len):
+    """
+    Write one CSV per usable ticker. In training start_test_date and end_date
+    are None: the data ends with validation and no test rows are required.
+    """
+    with_test = bool(start_test_date)
+    end_date = end_date or val_end_date
+
     data = read_prices(path, universe)
     constituents = pd.read_csv(f'{path}/constituents/eodhd/{universe}.csv')
-    tickers = filter_constituents_by_date(constituents, start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, start_test_date or first_test_day(val_end_date))['EODHD'].tolist()
 
     available_tickers = []
     reset_dir(root_path)
@@ -54,7 +62,8 @@ def load_dataset(start_date, end_date, train_end_date, val_end_date, start_test_
         val_df = df[(df['date'] > train_end_date) & (df['date'] <= val_end_date)]
         test_df = df[df['date'] > val_end_date]
 
-        if len(df) > 0 and len(train_df) >= 251 and len(val_df) >= len(train_df) * 0.1 and len(test_df) - pred_len - seq_len >= batch_size:
+        enough_test = not with_test or len(test_df) - pred_len - seq_len >= batch_size
+        if len(df) > 0 and len(train_df) >= 251 and len(val_df) >= len(train_df) * 0.1 and enough_test:
             df.to_csv(f'{root_path}/{ticker_csv_name(ticker)}', index=False)
             available_tickers.append(ticker)
 

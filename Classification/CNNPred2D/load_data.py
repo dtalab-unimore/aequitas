@@ -4,6 +4,7 @@ from sklearn.preprocessing import scale
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 def read_datasets(args):
@@ -20,10 +21,14 @@ def read_datasets(args):
     dataset = dataset.merge(df_cnnpred, on='date', how='inner')
 
     constituents = pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv')
-    tickers = filter_constituents_by_date(constituents, args.start_test_date)['EODHD'].tolist()
+    tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))['EODHD'].tolist()
     dataset = dataset[dataset['instrument'].isin(tickers)]
 
-    dataset = dataset[(dataset['date'] >= args.start_date) & (dataset['date'] <= args.end_date)]
+    dataset = dataset[dataset['date'] >= args.start_date]
+    # Training has no end_date: the rows after validation are kept, as the
+    # labels of the last validation days look pred_len days ahead.
+    if getattr(args, 'end_date', None):
+        dataset = dataset[dataset['date'] <= args.end_date]
     dataset = dataset.replace([np.inf, -np.inf], np.nan)
     return dataset
 
@@ -61,7 +66,10 @@ def split_train_val_test_ticker(df, args):
     else:
         return None
 
-    # Test data
+    # Test data (none in training, which has no start_test_date)
+    if not getattr(args, 'start_test_date', None):
+        return [train_data, train_labels, valid_data, valid_labels, None, None]
+
     test_start_date = df.index[df.index >= args.start_test_date].min()
     if isinstance(test_start_date, str):
         test_index = df.index.get_loc(test_start_date) - args.seq_len - args.pred_len + 1
@@ -98,7 +106,8 @@ def split_train_val_test(data_warehouse, args):
         if splitted_dataset is None:
             continue
 
-        dates[ticker] = extract_dates(splitted_dataset[4].index, splitted_dataset[5].index, args.seq_len)
+        if splitted_dataset[4] is not None:
+            dates[ticker] = extract_dates(splitted_dataset[4].index, splitted_dataset[5].index, args.seq_len)
         splitted_data_warehouse[ticker] = splitted_dataset
 
     return splitted_data_warehouse, dates

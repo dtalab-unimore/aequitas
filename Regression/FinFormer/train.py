@@ -13,6 +13,7 @@ from .finformer import Finformer_Model
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
+from utils.training import ticker_selection_date
 from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,8 +58,6 @@ if __name__ == '__main__':
     args.add_argument('--end_train_date', type=str, default='2021-12-31')
     args.add_argument('--start_valid_date', type=str, default='2022-01-01')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01')
-    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--d_feat', type=int, default=6)
@@ -75,13 +74,13 @@ if __name__ == '__main__':
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-    model_save_path, metrics_path =  create_saving_path(args, task_type='Regression', test_model='FinFormer', project_root=PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, task_type='Regression', test_model='FinFormer', project_root=PROJECT_ROOT)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     df_alpha = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha360.csv')
-    tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
+    tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), ticker_selection_date(args))
     df_alpha = df_alpha[df_alpha['instrument'].isin(tickers['EODHD'].tolist())]
 
     # Extract labels
@@ -116,17 +115,6 @@ if __name__ == '__main__':
     )
     valid_loader = DataLoader(df_valid, shuffle=False, drop_last=False, collate_fn=custom_collate)
 
-    df_test = CustomDataset(
-        df_alpha,
-        d_feat=args.d_feat,
-        pred_len=args.pred_len,
-        start_date=args.start_test_date,
-        end_date=args.end_date,
-        z_score=robust_z_score,
-        period='test'
-    )
-    test_loader = DataLoader(df_test, shuffle=False, drop_last=False, collate_fn=custom_collate)
-
     matrix = np.load(f'{args.data_path}/{args.universe}/{args.universe}_sector_industry_matrix.npz')
     adj_matrix, ticker_list = matrix['adj_matrix'][:11, :, :], matrix['tickers']
     adj_matrix = preprocess_matrix(adj_matrix)
@@ -138,9 +126,9 @@ if __name__ == '__main__':
                             snum_head=args.snum_head,
                             device=device)
 
-    out = model.fit(args, train_loader, valid_loader, test_loader, adj_matrix, ticker_list, metrics_path, model_save_path)
+    out = model.fit(args, train_loader, valid_loader, adj_matrix, ticker_list, model_save_path)
 
-    print(f"Training completed. Metrics saved to {metrics_path}")
+    print(f"Training completed. Model saved to {model_save_path}")
 
     emit_result(out)
 

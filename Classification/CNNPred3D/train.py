@@ -14,7 +14,7 @@ from tensorflow.keras.models import Sequential
 from .load_data import construct_data_warehouse_3d
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -104,25 +104,16 @@ def train_models(dataset, args, model_save_path, n_stocks, n_features):
         )
 
 
-def _save_split_results(args, dataset, dates, tickers, model_save_path, metrics_path):
+def _save_valid_metrics(args, dataset, model_save_path):
     n_stocks = dataset[0].shape[1]
     n_features = dataset[0].shape[-1]
     val_preds, _ = predict_all_stocks(dataset, args, model_save_path, n_stocks, n_features, 2)
-    val_metrics = {key: float(value) for key, value in get_metrics(val_preds, dataset[3]).items()}
-    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
-        json.dump(val_metrics, handle, indent=4)
-
-    test_preds, test_probabilities = predict_all_stocks(dataset, args, model_save_path, n_stocks, n_features, 4)
-    predictions = [row.reshape(-1, 1) for row in test_probabilities]
-    labels = [row.reshape(-1, 1) for row in np.asarray(dataset[5])]
-    return save_results(
-        args, get_metrics(test_preds, dataset[5]), predictions, labels,
-        dates["pred_date"], dates["last_date"], [tickers] * len(predictions), metrics_path
-    )
+    val_metrics = get_metrics(val_preds, dataset[3])
+    return val_metrics, save_valid_metrics(val_metrics, model_save_path, args.seq_len, args.pred_len)
 
 
 def run_train(args):
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "CNNPred3D", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Classification", "CNNPred3D", PROJECT_ROOT)
     tmp_root = os.path.join(CURRENT_DIR, "tmp")
     os.makedirs(tmp_root, exist_ok=True)
     tmpdir = tempfile.mkdtemp(prefix="tf_run_", dir=tmp_root)
@@ -131,7 +122,7 @@ def run_train(args):
         for gpu in tf.config.list_physical_devices("GPU"):
             tf.config.experimental.set_memory_growth(gpu, True)
         tf.random.set_seed(args.seed)
-        dataset, tickers, dates = construct_data_warehouse_3d(args)
+        dataset, tickers, _ = construct_data_warehouse_3d(args)
         if not tickers or dataset[0].size == 0:
             raise ValueError("No usable stocks or training windows were found for CNNPred3D.")
         args.trained_tickers = list(tickers)
@@ -140,13 +131,10 @@ def run_train(args):
         n_stocks = dataset[0].shape[1]
         n_features = dataset[0].shape[-1]
         train_models(dataset, args, model_save_path, n_stocks, n_features)
-        metrics, results_pkl, metrics_json = _save_split_results(
-            args, dataset, dates, tickers, model_save_path, metrics_path
-        )
+        val_metrics, valid_path = _save_valid_metrics(args, dataset, model_save_path)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
-    return {"model_path": model_save_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    return training_result(model_save_path, val_metrics, valid_path)
 
 
 def build_parser():
@@ -160,8 +148,6 @@ def build_parser():
     parser.add_argument("--end_train_date", default="2021-12-31")
     parser.add_argument("--start_valid_date", default="2022-06-01")
     parser.add_argument("--end_valid_date", default="2022-12-31")
-    parser.add_argument("--start_test_date", default="2023-01-01")
-    parser.add_argument("--end_date", default="2023-12-31")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--number_filter", type=int, nargs="+", default=[8, 8, 8])
     parser.add_argument("--dropout", type=float, default=0.1)

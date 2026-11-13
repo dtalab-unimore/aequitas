@@ -7,8 +7,9 @@ def build_param_dict(args):
         "end_train_date": [args.end_train_date],
         "start_valid_date": [args.start_valid_date],
         "end_valid_date": [args.end_valid_date],
-        "start_test_date": [args.start_test_date],
-        "end_date": [args.end_date],
+        # Test period: None in training (the data then ends with validation)
+        "start_test_date": [getattr(args, "start_test_date", None)],
+        "end_date": [getattr(args, "end_date", None)],
         "history_len": [args.seq_len],
         "pred_len": [args.pred_len],
         "fea_dim": [getattr(args, "fea_dim", 5)],

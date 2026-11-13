@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 def find_max_values(df):
@@ -28,6 +29,15 @@ def _context_index(dates, boundary, seq_len, pred_len):
 
 
 def load_dataset(args):
+    """
+    In training (no start_test_date / end_date) the data ends with
+    validation and test_index is len(dates), the end of validation: the
+    labels are computed before the date filter, so the last validation days
+    still have them.
+    """
+    with_test = bool(getattr(args, "start_test_date", None))
+    end_date = args.end_date if with_test else args.end_valid_date
+
     dataset = pd.read_csv(f"{args.data_path}/{args.universe}/{args.universe}.csv")
     trained_tickers = getattr(args, "trained_tickers", None)
     if trained_tickers:
@@ -35,7 +45,7 @@ def load_dataset(args):
     else:
         constituents = pd.read_csv(f"{args.data_path}/constituents/eodhd/{args.universe}.csv")
         requested_tickers = filter_constituents_by_date(
-            constituents, args.start_test_date
+            constituents, ticker_selection_date(args)
         )["EODHD"].tolist()
 
     dataset = dataset[dataset["instrument"].isin(requested_tickers)]
@@ -47,13 +57,13 @@ def load_dataset(args):
     all_data, ground_truth, price_data, available_tickers = [], [], [], []
     for ticker in tqdm(ticker_order):
         frame = dataset[dataset["instrument"] == ticker].copy().sort_values("date")
-        if frame.empty or frame["date"].min() > args.start_date or frame["date"].max() < args.end_date:
+        if frame.empty or frame["date"].min() > args.start_date or frame["date"].max() < end_date:
             continue
         frame["label"] = (frame["adj_close"].shift(-args.pred_len) - frame["adj_close"]) / frame["adj_close"]
         frame = pd.DataFrame({"date": all_dates}).merge(frame, on="date", how="left")
         feature_columns = ["instrument", "adj_open", "adj_close", "adj_high", "adj_low", "volume"]
         frame[feature_columns] = frame[feature_columns].ffill().bfill()
-        frame = frame[(frame["date"] >= args.start_date) & (frame["date"] <= args.end_date)]
+        frame = frame[(frame["date"] >= args.start_date) & (frame["date"] <= end_date)]
         maximums = find_max_values(
             frame[(frame["date"] >= args.start_date) & (frame["date"] <= args.end_train_date)]
         )
@@ -69,10 +79,13 @@ def load_dataset(args):
     if trained_tickers and available_tickers != list(trained_tickers):
         raise ValueError("The test period does not contain every ticker used to train StockMixer.")
 
-    dates = all_dates[(all_dates >= args.start_date) & (all_dates <= args.end_date)].reset_index(drop=True)
+    dates = all_dates[(all_dates >= args.start_date) & (all_dates <= end_date)].reset_index(drop=True)
     valid_index = _context_index(dates, args.start_valid_date, args.seq_len, args.pred_len)
-    test_index = _context_index(dates, args.start_test_date, args.seq_len, args.pred_len)
-    if not 0 < valid_index < test_index < len(dates):
+    if with_test:
+        test_index = _context_index(dates, args.start_test_date, args.seq_len, args.pred_len)
+    else:
+        test_index = len(dates)  # evaluate_range stops at the last window with a target
+    if not 0 < valid_index < test_index <= len(dates):
         raise ValueError("StockMixer periods do not produce ordered train/validation/test windows.")
 
     return (

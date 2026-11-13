@@ -23,7 +23,7 @@ from .load_data import (
 from .model.model import GAT
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -116,8 +116,8 @@ def run_train(args):
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "MAN-SF", PROJECT_ROOT)
-    prices, news, last_dates, pred_dates, tickers, adjacency = prepare_data(args)
+    model_save_path, _ = create_saving_path(args, "Classification", "MAN-SF", PROJECT_ROOT)
+    prices, news, _, _, tickers, adjacency = prepare_data(args)
     args.trained_tickers = tickers
     with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
         json.dump(vars(args), handle, indent=4)
@@ -155,19 +155,8 @@ def run_train(args):
 
     if best_valid_metrics is None:
         raise RuntimeError("MAN-SF training did not produce a valid checkpoint.")
-    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
-        json.dump({key: float(value) for key, value in best_valid_metrics.items()}, handle, indent=4)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    model.load_state_dict(checkpoint["model"])
-    test_metrics, predictions, labels = eval_model(model, prices[2], news[2], adjacency, device)
-    pred_date_values = flatten_dates(pred_dates)
-    last_date_values = flatten_dates(last_dates)
-    metrics, results_pkl, metrics_json = save_results(
-        args, test_metrics, predictions, labels, pred_date_values, last_date_values,
-        [tickers] * len(predictions), metrics_path
-    )
-    return {"model_path": checkpoint_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    valid_path = save_valid_metrics(best_valid_metrics, model_save_path, args.seq_len, args.pred_len)
+    return training_result(checkpoint_path, best_valid_metrics, valid_path)
 
 
 def build_parser():
@@ -181,8 +170,6 @@ def build_parser():
     parser.add_argument("--end_train_date", default="2021-12-31")
     parser.add_argument("--start_valid_date", default="2022-01-01")
     parser.add_argument("--end_valid_date", default="2022-12-31")
-    parser.add_argument("--start_test_date", default="2023-01-01")
-    parser.add_argument("--end_date", default="2023-12-31")
     parser.add_argument("--n_news", type=int, default=5)
     parser.add_argument("--sparse", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=42)

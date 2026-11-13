@@ -109,6 +109,7 @@ def build_tab():
                         choices=[],
                         value=None,
                         label="Start Year",
+                        info="Set by the model: the year after the end of validation",
                         interactive=False,
                         elem_classes=["dropdown-single-compact"],
                     )

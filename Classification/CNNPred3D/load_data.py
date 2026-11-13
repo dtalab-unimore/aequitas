@@ -4,6 +4,7 @@ from sklearn.preprocessing import scale
 from tqdm import tqdm
 
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import ticker_selection_date
 
 
 def read_datasets(args):
@@ -23,9 +24,13 @@ def read_datasets(args):
         tickers = list(trained_tickers)
     else:
         constituents = pd.read_csv(f"{args.data_path}/constituents/eodhd/{args.universe}.csv")
-        tickers = filter_constituents_by_date(constituents, args.start_test_date)["EODHD"].tolist()
+        tickers = filter_constituents_by_date(constituents, ticker_selection_date(args))["EODHD"].tolist()
     dataset = dataset[dataset["instrument"].isin(tickers)]
-    dataset = dataset[(dataset["date"] >= args.start_date) & (dataset["date"] <= args.end_date)]
+    dataset = dataset[dataset["date"] >= args.start_date]
+    # Training has no end_date: the rows after validation are kept, as the
+    # labels of the last validation days look pred_len days ahead.
+    if getattr(args, "end_date", None):
+        dataset = dataset[dataset["date"] <= args.end_date]
     return dataset.replace([np.inf, -np.inf], np.nan)
 
 
@@ -48,6 +53,10 @@ def split_train_val_test_ticker(df, args):
     valid_data = scale(valid_frame[:-args.pred_len].iloc[:, :-1])
     valid_labels = df[(df.index >= args.start_valid_date) & (df.index <= args.end_valid_date)]["label"]
 
+    # Training (no start_test_date): train and validation only
+    if not getattr(args, "start_test_date", None):
+        return [train_data, train_labels, valid_data, valid_labels]
+
     test_candidates = df.index[df.index >= args.start_test_date]
     if len(test_candidates) == 0:
         return None
@@ -64,8 +73,11 @@ def split_train_val_test_ticker(df, args):
 def construct_data_warehouse_3d(args):
     dataset = read_datasets(args)
     all_dates = dataset["date"].drop_duplicates().sort_values()
-    all_dates = all_dates[(all_dates >= args.start_date) & (all_dates <= args.end_date)]
-    grouped = [[] for _ in range(6)]
+    all_dates = all_dates[all_dates >= args.start_date]
+    if getattr(args, "end_date", None):
+        all_dates = all_dates[all_dates <= args.end_date]
+    # 6 splits (train, valid, test data and labels), 4 in training: no test
+    grouped = None
     tickers = []
     dates = {}
 
@@ -80,10 +92,12 @@ def construct_data_warehouse_3d(args):
         split = split_train_val_test_ticker(frame, args)
         if split is None:
             continue
+        if grouped is None:
+            grouped = [[] for _ in split]
         for index, value in enumerate(split):
             grouped[index].append(value)
         tickers.append(ticker)
-        if not dates:
+        if not dates and len(split) == 6:
             dates["pred_date"] = [str(value) for value in split[5].index]
             dates["last_date"] = [str(value) for value in split[4].index[args.seq_len - 1:]]
 

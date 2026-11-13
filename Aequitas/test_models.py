@@ -7,6 +7,7 @@ import re
 from Aequitas.script_runner import stream_job_logs
 from Aequitas.test_model_dispatcher import dispatch_test
 from utils.filter_constituents import filter_constituents_by_date
+from utils.training import first_test_year
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -325,11 +326,27 @@ def on_pl_change(universe: str, task_type: str, model_name: str, config_name: st
             gr.update(interactive=False),                        # test button
         )
 
+    # The test follows validation directly: it starts on 1 January of the
+    # year after end_valid_date, the day the tickers are taken at.
+    start_year = first_test_year(params.get("end_valid_date", ""))
+    if start_year is None or start_year not in TEST_YEARS:
+        reason = (
+            f"Validation ends on {params.get('end_valid_date')}: the test must start the day after, "
+            f"which is not available as a test start year ({TEST_YEARS[0]}-{TEST_YEARS[-1]})."
+        )
+        return (
+            gr.update(value=f"{config_text}\n\n{reason}", visible=True),  # config info
+            gr.update(choices=[], value=None, interactive=False),        # start year
+            gr.update(choices=[], value=None, interactive=False),        # end year
+            gr.update(interactive=False),                                # test button
+        )
+
     return (
-        gr.update(value=config_text, visible=True),              # config info
-        gr.update(choices=TEST_YEARS, value=None, interactive=True),  # start year
-        gr.update(choices=[], value=None, interactive=False),    # end year
-        gr.update(interactive=False),                            # test button
+        gr.update(value=config_text, visible=True),                       # config info
+        gr.update(choices=[start_year], value=start_year, interactive=False),  # start year: fixed
+        gr.update(choices=[y for y in TEST_YEARS if y >= start_year],      # end year
+                  value=None, interactive=True),
+        gr.update(interactive=False),                                     # test button
     )
 
 def extract_numeric_suffix(folder_name: str, prefix: str):

@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import ticker_selection_date, training_result
 from .load_dataset import CSVDataset
 from .master import MASTERModel
 from utils.filter_constituents import filter_constituents_by_date
@@ -71,8 +71,6 @@ if __name__ == '__main__':
     args.add_argument('--end_train_date', type=str, default='2020-12-31')
     args.add_argument('--start_valid_date', type=str, default='2021-01-01')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31')
-    args.add_argument('--start_test_date', type=str, default='2023-01-01')
-    args.add_argument('--end_date', type=str, default='2023-12-31')
 
     # Model Hyperparameters
     args.add_argument('--n_epoch', type=int, default=40)
@@ -111,7 +109,7 @@ if __name__ == '__main__':
 
     print(args)
 
-    model_save_path, metrics_path = create_saving_path(args, task_type='Regression', test_model='MASTER', project_root=PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, task_type='Regression', test_model='MASTER', project_root=PROJECT_ROOT)
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
@@ -121,7 +119,7 @@ if __name__ == '__main__':
         os.makedirs('./checkpoints/', exist_ok=True)
 
         df_alpha = pd.read_csv(f"{args.data_path}/{args.universe}/{args.universe}_alpha158.csv")
-        tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date)
+        tickers = filter_constituents_by_date(pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), ticker_selection_date(args))
         df_alpha = df_alpha[df_alpha['instrument'].isin(tickers['EODHD'].tolist())]
 
         market_index = pd.read_csv(f'{args.data_path}/{args.nation}_market.csv')
@@ -150,20 +148,9 @@ if __name__ == '__main__':
             z_score=robust_z_score,
             period='valid'
         )
-
-        dl_test = CSVDataset(
-            df_alpha=df_alpha,
-            seq_len=args.seq_len,
-            pred_len=args.pred_len,
-            start_date=args.start_test_date,
-            end_date=args.end_date,
-            z_score=robust_z_score,
-            period='test'
-        )
-
-        # save_datasets(dl_train, dl_valid, dl_test, args.universe, args.seq_len, args.pred_len)
+        # No test here: test.py runs it on the period chosen in the Test tab
     else:
-        dl_train, dl_valid, dl_test = open_datasets(args.universe, args.seq_len, args.pred_len)
+        dl_train, dl_valid, _ = open_datasets(args.universe, args.seq_len, args.pred_len)
 
 
     model = MASTERModel(
@@ -175,34 +162,20 @@ if __name__ == '__main__':
 
     start = time.time()
 
-    model.fit(dl_train, metrics_path, args, dl_valid, args.num_workers)
+    # fit writes the validation metrics of each epoch next to the model
+    model.fit(dl_train, model_save_path, args, dl_valid, args.num_workers)
 
     print("Model Trained.")
-    predictions, labels, metrics, mask = model.predict(dl_test, args.num_workers)
-
     running_time = time.time() - start
-
     print('Seed: {:d} time cost : {:.2f} sec'.format(args.seed, running_time))
 
-    output_dates = [date for i, date in enumerate(dl_test.output_dates) if mask[i]]
-    input_dates = [date for i, date in enumerate(dl_test.input_dates) if mask[i]]
+    valid_path = os.path.join(model_save_path, f'val_metrics_sl{args.seq_len}_pl{args.pred_len}.json')
+    valid_metrics = None
+    if os.path.exists(valid_path):
+        with open(valid_path) as f:
+            valid_metrics = json.load(f)
+    else:
+        valid_path = None
+    print('Validation Metrics:\n', valid_metrics)
 
-    metrics, results_pkl, metrics_json = save_results(
-        args,
-        metrics,
-        predictions,
-        labels,
-        output_dates,
-        input_dates,
-        dl_test.tickers_to_date,
-        metrics_path
-    )
-
-    print('Test Metrics:\n', metrics)
-
-    emit_result({
-        "model_path": f"{model_save_path}/model.pth",
-        "metrics": metrics,
-        "results_path": results_pkl,
-        "metrics_path": metrics_json,
-    })
+    emit_result(training_result(f"{model_save_path}/model.pth", valid_metrics, valid_path))

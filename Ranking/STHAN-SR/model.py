@@ -75,8 +75,6 @@ class ReRaLSTM:
         best_loss = None
 
         early_stop = 0
-        best_gt = None
-        best_pred = None
         best_valid_gt = None
         best_valid_pred = None
         for i in range(self.epochs):
@@ -165,52 +163,7 @@ class ReRaLSTM:
                 cur_valid_perf = evaluate(cur_valid_pred, cur_valid_gt, cur_valid_mask)
                 print('\t Valid preformance:', cur_valid_perf)
 
-                # test on testing set
-                cur_test_pred = np.zeros(
-                    [len(self.tickers), self.trade_dates - self.seq_len - self.steps + 1 - self.test_index],
-                    dtype=float
-                )
-                cur_test_gt = np.zeros(
-                    [len(self.tickers), self.trade_dates - self.seq_len - self.steps + 1 - self.test_index],
-                    dtype=float
-                )
-                cur_test_mask = np.zeros(
-                    [len(self.tickers), self.trade_dates - self.seq_len - self.steps + 1 - self.test_index],
-                    dtype=float
-                )
-                test_loss = 0.0
-                test_reg_loss = 0.0
-                test_rank_loss = 0.0
-                model.eval()
-                for cur_offset in range(self.test_index, self.trade_dates - self.seq_len - self.steps + 1):
-                    emb_batch, mask_batch, price_batch, gt_batch = self.get_batch(cur_offset)
-
-                    output_test = model(torch.FloatTensor(emb_batch).to(self.device), incidence_edge.to(self.device),
-                                        hyperedge_attr.to(self.device))
-
-                    cur_loss, cur_reg_loss, cur_rank_loss, cur_rr = trr_loss_mse_rank(
-                        output_test,
-                        torch.FloatTensor(price_batch).to(self.device),
-                        torch.FloatTensor(gt_batch).to(self.device),
-                        torch.FloatTensor(mask_batch).to(self.device),
-                        self.alpha, self.batch_size
-                    )
-
-                    cur_rr = cur_rr.detach().cpu().numpy().reshape((self.batch_size, 1))
-                    test_loss += cur_loss.detach().cpu().item()
-                    test_reg_loss += cur_reg_loss.detach().cpu().item()
-                    test_rank_loss += cur_rank_loss.detach().cpu().item()
-                    cur_test_pred[:, cur_offset - self.test_index] = copy.copy(cur_rr[:, 0])
-                    cur_test_gt[:, cur_offset - self.test_index] = copy.copy(gt_batch[:, 0])
-                    cur_test_mask[:, cur_offset - self.test_index] = copy.copy(mask_batch[:, 0])
-
-                print('Test MSE:',
-                      test_loss / (self.trade_dates - self.seq_len - self.steps + 1 - self.test_index),
-                      test_reg_loss / (self.trade_dates - self.seq_len - self.steps + 1 - self.test_index),
-                      test_rank_loss / (self.trade_dates - self.seq_len - self.steps + 1 - self.test_index))
-                cur_test_perf = evaluate(cur_test_pred, cur_test_gt, cur_test_mask)
-                print('\t Test performance:', cur_test_perf)
-
+                # No test here: test.py runs it on the period chosen in the Test tab
                 if best_loss is None or val_loss < best_loss:
                     best_loss = val_loss
 
@@ -218,8 +171,6 @@ class ReRaLSTM:
 
                     best_valid_gt = cur_valid_gt
                     best_valid_pred = cur_valid_pred
-                    best_gt = cur_test_gt
-                    best_pred = cur_test_pred
 
                     early_stop = 0
 
@@ -230,7 +181,7 @@ class ReRaLSTM:
                     break
 
 
-        return best_gt, best_pred, best_valid_gt, best_valid_pred
+        return best_valid_gt, best_valid_pred
 
     def test(self, model_save_path):
         global df

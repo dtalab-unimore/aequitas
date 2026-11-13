@@ -11,7 +11,7 @@ from .load_datasets import load_dataset
 from .model import StockMixer, get_loss
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -87,10 +87,11 @@ def result_dates(dates, tickers, start_index, args):
 def run_train(args):
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_save_path, metrics_path = create_saving_path(
+    model_save_path, _ = create_saving_path(
         args, "Regression", "StockMixer", PROJECT_ROOT
     )
-    eod_data, gt_data, price_data, valid_index, test_index, dates, tickers = load_dataset(args)
+    # No test period: the data ends with validation and test_index marks its end
+    eod_data, gt_data, price_data, valid_index, test_index, _, tickers = load_dataset(args)
     args.trained_tickers = list(tickers)
     with open(os.path.join(model_save_path, "config_params.json"), "w") as handle:
         json.dump(vars(args), handle, indent=4)
@@ -102,7 +103,7 @@ def run_train(args):
     model = build_model(args, stock_num, feature_num, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     best_valid_loss = float("inf")
-    best_payload = None
+    best_valid_metrics = None
     checkpoint_path = os.path.join(model_save_path, "model.pth")
 
     train_offsets = np.arange(valid_index, dtype=int)
@@ -132,22 +133,13 @@ def run_train(args):
         )
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            test_output = evaluate_range(model, args, arrays, device, test_index, eod_data.shape[1])
-            best_payload = (valid_metrics, test_output[3], test_output[4], test_output[5])
+            best_valid_metrics = valid_metrics
             torch.save({"model": model.state_dict(), "epoch": epoch + 1}, checkpoint_path)
 
-    if best_payload is None:
+    if best_valid_metrics is None:
         raise RuntimeError("StockMixer training did not produce a checkpoint.")
-    valid_metrics, test_metrics, predictions, labels = best_payload
-    with open(os.path.join(metrics_path, f"val_metrics_sl{args.seq_len}_pl{args.pred_len}.json"), "w") as handle:
-        json.dump({key: float(value) for key, value in valid_metrics.items()}, handle, indent=4)
-    pred_dates, last_dates, tickers_to_date = result_dates(dates, tickers, test_index, args)
-    metrics, results_pkl, metrics_json = save_results(
-        args, test_metrics, predictions, labels, pred_dates, last_dates,
-        tickers_to_date, metrics_path
-    )
-    return {"model_path": checkpoint_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    valid_path = save_valid_metrics(best_valid_metrics, model_save_path, args.seq_len, args.pred_len)
+    return training_result(checkpoint_path, best_valid_metrics, valid_path)
 
 
 def build_parser():
@@ -161,8 +153,6 @@ def build_parser():
     parser.add_argument("--end_train_date", default="2021-12-31")
     parser.add_argument("--start_valid_date", default="2022-01-01")
     parser.add_argument("--end_valid_date", default="2022-12-31")
-    parser.add_argument("--start_test_date", default="2023-01-01")
-    parser.add_argument("--end_date", default="2023-12-31")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--alpha", type=float, default=0.1)

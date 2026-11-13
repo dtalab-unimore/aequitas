@@ -16,7 +16,7 @@ from .load_dataset import load_dataset
 from .model import AdvALSTM
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -24,12 +24,17 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 WEIGHTS_FILE = "model.weights.npz"
 
 
-def load_data(args):
-    """Train / valid / test arrays (float32) and the test sample identifiers."""
+def load_data(args, with_test=True):
+    """
+    Train / valid / test arrays (float32) and the test sample identifiers.
+    with_test=False (training): data only up to the end of validation, empty test arrays.
+    """
+    end_date = args.end_date if with_test else args.end_valid_date
     (tra_pv, tra_wd, tra_gt, val_pv, val_wd, val_gt, tes_pv, tes_wd, tes_gt,
      test_tickers, test_last_dates, test_dates) = load_dataset(
-        args.data_path, args.universe, args.start_date, args.end_date, args.end_train_date,
-        args.end_valid_date, args.seq_len, args.pred_len, start_test_date=args.start_test_date,
+        args.data_path, args.universe, args.start_date, end_date, args.end_train_date,
+        args.end_valid_date, args.seq_len, args.pred_len,
+        start_test_date=args.start_test_date if with_test else None, with_test=with_test,
     )
     as_float = lambda a: np.asarray(a, dtype=np.float32)
     return (as_float(tra_pv), as_float(tra_gt), as_float(val_pv), as_float(val_gt),
@@ -56,21 +61,19 @@ def get_batch(tra_pv, tra_gt, batch_size, sta_ind):
 def run_train(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "Adv-ALSTM", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Classification", "Adv-ALSTM", PROJECT_ROOT)
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
-    (tra_pv, tra_gt, val_pv, val_gt, tes_pv, tes_gt,
-     test_tickers, test_last_dates, test_dates) = load_data(args)
-    print(f"Samples: train {len(tra_pv)}, valid {len(val_pv)}, test {len(tes_pv)}", flush=True)
+    tra_pv, tra_gt, val_pv, val_gt, _, _, _, _, _ = load_data(args, with_test=False)
+    print(f"Samples: train {len(tra_pv)}, valid {len(val_pv)}", flush=True)
 
     model = build_model(args, tra_pv.shape[2])
     weights_path = os.path.join(model_save_path, WEIGHTS_FILE)
     hinge = bool(args.hinge_lose)
 
     bat_count = -(-tra_pv.shape[0] // args.batch_size)
-    best_valid_perf = {'Accuracy': 0, 'MCC': -2}
-    best_test_perf, best_test_pred = None, None
+    best_valid_perf = None
 
     for epoch in range(args.epoch):
         t1 = time()
@@ -87,30 +90,20 @@ def run_train(args):
 
         val_pre = model.predict(val_pv).numpy()
         cur_valid_perf = evaluate(val_pre, val_gt, hinge)
-        tes_pre = model.predict(tes_pv).numpy()
-        cur_test_perf = evaluate(tes_pre, tes_gt, hinge)
 
         print(f"Epoch {epoch + 1}/{args.epoch}: obj={tra_obj / bat_count:.4f} loss={tra_loss / bat_count:.4f} "
               f"adv={tra_adv / bat_count:.4f} train_acc={tra_acc / bat_count:.4f} "
-              f"valid_acc={cur_valid_perf['Accuracy']:.4f} test_acc={cur_test_perf['Accuracy']:.4f} "
+              f"valid_acc={cur_valid_perf['Accuracy']:.4f} "
               f"({time() - t1:.1f}s)", flush=True)
 
-        if cur_valid_perf['Accuracy'] > best_valid_perf['Accuracy'] or best_test_pred is None:
+        if best_valid_perf is None or cur_valid_perf['Accuracy'] > best_valid_perf['Accuracy']:
             best_valid_perf = copy.copy(cur_valid_perf)
-            best_test_perf = copy.copy(cur_test_perf)
-            best_test_pred = copy.copy(tes_pre)
             model.save(weights_path)
 
         tra_pv, tra_gt = shuffle(tra_pv, tra_gt, random_state=0)
 
-    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump({k: float(v) for k, v in best_valid_perf.items()}, f, indent=4)
-
-    metrics, results_pkl, metrics_json = save_results(
-        args, best_test_perf, best_test_pred, tes_gt, test_dates, test_last_dates, test_tickers, metrics_path
-    )
-    return {"model_path": weights_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    valid_path = save_valid_metrics(best_valid_perf, model_save_path, args.seq_len, args.pred_len)
+    return training_result(weights_path, best_valid_perf, valid_path)
 
 
 def build_parser():
@@ -136,8 +129,6 @@ def build_parser():
     parser.add_argument('--end_train_date', type=str, default='2021-12-31')
     parser.add_argument('--start_valid_date', type=str, default='2022-01-01')
     parser.add_argument('--end_valid_date', type=str, default='2022-12-31')
-    parser.add_argument('--start_test_date', type=str, default='2023-01-01')
-    parser.add_argument('--end_date', type=str, default='2023-12-31')
     return parser
 
 

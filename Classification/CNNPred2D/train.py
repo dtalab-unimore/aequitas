@@ -18,7 +18,7 @@ from tensorflow.keras import backend as K, callbacks
 
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, training_result
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -133,38 +133,16 @@ def prediction(data_warehouse, model, dates, args, idx=(4,5)):
     return test_pred, cnn_test_target, tickers, last_dates, pred_dates, overall_results
 
 
-def run_cnn_ann(data_warehouse, checkpoint_dir, n_features, dates, args):
+def run_cnn_ann(data_warehouse, checkpoint_dir, n_features, args):
 
     K.clear_session()
     model = train(data_warehouse, checkpoint_dir, n_features, args)
-    val_preds, val_labels, _, _, _, _ = prediction(data_warehouse, model, dates, args, idx=(2, 3))
-    preds, labels, tickers, last_date, pred_date, preds_prob = prediction(data_warehouse, model, dates, args, idx=(4, 5))
+    val_preds, val_labels, _, _, _, _ = prediction(data_warehouse, model, None, args, idx=(2, 3))
 
     val_metrics = get_metrics(val_preds, val_labels)
-    val_metrics = {k: float(v) for k, v in val_metrics.items()}
+    valid_path = save_valid_metrics(val_metrics, checkpoint_dir, args.seq_len, args.pred_len)
 
-    with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-        json.dump(val_metrics, f, indent=4)
-
-    metrics = get_metrics(preds, labels)
-
-    metrics, results_pkl, metrics_json = save_results(
-        args,
-        metrics,
-        preds,
-        np.expand_dims(labels, axis=1),
-        pred_date,
-        last_date,
-        tickers,
-        metrics_path
-    )
-
-    return {
-        "model_path": join(checkpoint_dir, 'model.weights.h5'),
-        "metrics": metrics,
-        "results_path": results_pkl,
-        "metrics_path": metrics_json,
-    }
+    return training_result(join(checkpoint_dir, 'model.weights.h5'), val_metrics, valid_path)
 
 
 if __name__=='__main__':
@@ -181,8 +159,6 @@ if __name__=='__main__':
     args.add_argument('--end_train_date', type=str, default='2021-12-31', help='End date for training set')
     args.add_argument('--start_valid_date', type=str, default='2022-06-01', help='Start date for validation set')
     args.add_argument('--end_valid_date', type=str, default='2022-12-31', help='End date for validation set')
-    args.add_argument('--start_test_date', type=str, default='2023-06-01', help='Start date for the test set')
-    args.add_argument('--end_date', type=str, default='2023-12-31', help='End date for the dataset')
 
     args.add_argument('--n_epochs', type=int, default=200, help='Number of epochs')
     args.add_argument('--number_filter', type=int, nargs='+', default=[8, 8, 8])
@@ -213,16 +189,16 @@ if __name__=='__main__':
 
     tf.random.set_seed(args.seed)
 
-    model_save_path, metrics_path = create_saving_path(args, "Classification", "CNNPred2D", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Classification", "CNNPred2D", PROJECT_ROOT)
 
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     data_warehouse, n_stocks, n_features = construct_data_warehouse_2d(args)
-    data_warehouse, dates = split_train_val_test(data_warehouse, args)
+    data_warehouse, _ = split_train_val_test(data_warehouse, args)
 
-    output = run_cnn_ann(data_warehouse, model_save_path, n_features, dates, args)
+    output = run_cnn_ann(data_warehouse, model_save_path, n_features, args)
 
     shutil.rmtree(tmpdir)
-    print('Test Metrics:\n', output["metrics"])
+    print('Validation Metrics:\n', output["valid_metrics"])
     emit_result(output)

@@ -14,7 +14,7 @@ from .utils import set_seed
 from utils.filter_constituents import filter_constituents_by_date
 from utils.load_configuation import create_saving_path
 from utils.logger import emit_result
-from utils.save_results import save_results
+from utils.training import save_valid_metrics, ticker_selection_date, training_result
 from utils.z_score import RobustZScoreNormalization
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +54,7 @@ def prepare_dataset(args):
     """Alpha158 features + labels, robust z-scored on the training period."""
     dataset = pd.read_csv(f'{args.data_path}/{args.universe}/{args.universe}_alpha158.csv')
     tickers = filter_constituents_by_date(
-        pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), args.start_test_date
+        pd.read_csv(f'{args.data_path}/constituents/eodhd/{args.universe}.csv'), ticker_selection_date(args)
     )
     dataset = dataset[dataset['instrument'].isin(tickers['EODHD'].tolist())].copy()
 
@@ -137,16 +137,15 @@ def metrics_of(preds, labels):
 
 def run_train(args):
     set_seed(args.seed)
-    model_save_path, metrics_path = create_saving_path(args, "Regression", "FactorVAE", PROJECT_ROOT)
+    model_save_path, _ = create_saving_path(args, "Regression", "FactorVAE", PROJECT_ROOT)
     with open(f'{model_save_path}/config_params.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     dataset = prepare_dataset(args)
-    all_dates = dataset.index.get_level_values('datetime').unique().sort_values()
 
+    # No test here: test.py runs it on the period chosen in the Test tab
     train_loader = loader(dataset, args, args.start_date, args.end_train_date, shuffle=True)
     valid_loader = loader(dataset, args, args.start_valid_date, args.end_valid_date)
-    test_loader = loader(dataset, args, args.start_test_date, args.end_date)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device}", flush=True)
@@ -162,6 +161,7 @@ def run_train(args):
         wandb.init(project="FactorVAE", config=args, name=f"{args.run_name}")
 
     best_val_loss = float('inf')
+    best_val_metrics, valid_path = None, None
     for epoch in range(args.num_epochs):
         train_loss = train(model, train_loader, optimizer, scheduler, args)
         val_loss, val_metrics, _, _ = validate(model, valid_loader, args)
@@ -170,8 +170,8 @@ def run_train(args):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), checkpoint_path)
-            with open(f'{metrics_path}/val_metrics_sl{args.seq_len}_pl{args.pred_len}.json', 'w') as f:
-                json.dump({k: float(v) for k, v in val_metrics.items()}, f, indent=4)
+            best_val_metrics = val_metrics
+            valid_path = save_valid_metrics(val_metrics, model_save_path, args.seq_len, args.pred_len)
 
         if args.wandb:
             wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss,
@@ -181,13 +181,7 @@ def run_train(args):
         wandb.log({"Best Validation Loss": best_val_loss})
         wandb.finish()
 
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    preds, labels, pred_dates, last_dates, tickers = predict(model, test_loader, all_dates, args.pred_len, device)
-    metrics, results_pkl, metrics_json = save_results(
-        args, metrics_of(preds, labels), preds, labels, pred_dates, last_dates, tickers, metrics_path
-    )
-    return {"model_path": checkpoint_path, "metrics": metrics,
-            "results_path": results_pkl, "metrics_path": metrics_json}
+    return training_result(checkpoint_path, best_val_metrics, valid_path)
 
 
 def build_parser():
@@ -212,8 +206,6 @@ def build_parser():
     parser.add_argument('--end_train_date', type=str, default='2021-12-31', help='fit end time')
     parser.add_argument('--start_valid_date', type=str, default='2022-01-01', help='validation start time')
     parser.add_argument('--end_valid_date', type=str, default='2022-12-31', help='validation end time')
-    parser.add_argument('--start_test_date', type=str, default='2023-01-01', help='test start time')
-    parser.add_argument('--end_date', type=str, default='2023-12-31', help='end time')
 
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--run_name', type=str, default='VAE-Revision2', help='name of the run')
